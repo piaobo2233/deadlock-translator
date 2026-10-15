@@ -1,0 +1,196 @@
+# -*- coding: utf-8 -*-
+"""Windows 系统托盘（§三）。
+
+[!] pystray 是**可选**依赖 —— 没装就静默不启动托盘，翻译功能一行都不受影响。
+    托盘只是控制入口，不该成为「不装就跑不起来」的东西。有回归测试守着这条。
+
+[!] 为什么托盘跑在**翻译器自己的进程**里，而不是单独一个进程：
+    菜单要能直接「暂停翻译 / 恢复翻译 / 退出」，这些必须作用在真正在跑的那个
+    对象上。放单独进程就只能靠 IPC，复杂度不成比例。
+    代价是托盘万一崩了可能拖累翻译器 —— 所以整条启动路径都包在 try 里，
+    而且托盘线程是 daemon，最坏情况是托盘没了、翻译照跑。
+
+[!] 图标状态（§三）：绿＝正常、黄＝API 异常、灰＝已暂停、红＝错误。
+    图标是**画出来的**，不带图片资源 —— 打包时少一个文件就少一个出错点。
+"""
+
+import threading
+import time
+
+__all__ = ["Tray", "make_icon_image", "STATE_COLORS", "available"]
+
+# 托盘图标的四种状态色
+STATE_COLORS = {
+    "ok": (63, 185, 80),        # 绿：正常
+    "api": (210, 153, 34),      # 黄：API 异常
+    "paused": (140, 148, 158),  # 灰：已暂停
+    "error": (248, 81, 73),     # 红：错误
+}
+
+STATE_TEXT = {
+    "ok": "正在运行",
+    "api": "运行中（API 异常）",
+    "paused": "已暂停",
+    "error": "出错了",
+}
+
+
+def available() -> bool:
+    """装了 pystray 吗。没装就安静地跳过托盘，不报错。"""
+    try:
+        import pystray        # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def make_icon_image(state: str = "ok", size: int = 64):
+    """画一个图标：深色圆底 + 中间一个状态色的圆点。
+
+    不加载任何图片文件 —— 打包时少一个资源就少一类「找不到文件」的故障。
+    """
+    from PIL import Image, ImageDraw
+
+    color = STATE_COLORS.get(state, STATE_COLORS["ok"])
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    pad = max(2, size // 16)
+    draw.ellipse((pad, pad, size - pad, size - pad), fill=(20, 23, 28, 255),
+                 outline=(60, 66, 76, 255), width=max(1, size // 32))
+    inner = size // 3
+    off = (size - inner) // 2
+    draw.ellipse((off, off, off + inner, off + inner), fill=color + (255,))
+    return img
+
+
+class Tray:
+    """托盘图标 + 菜单。
+
+    回调都是零参数的 callable（`on_quit` 也是）—— 菜单项不该关心内部细节。
+    """
+
+    def __init__(self, on_quit=None, on_pause=None, on_resume=None,
+                 on_panel=None, on_ingame=None, on_cost=None,
+                 on_dictionary=None, on_settings=None, on_logs=None,
+                 is_paused=None, state=None):
+        self.on_quit = on_quit
+        self.on_pause = on_pause
+        self.on_resume = on_resume
+        self.on_panel = on_panel
+        self.on_ingame = on_ingame
+        self.on_cost = on_cost
+        self.on_dictionary = on_dictionary
+        self.on_settings = on_settings
+        self.on_logs = on_logs
+        self.is_paused = is_paused or (lambda: False)
+        self.state_of = state or (lambda: "ok")
+        self.icon = None
+        self._thread = None
+
+    # ---- 菜单 ----
+    def _build_menu(self):
+        import pystray
+
+        Item, Menu = pystray.MenuItem, pystray.Menu
+        paused = bool(self.is_paused())
+        state = "paused" if paused else self.state_of()
+
+        def wrap(fn):
+            def run(_icon=None, _item=None):
+                try:
+                    if fn:
+                        fn()
+                except Exception as exc:
+                    print(f"[warn] 托盘菜单项出错：{exc}")
+                # 点完刷新一下菜单和图标（暂停状态、实例数都可能变了）
+                self.refresh()
+            return run
+
+        items = [
+            Item(f"《异锁》翻译助手 —— {STATE_TEXT.get(state, state)}",
+                 None, enabled=False),
+            Menu.SEPARATOR,
+            # [!] 8 项封顶（§32：不要做十几个托盘菜单）。
+            #     去掉了「数据中心」（并进消耗）和「翻译记忆」（并进词库）——
+            #     它们在新架构里已经不是一级入口了，留着就是重复入口。
+            #     「打开数据目录」也去掉了：那是排错用的，设置里有。
+            Item("打开面板", wrap(self.on_panel), default=True),
+            Item("游戏内设置", wrap(self.on_ingame)),
+            Item("消耗", wrap(self.on_cost)),
+            Item("词库", wrap(self.on_dictionary)),
+            Item("设置", wrap(self.on_settings)),
+            Menu.SEPARATOR,
+            Item("恢复翻译", wrap(self.on_resume), visible=lambda _i: self.is_paused()),
+            Item("暂停翻译", wrap(self.on_pause), visible=lambda _i: not self.is_paused()),
+            Menu.SEPARATOR,
+            Item("查看日志", wrap(self.on_logs)),
+            Item("退出", wrap(self.on_quit)),
+        ]
+        return Menu(*items)
+
+    def refresh(self):
+        """状态变了就调它。图标和菜单标题都会跟着变。"""
+        if self.icon is None:
+            return
+        try:
+            state = "paused" if self.is_paused() else self.state_of()
+            self.icon.icon = make_icon_image(state)
+            self.icon.title = f"《异锁》翻译助手 —— {STATE_TEXT.get(state, state)}"
+            self.icon.menu = self._build_menu()
+        except Exception:
+            pass
+
+    # ---- 生命周期 ----
+    def start(self) -> bool:
+        """起托盘。**失败只打一行提示，绝不影响翻译。**"""
+        if self.icon is not None:
+            return True
+        try:
+            import pystray
+        except Exception:
+            print("[info] 没装 pystray，跳过系统托盘（不影响翻译）。"
+                  "想要托盘就 pip install pystray")
+            return False
+        try:
+            self.icon = pystray.Icon("deadlock-translator",
+                                     make_icon_image("ok"),
+                                     "《异锁》翻译助手",
+                                     menu=self._build_menu())
+            # run_detached 在某些后端上不灵；用后台线程跑 run() 更稳，
+            # 而且它是 daemon —— 最坏情况也不会拖住退出。
+            self._thread = threading.Thread(target=self._run, daemon=True,
+                                            name="tray")
+            self._thread.start()
+            print("[info] 系统托盘已就绪（右下角图标）")
+            return True
+        except Exception as exc:
+            print(f"[warn] 托盘启动失败（不影响翻译）：{exc}")
+            self.icon = None
+            return False
+
+    def _run(self):
+        try:
+            self.icon.run()
+        except Exception as exc:
+            print(f"[warn] 托盘线程退出：{exc}")
+        finally:
+            self.icon = None
+
+    def stop(self):
+        try:
+            if self.icon is not None:
+                self.icon.stop()
+        except Exception:
+            pass
+        self.icon = None
+
+
+def demo_state_icons(out_dir: str) -> list:
+    """把四种状态的图标各存一张（给测试/人工看一眼用）。返回文件列表。"""
+    import os
+    paths = []
+    for state in STATE_COLORS:
+        path = os.path.join(out_dir, f"tray_{state}.png")
+        make_icon_image(state).save(path)
+        paths.append(path)
+    return paths

@@ -1,0 +1,35 @@
+{
+  "repository": "https://github.com/tesseract-ocr/tessdata_fast",
+  "commit": "87416418657359cb625c412a48b6e1d6d41c29bd",
+  "license": "Apache-2.0",
+  "files": {
+    "chi_sim.traineddata": {
+      "sha256": "a5fcb6f0db1e1d6d8522f39db4e848f05984669172e584e8d76b6b3141e1f730",
+      "bytes": 2469156
+    },
+    "eng.traineddata": {
+      "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+      "bytes": 4113088
+    },
+    "LICENSE": {
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "bytes": 11358
+    },
+    "spa.traineddata": {
+      "sha256": "6f2e04d02774a18f01bed44b1111f2cd7f3ba7ac9dc4373cd3f898a40ea6b464",
+      "bytes": 2294433
+    },
+    "por.traineddata": {
+      "sha256": "c4932b937207a9514b7514d518b931a99938c02a28a5a5a553f8599ed58b7deb",
+      "bytes": 1982756
+    },
+    "fra.traineddata": {
+      "sha256": "ced037562e8c80c13122dece28dd477d399af80911a28791a66a63ac1e3445ca",
+      "bytes": 1130365
+    },
+    "deu.traineddata": {
+      "sha256": "19d219bbb6672c869d20a9636c6816a81eb9a71796cb93ebe0cb1530e2cdb22d",
+      "bytes": 1525436
+    }
+  }
+}

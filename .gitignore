@@ -1,0 +1,108 @@
+# 《异锁》聊天翻译助手 —— 不该进版本库的东西
+#
+# 核心原则：**用户的数据和凭据绝不进版本库。**
+# 这个项目会生成一堆「本机学习成果」（词库、记忆、留档、统计），
+# 那些是每个用户自己的，不是源码的一部分。
+
+# ---------------- 凭据 ----------------
+config.json
+*.key
+.env
+.env.*
+
+# ---------------- 本机数据（每个用户自己的） ----------------
+# [!] 2026-10-08 启动器大扫除：用户数据全部收进 data\ 子目录。
+#     下面那些裸文件名规则**故意保留**，它们现在的作用是兜底：
+#     万一迁移时某个文件被占用没搬走（store.migrate_root_data 会打印警告
+#     并留在原地），那个漏网的副本也绝不能进版本库。
+data/
+glossary.json
+translations.json
+local_cache.json
+learning_cache.json
+static_ui_candidates.json
+pending.json
+reviewed.json
+glossary_stats.json
+stats.json
+# 静态 UI 黑名单（跨会话记住哪些位置是游戏界面）—— 同样是用户数据，不入库
+static_ui.json
+# 按局记录（一局一个文件）—— 同样是用户数据，不入库
+局记录/
+chatlog.jsonl
+chatlog.jsonl.1
+chatlog.simulate.jsonl
+notchat.jsonl
+*.json.bad
+*_backups/
+backups/
+run.log
+run.log.1
+run_上一局.log
+
+# ---------------- 运行时状态（不是用户数据，随时可删） ----------------
+# runtime.json 是翻译器写给控制面板的状态文件（pid/暂停/游戏是否在前台）。
+# 每 3 秒重写一次，进程退出时删掉 —— 它只是两个进程之间的传话筒。
+runtime.json
+runtime.json.tmp
+
+# ---------------- 采集与调试产物 ----------------
+samples/
+.temp/
+dump/
+dump_dir/
+tess_words.txt
+
+# ---------------- Python ----------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.spec
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---------------- 编辑器 / 系统 ----------------
+.vscode/
+.idea/
+*.swp
+*~
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# ---------------- 打包产物 ----------------
+DeadlockTranslate.exe
+
+# ---------------- 真实对局数据（绝不进版本库） ----------------
+# [!] 2026-10-07 开源整改。下面这几项**原来被当成「素材/参考资料」放行**，
+#     实际会泄露真实玩家信息，全部改为排除：
+#       · docs\日志存档\   = run.log 的手工副本，含真实对局聊天原文 + 本机绝对路径
+#       · 快捷方式\*.lnk   = 内含作者机器的绝对路径，别人 clone 下来是死链
+#       · ref\convars.json = 377 KB 的游戏 convar 表，**代码从不读取**，纯死重
+#     （verify\truth 那 3 张整屏截图已于同日**脱敏**——玩家昵称与比赛 ID 已抹平——
+#       因为回归测试依赖它们的真实画面与坐标，所以保留在库里。）
+docs/日志存档/
+快捷方式/
+ref/convars.json
+
+# ---------------- 原子写的临时文件 ----------------
+# [!] store.atomic_write_json 是「写 <文件>.tmp 再 os.replace」。
+#     进程被强杀时可能留下 glossary.json.tmp / stats.json.tmp 之类，
+#     不排除掉下次 git add . 就会把用户数据带进库。
+*.tmp
+*.json.lock
+
+# [!] 但下面这些**必须**进版本库 —— 它们是程序的一部分：
+#     · 启动.vbs / scripts/run.py / scripts/跑测试.bat / scripts/build.bat
+#     · verify\truth\match_bubble.png（合成素材 36 KB，回归测试用）
+#     · verify\truth\bright_screen.png / wait2.png / long_chat.png
+#       —— 真实对局截图，**已脱敏**（昵称与比赛 ID 已抹平）后保留
+#     所以上面的规则都写得很具体，没有用 *.json / *.png 这种一刀切。
