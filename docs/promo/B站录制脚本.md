@@ -36,9 +36,9 @@
 - 中文输入转英文，预览后复制到游戏。
 - Windows 64 位，无需 Python；首次安装包内 OCR 组件，自备 API Key。
 
-下载：https://github.com/piaobo2233/deadlock-translato/releases/tag/v1.0.0-test.1
+下载：https://github.com/piaobo2233/deadlock-translator/releases/tag/v1.0.0-test.1
 
-源码：https://github.com/piaobo2233/deadlock-translato
+源码：https://github.com/piaobo2233/deadlock-translator
 
 工具开源，API 用量由服务商计费；当前为测试版，整局覆盖率和延迟仍需验证。网页气泡为功能示意，软件截图使用演示数据；项目非 Valve 官方产品。
 

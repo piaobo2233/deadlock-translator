@@ -21,8 +21,8 @@
   },
   {
     "path": "README.md",
-    "bytes": 4492,
-    "sha256": "611dbc8f5180d7834a4eb5d82f76a9d39b525a6e83c5748b79bb8a89db294d39"
+    "bytes": 4563,
+    "sha256": "1fb6b5bd2171c4c2fe48ebf4ee81a2cc2b1f5b440d0f43570dbe1217044fef10"
   },
   {
     "path": "VERSION",
@@ -466,18 +466,18 @@
   },
   {
     "path": "docs/promo/B站录制脚本.md",
-    "bytes": 3216,
-    "sha256": "a3af41e5d237e550e179443c217e1fbd9c9f092cd954dcfef5c3a5fa82f058b1"
+    "bytes": 3263,
+    "sha256": "eba5aea8a19a498cfe2c326d270724870d9a5425698025bc5f37d06a9e1376e0"
   },
   {
     "path": "docs/promo/B站录屏宣传页.html",
-    "bytes": 7424374,
-    "sha256": "faf98703f44d0c5dbe6d3ca36c97a88e14b65a0bce3b0084bbde2d21afe951d6"
+    "bytes": 7424380,
+    "sha256": "9a5fa3d28b3632d07b55967494d0a40973dc8b836443fc90b22a88b14538ab43"
   },
   {
     "path": "docs/promo/README.md",
-    "bytes": 1340,
-    "sha256": "22585f433c25e5769e8c311069213cb3c5f8c1b63ca1092c3540cb44870e0c62"
+    "bytes": 1356,
+    "sha256": "a76041d3f48ff0e66cf6456b82c8cbf8c6b2a064a7e0de9466574e0d7ba09890"
   },
   {
     "path": "docs/promo/assets/app-compose.png",
@@ -521,13 +521,13 @@
   },
   {
     "path": "docs/promo/assets/heybox-04-install.png",
-    "bytes": 114761,
-    "sha256": "00ac5a05b662bbe529b4c0052c11ccd4beb08afed21417ef5477b526b6361161"
+    "bytes": 114779,
+    "sha256": "6f0d8e8d0c6badc541283cf5a7bbc96869c75d93e12f0ba8cda00989087de4be"
   },
   {
     "path": "docs/promo/cards.html",
-    "bytes": 8184,
-    "sha256": "8e2091650d9d330affa0b1ebe7248cec4e4f4ea217c2b5ee4f79822fba6fb666"
+    "bytes": 8193,
+    "sha256": "e5cb80fa902805b6bd2a570bbf9152df848d0fb31f9f1bea4214bd7ed764304a"
   },
   {
     "path": "docs/promo/image-prompt.txt",
@@ -536,23 +536,23 @@
   },
   {
     "path": "docs/promo/index.html",
-    "bytes": 22116,
-    "sha256": "bc0529db86ad217a86d4b81a190538b24ad1f0d9a5aae7ca4689714c89cb9f97"
+    "bytes": 22122,
+    "sha256": "6677b1d495d011bb2a8d6a7d21a19fb1871b440ebd7e4e9eb76a11e1752ee57e"
   },
   {
     "path": "docs/promo/小黑盒发布预览.html",
-    "bytes": 3846,
-    "sha256": "6a3f2b08593d08c9f29cfd3ef3f962695f4abd1e54f1d14612274d933971ec2f"
+    "bytes": 3849,
+    "sha256": "5dcf0509aef0b9ddf8179f3949adf7e633553cfb3293e6ac0ca8ccf85066d4c4"
   },
   {
     "path": "docs/promo/小黑盒图文稿.md",
-    "bytes": 3328,
-    "sha256": "42b1e9606318aaff90b123c3f254f7868a86fe156f0cd4c5f69e2f516a579812"
+    "bytes": 3381,
+    "sha256": "42d70ada41b36ba40452ede7b8f19a9274e99569003a3a9180ca292ee23ef414"
   },
   {
     "path": "docs/releases/README-public.md",
-    "bytes": 4492,
-    "sha256": "611dbc8f5180d7834a4eb5d82f76a9d39b525a6e83c5748b79bb8a89db294d39"
+    "bytes": 4563,
+    "sha256": "1fb6b5bd2171c4c2fe48ebf4ee81a2cc2b1f5b440d0f43570dbe1217044fef10"
   },
   {
     "path": "docs/releases/v1.0.0-test.1.md",

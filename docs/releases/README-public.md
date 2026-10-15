@@ -4,7 +4,7 @@
 
 ![异锁翻译助手开源首测](docs/promo/assets/bilibili-cover.png)
 
-**[下载 Windows 测试包](https://github.com/piaobo2233/deadlock-translato/releases/tag/v1.0.0-test.1)** · [直接下载完整 ZIP](https://github.com/piaobo2233/deadlock-translato/releases/download/v1.0.0-test.1/DeadlockTranslator-1.0.0-test.1-windows-x64.zip) · [提交问题](https://github.com/piaobo2233/deadlock-translato/issues)
+**[下载 Windows 测试包](https://github.com/piaobo2233/deadlock-translator/releases/tag/v1.0.0-test.1)** · [直接下载完整 ZIP](https://github.com/piaobo2233/deadlock-translator/releases/download/v1.0.0-test.1/DeadlockTranslator-1.0.0-test.1-windows-x64.zip) · [提交问题](https://github.com/piaobo2233/deadlock-translator/issues)
 
 ## 能做什么
 

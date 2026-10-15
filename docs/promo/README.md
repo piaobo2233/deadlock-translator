@@ -10,6 +10,6 @@
 - `assets/app-*.png`：真实软件窗口，采用临时演示数据，没有调用真实 API。
 - `assets/city-radio.png`：使用内置 imagegen 创作的原创氛围插画；非游戏截图。提示词见 `image-prompt.txt`。
 
-GitHub 链接按用户指定的 `piaobo2233/deadlock-translato` 与测试标签 `v1.0.0-test.1` 配置。发布前需确认源码、Release 和资产链接实际可访问。
+GitHub 链接按用户指定的 `piaobo2233/deadlock-translator` 与测试标签 `v1.0.0-test.1` 配置。发布前需确认源码、Release 和资产链接实际可访问。
 
 所有图文均标明测试版、自备 API 与未验收边界。页面对 1920×1080 桌面和 390×844 手机布局、五语切换、键盘、全屏、单文件图片加载完成自动检查。录制真实对局效果需另拍实际游戏，不能用示意页面冒充实测。
