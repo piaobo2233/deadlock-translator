@@ -2,7 +2,6 @@
 import hashlib
 import json
 from pathlib import Path
-import shutil
 import sys
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -38,14 +37,17 @@ def main():
         if source.is_symlink() or (hasattr(source,'is_junction') and source.is_junction()):
             raise ValueError('Linked source file')
         body=source.read_bytes()
+        # Match the repository's explicit LF attributes before hashing the snapshot.
+        if source.suffix in {'.py','.md','.toml'}:
+            body=body.replace(b'\r\n',b'\n')
         if len(secret)>8 and secret in body:raise ValueError('Actual credential found in '+str(relative))
         if any(part.casefold() in {'data','backups','.git','.temp','truth_candidates','archive'} for part in relative.parts):
             raise ValueError('Unapproved source path: '+str(relative))
         target=destination/relative
         target.parent.mkdir(parents=True,exist_ok=True)
-        shutil.copy2(source,target)
+        target.write_bytes(body)
         rows.append(dict(path=relative.as_posix(),bytes=len(body),sha256=hashlib.sha256(body).hexdigest()))
-    body=(ROOT/'docs/releases/README-public.md').read_bytes()
+    body=(ROOT/'docs/releases/README-public.md').read_bytes().replace(b'\r\n',b'\n')
     (destination/'README.md').write_bytes(body)
     rows.append(dict(path='README.md',bytes=len(body),sha256=hashlib.sha256(body).hexdigest()))
     (destination/'PUBLIC-SOURCE-MANIFEST.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2),encoding='utf-8')
