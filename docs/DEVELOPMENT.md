@@ -27,7 +27,7 @@ python -m unittest discover -s tests -p test_composer.py -v
 
 ## Windows 测试包构建
 
-在 64 位 Windows 上安装运行依赖与 PyInstaller，下载 `scripts/build_portable.py` 中指定的官方 OCR 安装器，并核对固定 SHA-256：
+在 64 位 Windows 上安装运行依赖与 PyInstaller，下载 `scripts/build_portable.py` 中指定的 Tesseract OCR 安装器，并核对固定 SHA-256：
 
 ```powershell
 pip install pyinstaller
@@ -39,3 +39,40 @@ python scripts/build_portable.py --ocr-installer "C:\Downloads\tesseract-ocr-w64
 ## 反馈与数据
 
 请通过 Issues 报告可复现的问题。设置页可导出反馈 ZIP，提交前自行检查；不要提交 API Key、完整 `data/`、私人聊天或未经脱敏的截图。必要的模型与第三方许可随源码保留，见 [第三方声明](THIRD-PARTY-NOTICES.md)。
+
+
+## 识别、显示与计量
+
+- OCR 需三个不同采样帧确认，并执行正文几何、视觉连续性和独立源图复核；缓存不增加确认票。源图汉字检查不依赖用户词表。
+- 首选正文与独立源图读数一致时停止更多变体；短缩写保留英文后备策略。存在 `libtesseract-5.dll` 时使用可终止的常驻辅助进程，否则使用有超时保护的命令行路径，诊断中记录后备状态。
+- `ocr_interval` 是最小处理周期，整轮 OCR 耗时不再叠加额外等待；普通启动读取该配置，确认票数至少为 3。
+- 新字幕以首次候选帧为起点，API 等待及首次绘制均检查 4 秒截止时间；按时显示的字幕随原气泡寿命停留。候选帧可能晚于原文字出现，因此该截止时间不代表从原消息出现起的端到端上限。
+- 手动翻译接口等待为 4.5 秒，不自动重试；预览不受屏幕气泡寿命限制。网络和服务商响应无法由本机保证，该配置不表示所有翻译能在 5 秒内成功。
+- 手动翻译与屏幕翻译有独立请求身份，手动结果不写正式词库或屏幕待审核队列，费用记录沿用请求台账。后台旧结果或离开页面后的结果不进入新预览。
+- 待审核要求消息有 Tk 绘制回执且通过质量检查。该回执不能证明游戏合成器最终呈现了像素；跨局边界通过用户点击“开始新对局”确定，切换前的迟到消息不进入新局。
+
+`data/runtime.json` 的 `latency_drawn_ms` 保存本地/API 最近 512 个绘制样本。这些是成功显示样本，不能单独证明覆盖率。候选图、生命周期与分段耗时保留在本机私有 `backups/development/recognition-recent/`。
+
+`tools/benchmark_receive.py --output 私有目录/ocr.json` 比较英文 CLI、五语言 CLI 与常驻路径，使用裁图和合成语言样本，不调用翻译 API；不替代真实对局测试。
+
+整局验收使用 `verify/latency_acceptance.py labels.json --output report.json`。输入示例：
+
+```json
+{"messages":[{"id":"m1","eligible":true,"appeared_at":1.0,"drawn_at":2.0,"route":"api"}]}
+```
+
+时间统一使用原录像秒数，未显示记 `drawn_at:null`；`eligible` 依据原画面。原文无中文却被 OCR 误判跳过的消息仍计为符合条件且漏译。内部目标为 90% 在 2 秒内显示，目前未完成验收；计算时未译消息保留在分母中，同时报告超过 4 秒的显示。
+
+## 请求结果不明时的处理
+
+先向接口服务商核对请求状态，勿删除请求文件解除保护。以下命令仅处理记录，不自动发起翻译：
+
+```powershell
+python -m app --pending-requests
+python -m app --release 请求编号
+python -m app --abandon 请求编号
+```
+
+第一条查看记录；确认未计费后，第二条允许再次尝试；第三条放弃该请求。超时后的防重发记录不会因重启自动清除。
+
+待审核诊断可使用 `python -m app --review-pending`。未显示、质量检查失败和缺少显示证据的旧记录保留供检查，不会推定为已显示。
