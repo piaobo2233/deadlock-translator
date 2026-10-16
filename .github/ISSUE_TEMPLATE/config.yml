@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安装与使用说明
+    url: https://github.com/piaobo2233/deadlock-translator/blob/main/docs/guides/首版测试与分享.md
+    about: 配置、升级和常见问题
+  - name: 安全漏洞私密报告
+    url: https://github.com/piaobo2233/deadlock-translator/security/advisories/new
+    about: 请勿在公开 Issue 中提交真实密钥或漏洞细节

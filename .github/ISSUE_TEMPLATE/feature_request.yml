@@ -1,0 +1,18 @@
+name: 功能建议
+description: 描述使用场景与希望改进的行为
+title: "[建议] "
+body:
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 遇到什么实际问题？
+      description: 描述使用场景和目前的操作，不要附私人聊天或密钥。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 希望怎样改进？
+      description: 可以附替代做法；涉及游戏效果时区分亲自观察与推测。
+    validations:
+      required: true

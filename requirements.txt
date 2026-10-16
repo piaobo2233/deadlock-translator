@@ -14,11 +14,11 @@ Pillow>=10.0              # 截屏抓取（PIL.ImageGrab）
 pytesseract>=0.3.10       # Tesseract 的 Python 绑定
 
 # ---- 可选（装了更好用，**不装也能用**）----
-# [!] ttkbootstrap 只影响设置中心/数据中心的观感。
-#     少了它界面会自动退回手写的深色 ttk 样式（见 gui/theme.py），
+# [!] ttkbootstrap 只影响控制面板的观感。
+#     少了它界面会退回标准 ttk 样式（见 gui/theme.py），
 #     程序**不会**因为缺这个包就打不开 —— 有回归测试守着这条。
 #     命令行报表（python -m app --stats）完全不需要它。
-ttkbootstrap>=1.10        # 现代深色主题（可选）
+ttkbootstrap>=1.10        # 控制面板主题（可选）
 
 # [!] pystray 只提供右下角托盘图标。没装就安静跳过托盘，
 #     **翻译功能一行都不受影响**（也有回归测试守着）。
@@ -28,8 +28,7 @@ pystray>=0.19             # 系统托盘（可选）
 # 以下不是必需，但对调试有帮助：
 # mss                     # 更快的截屏（当前用 PIL.ImageGrab，够用）
 
-# ---- 只有「自己打包 exe」才需要（普通使用不用管）----
-# [!] build.bat 会调 `python -m PyInstaller`。不装它就会在打包时报
-#     "No module named PyInstaller" —— 那个报错很容易被误判成 Python 装错了。
-#     所以这一条**不注释掉**：照 README 装一次依赖，build.bat 就能直接用。
-pyinstaller>=6.0          # 打包成单文件 exe（仅 build.bat 用得到）
+# ---- 只有自己打包 Windows 包时才需要 ----
+# scripts/build_portable.py 使用 PyInstaller 目录模式，显式指定版本与 OCR 安装器摘要。
+# 参数与许可收集说明见 docs/DEVELOPMENT.md、docs/THIRD-PARTY-NOTICES.md。
+pyinstaller>=6.0          # Windows 目录模式打包工具

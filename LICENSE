@@ -19,29 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-## 中文说明（非法律文本，仅为方便阅读；以上英文 MIT 原文为准）
-
-你可以自由地：使用、复制、修改、合并、发布、分发、再授权、出售本软件。
-
-唯一的条件是：**保留上面的版权声明和这段许可声明**。
-
-本软件按「原样」提供，不附带任何担保。
-
----
-
-## 关于游戏
-
-本项目是**第三方辅助工具**，与 Valve Corporation 无关联，
-未获得其授权、认可或赞助。
-
-《异锁》（Deadlock）及相关名称、素材是 Valve Corporation 的商标或版权财产。
-本项目不包含、不分发任何游戏本体文件。
-
-程序在运行时只做两件事：
-1. **读屏幕像素**（判断屏幕上有没有聊天气泡）；
-2. 从游戏安装目录**加载字体文件用于本地渲染**（不修改、不复制游戏文件）。
-
-它**不注入**游戏进程、**不修改**游戏内存、**不读写**游戏存档、**不与游戏通信**。

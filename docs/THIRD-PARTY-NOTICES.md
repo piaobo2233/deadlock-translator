@@ -1,112 +1,60 @@
-# 第三方组件与许可证
+# 第三方组件、技术来源与许可
 
-本文件列出《异锁》翻译助手实际使用到的第三方组件及其许可证。
+感谢各项目的作者和贡献者。本文以公开源码与已发布 **1.0.0-test.3** ZIP 为核对对象（2026-10-17）；项目原创代码的 [MIT](../LICENSE) 不替代第三方许可。技术用途摘要见[技术致谢](ACKNOWLEDGEMENTS.md)，游戏及截图来源见[项目与素材说明](PROJECT-NOTICE.md)。
 
-首个 Windows 测试 ZIP 另附 Tesseract 官方项目发布的原始 Windows 安装器，由测试者首次自行安装；该安装器及其包含组件不是嵌入助手 exe 的代码。安装器来源与 SHA-256 放在包内 `首次安装OCR/来源与校验.txt`，安装和许可说明保留上游原样。下文“外部程序”指助手调用的已安装程序。
+## 核对依据
 
-测试 ZIP 使用 PyInstaller 的目录模式，随附 Python、Tcl/Tk、所收集 Python 包和识别模型的许可文本。Tcl 8.6.15 的本机发行目录未带单独许可文件，补充自 [Tcl 官方对应版本](https://github.com/tcltk/tcl/blob/core-8-6-15/license.terms)，源码副本位于 `docs/licenses/Tcl-8.6.15.txt`。
+- [依赖声明](../requirements.txt) 是安装下限，不是 test.3 的锁定版本清单。
+- [构建脚本](../scripts/build_portable.py) 使用 PyInstaller 目录模式；测试 ZIP 附 `THIRD-PARTY-NOTICES.md`、`licenses/`、模型许可及原始 OCR 安装器。包内许可全文与 NOTICE 应保留，不能只留下本页摘要。
+- 表内版本来自现有构建日志、ZIP 的 METADATA、许可目录名或冻结 PYZ 的静态版本常量；不能从这些材料确认的版本明确标为未确认。后续构建应另存完整依赖清单。
+- 本次仅整理仓库说明，未修改已发布 ZIP。test.3 内附的旧说明仍是历史版本；本页纠正其字体、术语来源、可选依赖及许可概括等表述，不声称完成了全部传递组件或安装器内部审计。
 
-随程序附带的 `app/recognition/models/` 中 `chi_sim`、`eng`、`spa`、`por`、`fra`、`deu` 六份 `.traineddata` 来自 [Tesseract 官方 tessdata_fast](https://github.com/tesseract-ocr/tessdata_fast)，按 Apache-2.0 分发。模型未修改，完整许可证见该目录 `LICENSE`；固定提交、大小及 SHA-256 见 `provenance.json`。六份模型合计约 13.5 MB，用于本机识别，源图不发送给模型提供方。常驻识别使用用户已安装的 Tesseract C API，不随源码分发 DLL。
+## 运行与界面组件
 
-> **本程序自身**以 [MIT](../LICENSE) 发布，与 Valve Corporation 无关联。
+以下许可位置均相对于解压后的 test.3 目录，路径以实际包为准。
 
----
+| 组件 / 官方来源 | test.3 可确认版本 | 许可与归属证据 | 随包位置 |
+| --- | --- | --- | --- |
+| [Python](https://www.python.org/) | 3.13.14（构建日志） | Python Software Foundation 及其附带历史许可 | `licenses/Python-Tcl-Tk/` 中的 `LICENSE.txt` |
+| [Tcl](https://github.com/tcltk/tcl) / [Tk](https://github.com/tcltk/tk) | Tcl 8.6.15；Tk 精确补丁版本未确认 | 上游 Tcl/Tk 原许可；另有[对应 Tcl 许可副本](licenses/Tcl-8.6.15.txt) | `licenses/Python-Tcl-Tk/` |
+| [NumPy](https://github.com/numpy/numpy) | 2.3.5（包内 METADATA） | NumPy Developers，主许可 BSD-3-Clause；原文件另含 OpenBLAS、LAPACK、GCC runtime 等声明及例外，不能全部简化为 BSD | `licenses/numpy/` |
+| [opencv-python](https://github.com/opencv/opencv-python) | 4.13.0.92（许可目录） | Python 包装层 MIT，Olli-Pekka Heinisuo；OpenCV 与其余组件见随附第三方声明 | `licenses/opencv-python/` 的 `LICENSE.txt` 与 `LICENSE-3RD-PARTY.txt` |
+| [Pillow / PIL](https://python-pillow.org/) | 12.2.0（冻结版本常量） | MIT-CMU；Secret Labs AB、Fredrik Lundh、Jeffrey ‘Alex’ Clark 及贡献者；原文另含 Brotli、FreeType 等声明 | `licenses/pillow/licenses/LICENSE` |
+| [pytesseract](https://github.com/madmaze/pytesseract) | 0.3.13（许可目录） | Apache-2.0；具体作者声明以发行版与上游为准，不沿用未经核实的旧年份 | `licenses/pytesseract/` |
+| [ttkbootstrap](https://github.com/israel-dryer/ttkbootstrap) | 未确认 | 随包主许可 MIT，`Copyright (c) 2021–2026 Israel Dryer` | `licenses/ttkbootstrap/licenses/LICENSE` |
+| [Bootstrap Icons](https://github.com/twbs/icons) | 精确图标版本未确认 | MIT，`2019–2024 The Bootstrap Authors`；[上游贡献者](https://github.com/twbs/icons/graphs/contributors) | `licenses/ttkbootstrap/icons/LICENSE`；资源为 `_internal/ttkbootstrap/assets/icons/bootstrap.ttf` |
+| [packaging](https://github.com/pypa/packaging) | 26.1（冻结版本常量） | Apache-2.0 或 BSD；BSD 原文署名 Donald Stufft and individual contributors | `licenses/packaging/licenses/LICENSE`、`LICENSE.APACHE`、`LICENSE.BSD` |
 
-## 一、Python 依赖（`requirements.txt`）
+ttkbootstrap 版本常量为 `unknown`，包内未保留其发行版 METADATA，不能据此补写精确版本。版本未确认不表示组件未使用，也不能用当前机器安装的新版填入旧包版本。随包复合许可中的署名、年份和例外按原文保留。
 
-| 包 | 用途 | 许可证 | 版权 |
-|---|---|---|---|
-| [opencv-python](https://github.com/opencv/opencv-python) | 截图分析、气泡检测、图像预处理 | **Apache-2.0** | Copyright (c) OpenCV Foundation / Intel Corporation |
-| [numpy](https://numpy.org/) | 数组运算 | **BSD-3-Clause** | Copyright (c) 2005-2025, NumPy Developers |
-| [Pillow](https://python-pillow.org/) | 截屏抓取（`PIL.ImageGrab`） | **MIT-CMU**（HPND） | Copyright © 2010-2025 by Jeffrey A. Clark and contributors |
-| [pytesseract](https://github.com/madmaze/pytesseract) | Tesseract 的 Python 绑定 | **Apache-2.0** | Copyright (c) 2014-2024 Samuel Hoffstaetter, Matthias Lee |
-| [ttkbootstrap](https://github.com/israel-dryer/ttkbootstrap)（可选） | 控制面板观感 | **MIT AND (Apache-2.0 OR BSD-2-Clause)** | Copyright (c) 2019 Israel Dryer；含 Bootswatch 主题（Apache-2.0 / BSD-2-Clause） |
-| [pystray](https://github.com/moses-palmer/pystray)（可选） | 系统托盘图标 | **LGPL-3.0** | Copyright (c) 2016 Moses Palmér |
-| [pyinstaller](https://pyinstaller.org/)（仅打包用） | 生成单文件 exe | **GPL-2.0-or-later，附例外条款** | Copyright (c) 2010-2025, PyInstaller Development Team |
+## OCR 程序与模型
 
-### 关于 LGPL 的 `pystray`
+**Tesseract 程序**：[官方项目](https://github.com/tesseract-ocr/tesseract)，Apache-2.0。助手调用用户已安装的程序或 C API。源码不附 Tesseract 可执行文件/DLL；test.3 ZIP 另附上游原始 Windows 安装器，用户自行安装，未从开发机安装目录抽取 DLL。
 
-`pystray` 是**可选**依赖：没装它程序照常工作，只少了右下角的托盘图标
-（见 `tray.py` 的降级逻辑，有回归测试守着）。
+- 安装器：[5.5.3 上游发布文件](https://github.com/tesseract-ocr/tesseract/releases/download/5.5.3/tesseract-ocr-w64-setup-5.5.3.20260724.exe)。
+- SHA-256：`bee9e3434bd94fd65387d9be28cd467a41f61b1275383b55b0f59a1331270ae4`。
+- 包内来源记录：`首次安装OCR/来源与校验.txt`。安装器内部可能含其他组件，本轮未逐项审计；安装器原有许可和来源说明不能被本页概括替代。
 
-因此本项目的**分发策略**是：
+**OCR 模型**：来自 [tessdata_fast 固定提交](https://github.com/tesseract-ocr/tessdata_fast/tree/87416418657359cb625c412a48b6e1d6d41c29bd)，Apache-2.0。它们不是程序安装器的版本，也不能混写为泛指 tessdata 的来源。
 
-- **分发的 exe 里不打包 `pystray`**。托盘作为「可选增强」，想要的人自己
-  `pip install pystray` 即可。这样既不用把 LGPL 组件捆进单文件可执行体，
-  也不损失任何翻译功能。
-- 如果将来确实要把它打进 exe，必须同时提供该组件可替换的形式
-  （例如附上 `pystray` 的源码与构建脚本），并在本文件里附 LGPL-3.0 全文。
+公开源码保留六个模型文件、[完整许可](../app/recognition/models/LICENSE) 和 [provenance.json](../app/recognition/models/provenance.json)，包含固定提交、逐文件大小与 SHA-256；模型未修改。本轮重新核对文件摘要匹配。冻结包对应路径为 `_internal/app/recognition/models/`。模型范围属于实现记录，不构成其他语言已实测的声明。
 
-### 关于 Apache-2.0
+## 构建与可选源码依赖
 
-`opencv-python` 与 `pytesseract` 采用 Apache-2.0。**只要只是源码依赖（由用户自己
-`pip install`），本仓库不承担再分发义务**；但一旦本项目**打包并分发 exe**
-（PyInstaller 会把它们嵌进可执行体），就属于再分发，需要：
+| 项目 | 状态 | 许可与依据 |
+| --- | --- | --- |
+| [PyInstaller](https://pyinstaller.org/) | 构建工具 6.20.0；contrib hooks 2026.4（构建日志） | GPL-2.0-or-later，附 Bootloader Exception；运行时 hooks 另有 Apache-2.0。完整例外与版权原文见包内 `licenses/pyinstaller/licenses/COPYING.txt`，不能省略例外或自行更改年份 |
+| [pystray](https://github.com/moses-palmer/pystray) | 源码可选托盘依赖；test.3 构建明确排除 | 上游 LGPL-3.0；本轮未分发其源码。以后若纳入包，需另核对实际版本与分发材料 |
+| [defusedxml](https://github.com/tiran/defusedxml)、[darkdetect](https://github.com/albertosottile/darkdetect) | 构建脚本列入可选许可收集候选；静态核对 test.3 冻结 PYZ 模块表与 ZIP 文件后未发现这两个组件 | 不列为 test.3 内置依赖；以后环境若收集这些组件，需同时记录实际版本和许可 |
 
-1. 随发布包附上 Apache-2.0 许可证全文；
-2. 保留上游的版权、专利、商标与归属声明。
+基础 CI 使用 GitHub 官方 [checkout](https://github.com/actions/checkout) 与 [setup-python](https://github.com/actions/setup-python)，工作流固定提交摘要；它们用于仓库检查，不进入助手下载包。
 
-**发布清单里已列为阶段 6 的必办项。**
+## 游戏、图片与字体
 
----
+`app/translation/game_terms.json` 来自本机安装的 Valve 游戏本地化文件配对整理，包含来源摘要，并随 test.3 分发；其单独再分发授权依据尚未核实。具体边界见[项目与素材说明](PROJECT-NOTICE.md)，不能概括成“不包含任何游戏数据表”或“全部内容均属项目 MIT”。
 
-## 二、外部识别程序
+当前公开截图是新版助手界面的真实截图，没有伪造译文或使用 AI 插画。源码未附游戏字体；运行时可本机私有加载游戏字体。Windows 包另附 Bootstrap Icons 图标字体及许可。私人游戏截图和人工真值材料未公开。
 
-| 组件 | 用途 | 许可证 | 说明 |
-|---|---|---|---|
-| [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) | 屏幕文字识别 | **Apache-2.0** | 用户自行安装；首个测试 ZIP 附上游未修改安装器，来源与摘要见包内说明。源码不包含 `tesseract.exe` / `*.dll` |
-| [tessdata](https://github.com/tesseract-ocr/tessdata)（`eng.traineddata`） | 英文语言包 | **Apache-2.0** | 用户安装 Tesseract 时勾选 English 一并装好 |
+## 更新清单
 
-OCR 安装器包含的其他组件及相应许可由上游安装器原样提供；测试 ZIP 保留安装器，不从作者的安装目录抽取或改装 DLL。
-
----
-
-## 三、字体
-
-本仓库**不包含任何字体文件**（`*.ttf` / `*.otf` 数量为 0）。
-
-程序在运行时从**用户本机的游戏目录**加载 `notosanssc-*.ttf` 用于浮窗渲染
-（`AddFontResourceExW` + `FR_PRIVATE`：进程内私有加载，**不安装到系统、
-不复制、不修改**游戏文件）。
-
-界面本身使用 Windows 自带的 `Bahnschrift` / `Microsoft YaHei UI`，
-只引用字体族名，不涉及字体文件分发。
-
----
-
-## 四、游戏相关内容
-
-仓库里**保留**以下与游戏有关的文件，均为本项目的测试素材或说明配图：
-
-| 文件 | 说明 |
-|---|---|
-| `verify/truth/match_bubble.png` | 合成素材（文本是 `test789 push mid now`），回归测试用 |
-| `verify/truth/bright_screen.png`<br>`verify/truth/wait2.png`<br>`verify/truth/long_chat.png` | 真实对局截图，**已脱敏**：玩家昵称与比赛 ID 已抹平，仅保留回归测试需要的画面与坐标 |
-| `可视化/*.png` | 项目自己的示意图与流程图（游戏画面已涂黑或为合成内容） |
-
-**不包含**任何游戏本体文件、可执行文件或数据表。
-
-《异锁》（Deadlock）及相关名称、素材是 Valve Corporation 的商标或版权财产。
-本项目与 Valve Corporation 无关联，未获得其授权、认可或赞助。
-
----
-
-## 五、如何取得完整的许可证文本
-
-- **Python 包**：每个包的发行版里都带着自己的 `LICENSE` 文件。装完之后可以这样找：
-
-  ```powershell
-  python -c "import importlib.metadata as m; print(m.metadata('opencv-python')['License'])"
-  ```
-
-  或直接访问上表里的上游仓库链接。
-
-- **完整文本随发布包提供**：正式发布的 zip 里会附本文件，并在打包时把
-  Apache-2.0 全文一并放进发布目录。
-
----
-
-## 六、贡献者请注意
-
-如果你提交的代码引入了新的第三方依赖，请**同时更新本文件**（包名、用途、许可证、版权）。
-许可证是 `GPL` / `AGPL` 这类强传染性的库，本项目不能接受。
+新增或升级依赖、引用外部代码、模型、字体或图片时，应记录：实际版本/固定提交、原作者及官方来源、用途、修改情况、许可/NOTICE 原文与包内位置、再分发依据。将源码依赖、构建工具、外部服务和实际打包组件分别核对；无法确认的项目保持待核实状态，并在发布前处理。详见[贡献说明](CONTRIBUTING.md)与[发布规范](releases/README.md)。
