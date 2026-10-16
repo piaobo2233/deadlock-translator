@@ -106,7 +106,7 @@ def main():
             command.extend(['--exclude-module', name])
         command.append(str(source/'scripts/run.py'))
         env = dict(os.environ, DEEPSEEK_API_KEY='')
-        log = ROOT/'backups/development/first-test-20261015/build.log'
+        log = ROOT/'backups/development/portable-build'/args.version/'build.log'
         log.parent.mkdir(parents=True, exist_ok=True)
         with log.open('w', encoding='utf-8') as stream:
             subprocess.run(command, cwd=source, env=env, stdout=stream, stderr=subprocess.STDOUT, check=True)

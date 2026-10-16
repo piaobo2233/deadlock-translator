@@ -31,10 +31,10 @@ python -m unittest discover -s tests -p test_composer.py -v
 
 ```powershell
 pip install pyinstaller
-python scripts/build_portable.py --ocr-installer "C:\Downloads\tesseract-ocr-w64-setup-5.5.3.20260724.exe" --installer-sha256 bee9e3434bd94fd65387d9be28cd467a41f61b1275383b55b0f59a1331270ae4
+python scripts/build_portable.py --version 1.0.0-test.3 --ocr-installer "C:\Downloads\tesseract-ocr-w64-setup-5.5.3.20260724.exe" --installer-sha256 bee9e3434bd94fd65387d9be28cd467a41f61b1275383b55b0f59a1331270ae4
 ```
 
-将示例路径替换为实际下载位置。工具从允许的源码与资源构建，排除用户数据；结果写入 `dist/`，已有同名 ZIP 时拒绝覆盖。源码 VERSION 为 1.0.0，默认测试包版本为 1.0.0-test.1。实际发布 ZIP 的检查入口为 `verify/portable_smoke.py`，参数见 `--help`。
+将示例路径替换为实际下载位置。工具从允许的源码与资源构建，排除用户数据；结果写入 `dist/`，已有同名 ZIP 时拒绝覆盖。本版源码 VERSION 为 1.0.0-test.3，构建时显式传入 `--version 1.0.0-test.3`。实际发布 ZIP 的检查入口为 `verify/portable_smoke.py`，参数见 `--help`。
 
 ## 反馈与数据
 
@@ -84,10 +84,10 @@ python -m app --abandon 请求编号
 
 公开源码不附私人截图、聊天记录或人工真值资料；依赖这些材料的完整开发测试不能直接在公开克隆中复现。包构建命令需显式传入 `--version 1.0.0-test.2`。测试结果及已知限制见[本版说明](releases/v1.0.0-test.2.md)。
 
-## 未发布源码：导航与发言流程
+## 1.0.0-test.3：导航与发言流程
 
 当前 main 使用六页导航。接口草稿与发言原文/预览在本次窗口生命周期内保留；地址、模型和密钥统一点击保存。过期译文不可通过复制按钮使用，迟到的保存与连接结果也需核对当前配置。
 
 开发目录的后台相关检查为 170 项：159 通过、10 因可见窗口/原生钩子边界跳过、1 条关闭失败回调用例未通过。该用例期望退出保存回调异常后仍销毁窗口，而当前实现保留窗口；该实现没有在本轮修改。语法检查通过。测试使用临时数据、模拟 API/输入和隐藏 Tk 窗口，没有真实网络请求、剪贴板或游戏输入操作。
 
-原生默认/小窗口、DPI、焦点顺序与实际游戏回填、自动发送仍未验收。以上记录不能替代真实游戏结果，也不是标准全量检查通过声明。下载附件仍是 1.0.0-test.2，此次只同步源码，没有新标签或安装包。
+用户空闲后已核对新包接收、发言及接口页的默认窗口；小窗口、DPI、完整焦点顺序及实际游戏回填、自动发送仍未全面验收。以上记录不能替代真实游戏结果，也不是标准全量检查通过声明。本版已重建下载包并通过清单、凭据排除、冻结依赖、OCR辅助进程及离线无窗退出检查；独立新版面板打开/关闭与三页实拍通过，但没有实际游戏发送验收。详见[版本说明](releases/v1.0.0-test.3.md)。
