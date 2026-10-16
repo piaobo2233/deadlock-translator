@@ -32,6 +32,8 @@ class InputTransaction:
         original, translated, sent, token = '', '', False, None
         status = '未回填'
         try:
+            if self.closed or not self.allowed():
+                return
             token = self.native.begin()
             if token is None:
                 return
@@ -42,6 +44,9 @@ class InputTransaction:
                 return (not self.closed and self.allowed() and self.clock() - started < 5.5 and self.native.current(token)
                         and all(latest.get(k) == config.get(k) for k in
                                 ('api_key','endpoint','model','translate_api','send_target','auto_send')))
+            if not current():
+                status = '输入状态已改变，已取消'
+                return
             original = self.native.read_input(token)
             if not original or not current():
                 status = '未读到有效输入或焦点/输入已改变'
@@ -62,7 +67,9 @@ class InputTransaction:
                 status = '回填未确认，未发送；请检查游戏输入，原文可在面板恢复'
                 return
             status = '已回填，请在游戏中手动发送'
-            if config.get('auto_send') and current():
+            if not current():
+                status = '回填后状态已改变，未自动发送；请核对游戏输入'
+            elif config.get('auto_send'):
                 # Require a confirmed readback before sending, not just SendInput's return count.
                 if self.native.read_input(token) == translated and current() and self.native.send(token, current):
                     sent = True

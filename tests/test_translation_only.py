@@ -61,7 +61,7 @@ class UserKeyRoutingTests(unittest.TestCase):
     def test_panel_reason_counts_validate_and_expire(self):
         state=dict(at=100,translation_unavailable={'pending':1,'none':2,'budget':1},ui_status='视觉采集异常')
         feedback=display_feedback(state,running=True,now=101)[1]
-        for label in ('在线翻译未启用','自己的 API Key','费用保护','视觉采集异常'):
+        for label in ('在线翻译未启用','未配置密钥（翻译接口）','费用保护','视觉采集异常'):
             self.assertIn(label,feedback)
         self.assertEqual(len(feedback.splitlines()),4)
         self.assertEqual(display_feedback(state,running=True,now=131)[1],'')

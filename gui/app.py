@@ -90,6 +90,7 @@ class App:
         self.current = None
         self._page_failed = False
         self._history = []
+        self._page_status = {}
         self.th = Theme("Deadlock Translator",
                         # At Windows' current DPI, 650px clips existing actions/charts.
                         # This is only the initial size; navigation preserves resizing.
@@ -106,6 +107,9 @@ class App:
 
     def _on_destroy(self, event):
         if event.widget is self.root:
+            draft = getattr(self, '_composer_draft', None)
+            if draft is not None:
+                draft['generation'] += 1
             self.page_callbacks.cancel_all()
             self.window_callbacks.cancel_all()
             if self._coordinator:
@@ -115,8 +119,12 @@ class App:
         return self.page_callbacks.schedule(delay, callback)
 
     # ------------------------------------------------------------ 状态栏
-    def set_status(self, text, color=""):
+    def set_status(self, text, color="", *, page=None):
         """底部一行状态。保存成功/失败用它，**不弹窗**（§50）。"""
+        page = page or self.current
+        self._page_status[page] = (text, color)
+        if page != self.current:
+            return
         try:
             self.status.configure(text=text, fg=color or COLORS["muted"])
             feedback = getattr(self, '_page_feedback', None)
@@ -132,6 +140,9 @@ class App:
         from app.runtime.config_application import application_state
         self._application_generation += 1
         generation = self._application_generation
+        page = self.current
+        def status(*args):
+            self.set_status(*args, page=page)
         started = time.monotonic()
         def check():
             if generation != self._application_generation:
@@ -142,12 +153,12 @@ class App:
                       'failed': ('已保存，但当前运行应用失败；请查看诊断', COLORS['err']),
                       'protected': ('已保存；当前运行受严格离线限制', COLORS['warn'])}
             if state in labels:
-                self.set_status(*labels[state])
+                status(*labels[state])
                 return
             if time.monotonic() - started >= 12:
-                self.set_status('已保存；尚未收到当前运行的应用确认', COLORS['warn'])
+                status('已保存；尚未收到当前运行的应用确认', COLORS['warn'])
                 return
-            self.set_status('已保存，等待运行时应用（约2秒轮询）', COLORS['muted'])
+            status('已保存，等待运行时应用确认', COLORS['muted'])
             self.window_callbacks.schedule(400, check)
         check()
 
@@ -173,11 +184,11 @@ class App:
         self.nav.pack(side='left',fill='y');self.nav.pack_propagate(False)
         th.tk.Frame(self.nav,bg=c['soft'],height=20).pack(fill='x')
         self.nav_buttons={}
-        for key,label in (('home','↔   翻译'),('dictionary','≡   词库'),('settings','⚙   设置')):
+        for key,label in (('home','接收翻译'),('send','发言翻译'),('dictionary','词库'),
+                          ('recognition','识别与显示'),('api','翻译接口'),('settings','设置')):
             self.nav_buttons[key]=self._make_nav_button(self.nav,key,label)
         bottom=th.tk.Frame(self.nav,bg=c['soft']);bottom.pack(side='bottom',fill='x',padx=24,pady=20)
         th.label(bottom,'本地优先',bg=c['soft'],fg=c['ok'],font=th.font_small).pack(anchor='w')
-        th.label(bottom,'先查词库，再联网补充',bg=c['soft'],fg=c['muted'],font=(th.font[0],8),wraplength=130,justify='left').pack(anchor='w',pady=(4,0))
         th.tk.Frame(self.body,bg=c['border'],width=1).pack(side='left',fill='y')
         content=th.tk.Frame(self.body,bg=c['panel']);content.pack(side='left',fill='both',expand=True)
         self.canvas=th.tk.Canvas(content,bg=c['panel'],highlightthickness=0)
@@ -259,12 +270,14 @@ class App:
             self._fail(key, UnknownPage(key))
             return False
         requested = key
-        key = {'ingame':'settings', 'cost':'home'}.get(key, key)
+        key = {'ingame':'recognition', 'cost':'home'}.get(key, key)
         if key == self.current and not self._page_failed:
             self._locate(requested)
             return True
 
         dictionary = getattr(self, 'dictionary', None)
+        if self.current == 'send':
+            self.composer['remember']()
         if self.current == 'dictionary' and dictionary is not None:
             dictionary.remember()
         self.canvas.yview_moveto(0)
@@ -273,6 +286,7 @@ class App:
             self._history.append(self.current)
             self._history = self._history[-64:]
         self.current = key
+        self._page_feedback = None
         self._page_failed = False
         self._refresh_nav()
 
@@ -289,7 +303,8 @@ class App:
 
         # 标题 / 返回按钮 / 窗口尺寸
         is_home = (key == "home")
-        self.title_label.configure(text="翻译" if is_home else spec["title"])
+        self.title_label.configure(text=spec["title"])
+        self.set_status(*self._page_status.get(key, ('', '')))
         if is_home or not self._history:
             self.back_btn.pack_forget()
         else:
@@ -300,9 +315,7 @@ class App:
         return True
 
     def _locate(self, requested):
-        if requested == 'ingame':
-            self.settings_controls['show']('识别与显示')
-        elif requested == 'cost':
+        if requested == 'cost':
             self.expand_cost()
             self.root.update_idletasks()
             y = self.cost_summary.winfo_rooty() - self.page.winfo_rooty()
@@ -314,20 +327,25 @@ class App:
         from app.runtime.config_application import application_state
         self._application_generation += 1
         generation = self._application_generation
+        page = self.current
+        def status(*args):
+            self.set_status(*args, page=page)
         started = time.monotonic()
         def check():
             if generation != self._application_generation: return
             states = [application_state(self.root_dir,k,v,running=dt.translator_is_running()) for k,v in values.items()]
             if 'failed' in states:
-                self.set_status(prefix+'已保存，但当前运行应用失败；可重试或重新启动', COLORS['err']); return
+                status(prefix+'已保存，但当前运行应用失败（设置：诊断）', COLORS['err']); return
             if 'protected' in states:
-                self.set_status(prefix+'已保存；当前运行受严格离线限制', COLORS['warn']); return
+                status(prefix+'已保存；当前运行受严格离线限制', COLORS['warn']); return
             if all(s == 'applied' for s in states):
-                self.set_status(prefix+'已保存，当前运行已应用', COLORS['ok']); return
+                status(prefix+'已保存，当前运行已应用', COLORS['ok']); return
             if all(s == 'saved' for s in states):
-                self.set_status(prefix+'已保存，启动后生效（翻译器未运行）', COLORS['muted']); return
-            self.set_status(prefix+'已保存，等待运行时应用确认', COLORS['muted'])
-            if time.monotonic()-started < 12: self.window_callbacks.schedule(400,check)
+                status(prefix+'已保存，启动后生效', COLORS['muted']); return
+            if time.monotonic()-started >= 12:
+                status(prefix+'已保存；尚未收到应用确认', COLORS['warn']); return
+            status(prefix+'已保存，等待运行时应用确认', COLORS['muted'])
+            self.window_callbacks.schedule(400,check)
         check()
 
     MAX_H = 700          # 内容很长才滚动；宽度由用户窗口控制。
@@ -342,6 +360,15 @@ class App:
             return
         try:
             if not self.canvas.winfo_exists():
+                return
+            widget = event.widget
+            while widget is not None and widget is not self.page:
+                if widget.winfo_class() in {'Text', 'Listbox', 'Treeview', 'TCombobox', 'Spinbox', 'TSpinbox'}:
+                    return
+                if widget is not self.canvas and widget.winfo_class() == 'Canvas':
+                    return
+                widget = getattr(widget, 'master', None)
+            if widget is None and event.widget is not self.canvas:
                 return
             self.canvas.yview_scroll(-1 if event.delta > 0 else 1, "units")
         except Exception:

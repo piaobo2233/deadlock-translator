@@ -58,7 +58,7 @@ class PanelInstanceTests(unittest.TestCase):
         self.fail('Panel condition not reached: '+repr(failures))
 
     def ready(self,page='home'):
-        page = {'ingame':'home','cost':'home'}.get(page,page)
+        page = {'ingame':'recognition','cost':'home'}.get(page,page)
         return self.wait(lambda: self.state() if self.state().get('page')==page else None)
 
     def close_window(self,pid):

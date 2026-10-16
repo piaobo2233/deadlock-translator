@@ -175,16 +175,17 @@ class SimplifiedTkTests(unittest.TestCase):
         self.assertTrue(self.app.open_page('home'));self.app.root.update()
         labels=self.labels()
         for removed in ('本次会话回看','开始新对局','译文最大宽度','新消息延长旧译文'):self.assertNotIn(removed,labels)
-        self.assertIn('复制上次输入原文',labels)
+        self.assertNotIn('复制上次输入原文',labels)
+        self.app.open_page('send');self.assertIn('复制上次输入原文',self.labels())
         self.assertTrue(self.app.open_page('ingame'));self.app.root.update()
-        self.assertEqual(self.app.current,'settings');self.assertEqual(self.app.settings_controls['group'].get(),'识别与显示')
+        self.assertEqual(self.app.current,'recognition')
         labels=self.labels();self.assertIn('测试识别',labels);self.assertNotIn('调整区域',labels)
         self.assertNotIn('服务商',labels)
-        for group in ('语言与输入','翻译接口','启动与关闭'):
-            self.app.settings_controls['show'](group);self.app.root.update();self.assertFalse(self.app._page_failed)
+        for page in ('send','api','settings'):
+            self.app.open_page(page);self.app.root.update();self.assertFalse(self.app._page_failed)
         self.assertTrue(self.app.open_page('cost'));self.app.root.update()
         self.assertTrue(self.app.cost_section.winfo_manager())
-        self.assertTrue(self.app.cost_controls['table'].winfo_ismapped())
+        self.assertTrue(self.app.cost_controls['table'].winfo_manager())
         self.assertIn('日期 / 已知估算费用 / 完整性',self.app.cost_controls['table'].get('1.0','end'))
 
     def test_mode_hides_inactive_hotkey_and_preset_saves_only_one_field(self):
@@ -201,7 +202,7 @@ class SimplifiedTkTests(unittest.TestCase):
         from app.runtime.panel_instance import begin_translator
         from app.runtime.session_view import SessionView
         owner=begin_translator(self.root);view=SessionView(self.root,owner['token'])
-        self.app.open_page('home')
+        self.app.open_page('send')
         for status in ('正在翻译','翻译失败','已回填，请手动发送'):
             self.assertTrue(view.input(dict(original='保留原文',translation='',status=status)))
             self.app._feedback_refreshes[0]()

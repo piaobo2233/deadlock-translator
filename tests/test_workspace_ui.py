@@ -59,34 +59,91 @@ class WorkspaceTests(unittest.TestCase):
     def draft(self,d,value):
         d.draft.delete('1.0','end');d.draft.insert('1.0',value)
 
-    def test_three_nav_and_legacy_locations_and_unknown_error(self):
-        self.assertEqual(list(self.app.nav_buttons),['home','dictionary','settings'])
-        for name,current in (('home','home'),('ingame','settings'),('cost','home')):
+    def test_six_nav_and_legacy_locations_and_unknown_error(self):
+        self.assertEqual(list(self.app.nav_buttons),['home','send','dictionary','recognition','api','settings'])
+        for name,current in (('home','home'),('ingame','recognition'),('cost','home')):
             self.assertTrue(self.app.open_page(name));self.assertEqual(self.app.current,current)
         self.assertTrue(self.app.cost_section.winfo_manager())
         self.assertFalse(self.app.open_page('typo'))
-        self.assertTrue(self.app.open_page('home'));self.assertEqual(self.app.title_label.cget('text'),'翻译')
+        self.assertTrue(self.app.open_page('home'));self.assertEqual(self.app.title_label.cget('text'),'接收翻译')
+
+    def test_api_draft_survives_navigation_and_focusout_never_saves(self):
+        self.app.open_page('api');c=self.app.api_controls
+        before=Path(self.config).read_bytes()
+        c['key'].set('fixture-draft-key');c['model'].set('draft-model')
+        c['endpoint'].set('https://draft.invalid/chat/completions')
+        c['entry'].event_generate('<FocusOut>');self.app.root.update()
+        self.assertEqual(Path(self.config).read_bytes(),before)
+        self.assertEqual(c['dirty'].cget('text'),'未保存')
+        self.app.open_page('send');self.app.open_page('api');c=self.app.api_controls
+        self.assertEqual(c['key'].get(),'fixture-draft-key')
+        self.assertEqual(c['model'].get(),'draft-model')
+        self.assertEqual(c['endpoint'].get(),'https://draft.invalid/chat/completions')
+        self.assertEqual(Path(self.config).read_bytes(),before)
+        c['save']();self.assertEqual(c['dirty'].cget('text'),'已保存')
+        self.assertEqual(store.read_json(self.config)['api_key'],'fixture-draft-key')
+
+    def test_local_text_scroll_does_not_also_move_page(self):
+        from types import SimpleNamespace
+        self.app.open_page('send');self.app._scrolling=True
+        with patch.object(self.app.canvas,'yview_scroll') as scroll:
+            self.app._wheel(SimpleNamespace(widget=self.app.composer['source'],delta=-120))
+            scroll.assert_not_called()
+            self.app._wheel(SimpleNamespace(widget=self.app.page,delta=-120))
+            scroll.assert_called_once_with(1,'units')
+
+    def test_current_problem_does_not_repeat_historical_failures(self):
+        from gui.workspace import current_problem
+        config=dict(translate_api=True,api_key='fixture-key')
+        state=dict(at=100,translation_unavailable={'none':20})
+        kwargs=dict(data=state,config=config,word='运行中',why='正在接收',now=101)
+        self.assertEqual(current_problem(**kwargs),'正在接收')
+        config['api_key']=''
+        self.assertEqual(current_problem(**kwargs),'未配置密钥（翻译接口）')
+        state['at']=0
+        self.assertEqual(current_problem(**kwargs),'等待当前诊断记录')
+
+    def test_application_ack_stays_on_originating_page(self):
+        self.app.open_page('api')
+        with patch('app.runtime.config_application.application_state',return_value='pending') as ack:
+            self.app.api_controls['save']()
+            self.app.open_page('send');self.app.set_status('发言页草稿')
+            ack.return_value='applied'
+            end=time.monotonic()+.55
+            while time.monotonic()<end:self.app.root.update();time.sleep(.01)
+        self.assertEqual(self.app.current,'send')
+        self.assertEqual(self.app.status.cget('text'),'发言页草稿')
+        self.app.open_page('api');self.assertIn('已应用',self.app.status.cget('text'))
 
     def test_model_and_key_patch_verified_persist_across_reopen(self):
-        self.app.open_page('settings');controls=self.app.api_controls
+        self.app.open_page('api');controls=self.app.api_controls
         self.assertEqual(str(controls['box'].cget('state')),'normal')
         self.assertIn('legacy-model',controls['box'].cget('values'))
         controls['model'].set('deepseek-v4-pro');controls['key'].set('fixture-new-key')
         ConfigRepository(self.config).save({'width':640,'unknown':{'keep':2}})
-        self.button('保存接口设置').invoke()
+        self.button('保存').invoke()
         disk=store.read_json(self.config)
         self.assertEqual((disk['model'],disk['api_key']),('deepseek-v4-pro','fixture-new-key'))
         self.assertEqual((disk['endpoint'],disk['width'],disk['unknown']),('https://custom.invalid/v1',640,{'keep':2}))
         self.assertIn('启动后生效',self.app.status.cget('text'));self.assertNotIn('已应用',self.app.status.cget('text'))
-        self.app.open_page('home');self.app.open_page('settings')
+        self.app.open_page('home');self.app.open_page('api')
         self.assertEqual(self.app.api_controls['model'].get(),'deepseek-v4-pro')
         other=App(str(self.root))
         try:
-            other.open_page('settings');self.assertEqual(other.api_controls['model'].get(),'deepseek-v4-pro')
+            other.open_page('api');self.assertEqual(other.api_controls['model'].get(),'deepseek-v4-pro')
         finally:other.root.destroy()
 
+    def test_new_api_draft_is_not_marked_applied_by_old_save_ack(self):
+        self.app.open_page('api');c=self.app.api_controls
+        with patch('app.runtime.config_application.application_state',return_value='pending') as ack:
+            c['save']();c['model'].set('unsaved-model');ack.return_value='applied'
+            end=time.monotonic()+.55
+            while time.monotonic()<end:self.app.root.update();time.sleep(.01)
+        self.assertEqual(self.app.status.cget('text'),'未保存')
+        self.assertEqual(c['dirty'].cget('text'),'未保存')
+
     def test_provider_preset_custom_endpoint_and_explicit_connection_test(self):
-        self.app.open_page('settings');controls=self.app.api_controls
+        self.app.open_page('api');controls=self.app.api_controls
         controls['provider'].set('DeepSeek');controls['select_provider']()
         self.assertEqual(controls['endpoint'].get(),'https://api.deepseek.com/chat/completions')
         self.assertEqual(controls['model'].get(),'deepseek-flash')
@@ -107,6 +164,21 @@ class WorkspaceTests(unittest.TestCase):
                 self.app.root.update();time.sleep(.01)
             request.assert_called_once()
             self.assertEqual(self.app.connection_controls['status'].cget('text'),'连接成功')
+
+    def test_connection_result_is_stale_after_draft_change_without_navigation(self):
+        import threading
+        started,release=threading.Event(),threading.Event()
+        def blocked(*args,**kwargs):
+            started.set();release.wait(2);return True,'连接成功'
+        self.app.open_page('api')
+        with patch('app.config.providers.test_connection',side_effect=blocked):
+            self.app.connection_controls['button'].invoke();self.assertTrue(started.wait(1))
+            self.app.api_controls['model'].set('another-model');release.set()
+            end=time.monotonic()+2
+            while time.monotonic()<end and '过期' not in self.app.connection_controls['status'].cget('text'):
+                self.app.root.update();time.sleep(.01)
+            self.assertIn('过期',self.app.connection_controls['status'].cget('text'))
+            self.assertEqual(self.app.current,'api')
 
     def wait_region(self):
         end=time.monotonic()+4
@@ -151,7 +223,7 @@ class WorkspaceTests(unittest.TestCase):
             self.assertEqual(self.app.root.state(),'normal');capture.assert_not_called()
 
     def test_empty_and_mask_never_replace_secret_and_failure_has_no_success(self):
-        self.app.open_page('settings');c=self.app.api_controls
+        self.app.open_page('api');c=self.app.api_controls
         c['save']();self.assertEqual(store.read_json(self.config)['api_key'],'fixture-key')
         c['key'].set('********');c['save']();self.assertIn('保存失败',self.app.status.cget('text'))
         c['key'].set('fixture-new-key')
@@ -162,12 +234,12 @@ class WorkspaceTests(unittest.TestCase):
     def test_environment_source_remains_explicit_after_file_save(self):
         original=gui.pages._load_config
         with patch('gui.pages._load_config',side_effect=lambda root:ConfigRepository(self.config).load(environment={'DEEPSEEK_API_KEY':'fixture-environment-key'})):
-            self.app.open_page('settings');c=self.app.api_controls;c['key'].set('fixture-new-key');c['save']()
+            self.app.open_page('api');c=self.app.api_controls;c['key'].set('fixture-new-key');c['save']()
             self.assertIn('环境变量',self.app.status.cget('text'));self.assertIn('环境变量',c['hint'].cget('text'))
             self.assertEqual(store.read_json(self.config)['api_key'],'fixture-new-key')
 
     def test_save_and_runtime_apply_are_distinct(self):
-        self.app.open_page('settings')
+        self.app.open_page('api')
         for state,expected in (('pending','等待'),('applied','已应用'),('failed','应用失败')):
             with patch('app.runtime.config_application.application_state',return_value=state):
                 self.app.api_controls['save']()
@@ -196,7 +268,7 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(d.selected['key'],'second');self.assertEqual(Path(self.pending).read_bytes(),before)
         self.choose(d,'first');self.assertEqual(d.draft.get('1.0','end-1c'),'保留草稿')
         d.refresh();self.app.root.update();self.assertEqual(d.draft.get('1.0','end-1c'),'保留草稿')
-        self.app.open_page('settings');self.app.open_page('dictionary');self.app.root.update()
+        self.app.open_page('api');self.app.open_page('dictionary');self.app.root.update()
         self.assertEqual(self.app.dictionary.draft.get('1.0','end-1c'),'保留草稿')
 
     def test_conflict_reread_keeps_draft_and_requires_new_confirmation(self):
@@ -307,7 +379,7 @@ class WorkspaceTests(unittest.TestCase):
         self.assertFalse(d.selected['can_restore'])
         glossary_ops=__import__('app.translation.glossary_ops', fromlist=['*'])
         glossary_ops.set_enabled(self.glossary,'afk',False)
-        self.app.open_page('settings');self.app.open_page('dictionary');d=self.app.dictionary
+        self.app.open_page('api');self.app.open_page('dictionary');d=self.app.dictionary
         d.filter.set('已停用');d.refresh();self.choose(d,'afk');self.button('重新启用').invoke()
         self.assertTrue(store.load_glossary_file(self.glossary)['afk']['enabled'])
         self.assertIn('内置词表仍关闭',self.app.status.cget('text'))
@@ -319,13 +391,13 @@ class WorkspaceTests(unittest.TestCase):
         switch=next(w for w in walk(self.app.page) if 'Checkbutton' in w.winfo_class())
         with patch.object(ConfigRepository,'save',return_value=False):switch.invoke()
         self.assertFalse(d.builtins.get());self.assertIn('保存失败',self.app.status.cget('text'))
-        self.app.open_page('settings');controls=self.app.api_controls;controls['model'].set('deepseek-v4-pro')
-        with patch.object(ConfigRepository,'save',return_value=False):self.button('保存接口设置').invoke()
+        self.app.open_page('api');controls=self.app.api_controls;controls['model'].set('deepseek-v4-pro')
+        with patch.object(ConfigRepository,'save',return_value=False):self.button('保存').invoke()
         self.assertEqual(controls['model'].get(),'deepseek-v4-pro');self.assertIn('保存失败',self.app.status.cget('text'))
         self.assertEqual(store.read_json(self.config)['model'],'legacy-model')
 
     def test_small_settings_show_only_useful_controls_and_no_learning(self):
-        self.app.open_page('settings');self.app.settings_controls['show']('启动与关闭');self.app.root.update()
+        self.app.open_page('settings');self.app.root.update()
         self.assertEqual(tuple(self.app.close_controls['box'].cget('values')),('退出助手','收起到托盘'))
         self.app.close_controls['variable'].set('收起到托盘');self.app.close_controls['save']()
         self.assertEqual(store.read_json(self.config)['close_action'],'tray')
@@ -335,7 +407,7 @@ class WorkspaceTests(unittest.TestCase):
     def test_new_word_survives_unrelated_list_refresh_and_history_is_readonly(self):
         d=self.dictionary('formal');self.button('＋ 添加词条').invoke();d.new_original.insert(0,'new draft');self.draft(d,'新增草稿')
         d.refresh();self.app.root.update();self.assertEqual(d.new_original.get(),'new draft');self.assertEqual(d.draft.get('1.0','end-1c'),'新增草稿')
-        self.app.open_page('settings');self.app.open_page('dictionary');d=self.app.dictionary
+        self.app.open_page('api');self.app.open_page('dictionary');d=self.app.dictionary
         self.assertEqual(d.new_original.get(),'new draft');self.assertEqual(d.draft.get('1.0','end-1c'),'新增草稿')
         self.button('保存新词条').invoke();self.assertEqual(store.load_glossary_file(self.glossary)['new draft']['zh'],'新增草稿')
         store.save_memory_file(store.data_path(self.root,'translations.json'),{'historic':store.memory_entry('历史译文')})
@@ -352,7 +424,7 @@ class WorkspaceTests(unittest.TestCase):
     def test_close_and_page_switch_cancel_callbacks_without_stopping_translator(self):
         self.seed();d=self.dictionary();self.choose(d,'first');self.draft(d,'切页草稿')
         self.app.open_page('home');self.assertTrue(self.app.page_callbacks._pending)
-        self.app.open_page('settings');self.assertFalse(self.app.page_callbacks._pending)
+        self.app.open_page('api');self.assertFalse(self.app.page_callbacks._pending)
         with patch.object(dt.Overlay,'close_assistant') as close:
             self.app.root.destroy();close.assert_not_called()
         self.assertFalse(self.app.page_callbacks._pending);self.assertFalse(self.app.window_callbacks._pending)
@@ -376,12 +448,12 @@ class WorkspaceTests(unittest.TestCase):
         self.app.root.after(500,self.app.root.quit);self.app.root.mainloop()
         self.assertEqual(store.read_json(self.config)['font_size'],20)
         self.assertEqual(store.read_json(self.config)['unknown'],{'keep':1})
-        self.app.settings_controls['show']('启动与关闭')
+        self.app.open_page('settings')
         with patch('app.platform.launcher.set_autostart',return_value=(True,'saved')) as start:
             self.app.startup_control.invoke();self.assertTrue(start.called)
 
     def test_preview_shell_and_api_fields_have_the_approved_geometry(self):
-        self.app.open_page('settings');self.app.root.geometry('1210x850+20+20');self.app.root.update()
+        self.app.open_page('api');self.app.root.geometry('1210x850+20+20');self.app.root.update()
         self.assertEqual(self.app.nav.winfo_width(),167)
         self.assertEqual(self.app.page.cget('bg'),'#FFFFFF')
         controls=self.app.api_controls
@@ -429,24 +501,27 @@ class WorkspaceTests(unittest.TestCase):
                   display_translation_drawn=1,display_layout_waiting=1)
         self.assertTrue(store.atomic_write_json(path,data))
         self.app.open_page('home');self.app.root.update()
+        self.assertFalse(self.app.diagnostic_controls['body'].winfo_manager())
+        self.app.diagnostic_controls['toggle']()
         self.assertIn('得到译文 2',self.app.display_counts.cget('text'))
         self.assertIn('已绘制译文 1',self.app.display_counts.cget('text'))
         self.assertIn('显示空间不足',self.app.display_feedback.cget('text'))
-        self.assertTrue(self.app.display_feedback.winfo_ismapped())
+        self.assertTrue(self.app.display_feedback.winfo_manager())
         self.assertTrue(store.atomic_write_json(path,{**data,'at':time.time(),
             'display_translation_drawn':2,'display_layout_waiting':0,'ui_status':'显示空间已恢复'}))
         self.app.root.after(1600,self.app.root.quit);self.app.root.mainloop()
         self.assertIn('已绘制译文 2',self.app.display_counts.cget('text'))
         self.assertEqual(self.app.display_feedback.cget('text'),'显示空间已恢复')
         old=self.app.display_feedback
-        self.app.open_page('settings');self.app.root.update()
+        self.app.open_page('api');self.app.root.update()
         self.assertFalse(old.winfo_exists())
 
     def test_page_switch_removes_card_bindings_and_display_variable_traces(self):
         self.seed();d=self.dictionary();self.app.root.update()
         self.app.open_page('home');self.app.root.update()
+        self.app.diagnostic_controls['toggle']()
         old=self.app.display_counts
-        self.app.open_page('settings');self.app.root.update()
+        self.app.open_page('api');self.app.root.update()
         self.assertFalse(old.winfo_exists())
 
     def test_native_panel_shows_untranslated_reasons_and_clears_on_refresh(self):
@@ -456,19 +531,20 @@ class WorkspaceTests(unittest.TestCase):
         store.atomic_write_json(path,state)
         with patch.object(gui.pages,'status_of',return_value=('运行中','isolated', '#000000')):
             self.app.open_page('home');self.app.root.update()
+            self.app.diagnostic_controls['toggle']()
             feedback=self.app.display_feedback.cget('text')
             self.assertIn('在线翻译未启用',feedback)
-            self.assertIn('自己的 API Key',feedback)
+            self.assertIn('未配置密钥（翻译接口）',feedback)
             self.assertIn('视觉采集异常',feedback)
             self.assertIn('\n',feedback)
-            self.assertTrue(self.app.display_feedback.winfo_ismapped())
-            self.assertGreater(self.app.display_feedback.winfo_y(),0)
+            self.assertTrue(self.app.display_feedback.winfo_manager())
+            self.assertTrue(self.app.diagnostic_controls['body'].winfo_manager())
             state.update(at=time.time(),translation_unavailable={},ui_status='')
             store.atomic_write_json(path,state)
             self.app.root.after(1600,self.app.root.quit);self.app.root.mainloop()
             self.assertEqual(self.app.display_feedback.cget('text'),'')
-            self.assertFalse(self.app.display_feedback.winfo_ismapped())
-        self.app.open_page('settings');self.app.root.update()
+            self.assertEqual(self.app.display_feedback.cget('text'),'')
+        self.app.open_page('api');self.app.root.update()
         def texts(w):
             values=[]
             for child in w.winfo_children():
@@ -476,7 +552,7 @@ class WorkspaceTests(unittest.TestCase):
                 except self.app.th.tk.TclError: pass
                 values.extend(texts(child))
             return values
-        self.assertTrue(any('自己的 DeepSeek API Key' in value for value in texts(self.app.page)))
+        self.assertTrue(any('API Key' in value for value in texts(self.app.page)))
         self.assertFalse(any('Claude' in value or '兜底' in value for value in texts(self.app.page)))
 
 if __name__=='__main__':unittest.main()

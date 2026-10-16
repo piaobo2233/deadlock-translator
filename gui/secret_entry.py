@@ -9,8 +9,10 @@ SOURCE_LABELS = {
 }
 
 
-def bind_secret_entry(entry, variable, save, *, source="none", hint=None, invalid=lambda: None):
-    variable.set("")
+def bind_secret_entry(entry, variable, save, *, source="none", hint=None, invalid=lambda: None,
+                      autosave=True):
+    if autosave:
+        variable.set("")
     entry.configure(show="•")
     if hint is not None:
         hint.configure(text=SOURCE_LABELS.get(source, SOURCE_LABELS["none"]))
@@ -29,6 +31,7 @@ def bind_secret_entry(entry, variable, save, *, source="none", hint=None, invali
             if hint is not None:
                 hint.configure(text=SOURCE_LABELS["environment" if source == "environment" else "config"])
 
-    entry.bind("<Return>", commit)
-    entry.bind("<FocusOut>", commit)
+    if autosave:
+        entry.bind("<Return>", commit)
+        entry.bind("<FocusOut>", commit)
     return commit

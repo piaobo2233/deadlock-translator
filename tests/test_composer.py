@@ -13,6 +13,7 @@ from app.translation.control import RequestControl
 from app.translation.results import TranslationResult
 from app.storage import store
 from gui.app import App
+import gui.pages  # Standalone test runs also need page registration.
 
 
 class ComposerTests(unittest.TestCase):
@@ -33,7 +34,7 @@ class ComposerTests(unittest.TestCase):
             self.addCleanup(mocked.stop)
         self.errors=[]
         self.app.root.report_callback_exception=lambda *args:self.errors.append(repr(args))
-        self.app.open_page('home')
+        self.app.open_page('send')
         self.app.root.update()
         self.addCleanup(self.close)
 
@@ -74,7 +75,7 @@ class ComposerTests(unittest.TestCase):
         c['source'].insert('end','！')
         self.app.root.update()
         self.assertEqual(str(c['copy'].cget('state')),'disabled')
-        self.assertEqual(c['output'].get('1.0','end-1c'),'')
+        self.assertEqual(c['output'].get('1.0','end-1c'),'Wait for me')
 
     def test_background_response_stale_edit_and_navigation_are_safe(self):
         started,release=threading.Event(),threading.Event()
@@ -96,7 +97,7 @@ class ComposerTests(unittest.TestCase):
             self.assertEqual(str(c['copy'].cget('state')),'disabled')
         self.app.open_page('settings')
         self.app.root.update()
-        self.assertFalse(c['state']['alive'])
+        self.assertFalse(c['view']['alive'])
         self.assertFalse(self.app.page_callbacks._pending)
 
     def test_real_service_displays_slow_reply_and_keeps_unknown_result_fenced(self):
@@ -132,7 +133,58 @@ class ComposerTests(unittest.TestCase):
             self.pump_until(lambda: not c['state']['busy'])
             request.assert_called_once()
 
-    def test_real_service_late_reply_after_edit_or_navigation_does_not_display(self):
+    def test_draft_and_preview_survive_navigation_but_settings_invalidate_copy(self):
+        c=self.app.composer
+        c['source'].insert('1.0','等我一下')
+        self.app.root.update()
+        with patch.object(self.app._manual_service,'translate',return_value=TranslationResult.from_legacy('Wait for me','api')):
+            c['translate'].invoke();self.pump_until(lambda:not c['state']['busy'])
+        self.app.open_page('api');self.app.open_page('send')
+        c=self.app.composer
+        self.assertEqual(c['source'].get('1.0','end-1c'),'等我一下')
+        self.assertEqual(c['output'].get('1.0','end-1c'),'Wait for me')
+        self.assertEqual(str(c['copy'].cget('state')),'normal')
+        self.app.open_page('api');self.app.api_controls['model'].set('draft-model')
+        self.app.open_page('send');c=self.app.composer
+        self.assertEqual(c['output'].get('1.0','end-1c'),'Wait for me')
+        self.assertEqual(str(c['copy'].cget('state')),'disabled')
+        self.assertIn('过期',c['status'].cget('text'))
+        with patch.object(self.app.root,'clipboard_clear') as clear:
+            c['copy'].invoke();clear.assert_not_called()
+
+    def test_new_request_failure_cannot_reuse_previous_translation_for_new_input(self):
+        c=self.app.composer
+        c['source'].insert('1.0','等我一下');self.app.root.update()
+        with patch.object(self.app._manual_service,'translate',return_value=TranslationResult.from_legacy('Wait for me','api')):
+            c['translate'].invoke();self.pump_until(lambda:not c['state']['busy'])
+        c['source'].delete('1.0','end');c['source'].insert('1.0','需要帮助');self.app.root.update()
+        with patch.object(self.app._manual_service,'translate',return_value=TranslationResult.from_legacy('','none')):
+            c['translate'].invoke();self.pump_until(lambda:not c['state']['busy'])
+        self.assertEqual(c['output'].get('1.0','end-1c'),'Wait for me')
+        self.assertEqual(str(c['copy'].cget('state')),'disabled')
+
+    def test_late_reply_cannot_match_changed_language_or_api_draft(self):
+        for change in ('language','api'):
+            with self.subTest(change=change):
+                self.app.open_page('send');c=self.app.composer
+                c['source'].delete('1.0','end');c['source'].insert('1.0','等我一下');self.app.root.update()
+                started,release=threading.Event(),threading.Event()
+                def blocked(*args,**kwargs):
+                    started.set();release.wait(2)
+                    return TranslationResult.from_legacy('Wait for me','api')
+                with patch.object(self.app._manual_service,'translate',side_effect=blocked):
+                    c['translate'].invoke();self.assertTrue(started.wait(1))
+                    if change=='language':
+                        from gui.pages import _config_repository
+                        _config_repository(self.app.root_dir).save({'send_target':'fr'})
+                    else:
+                        self.app.open_page('api');self.app.api_controls['endpoint'].set('https://draft.invalid')
+                    release.set();self.pump_until(lambda:not c['state']['busy'])
+                    self.app.open_page('send');c=self.app.composer
+                    self.assertEqual(str(c['copy'].cget('state')),'disabled')
+                    self.assertEqual(c['output'].get('1.0','end-1c'),'')
+
+    def test_real_service_late_reply_after_edit_is_stale_but_navigation_keeps_request(self):
         self.enable_manual_api()
         for navigate in (False, True):
             c = self.app.composer
@@ -164,10 +216,11 @@ class ComposerTests(unittest.TestCase):
                 release.set()
                 self.assertTrue(finished.wait(2))
                 if navigate:
-                    self.app.open_page('home')
+                    self.app.open_page('send')
                     self.app.root.update()
-                    self.assertFalse(c['state']['alive'])
-                    self.assertEqual(self.app.composer['output'].get('1.0', 'end-1c'), '')
+                    self.assertFalse(c['view']['alive'])
+                    self.pump_until(lambda: not c['state']['busy'])
+                    self.assertEqual(self.app.composer['output'].get('1.0', 'end-1c'), 'Please wait')
                 else:
                     self.pump_until(lambda: not c['state']['busy'])
                     self.assertEqual(c['output'].get('1.0', 'end-1c'), '')

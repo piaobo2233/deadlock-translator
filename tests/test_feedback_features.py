@@ -132,6 +132,23 @@ class InputSafetyTests(unittest.TestCase):
         self.transaction.run()
         self.service.translate.assert_not_called()
 
+    def test_paused_or_closed_transaction_does_not_even_read_game_input(self):
+        for closed in (False,True):
+            self.transaction.closed=closed
+            self.transaction.allowed=lambda:False
+            with patch.object(self.native,'begin') as begin:
+                self.transaction.run();begin.assert_not_called()
+            self.service.translate.assert_not_called()
+            self.assertFalse(self.native.writes)
+
+    def test_pause_during_hotkey_release_does_not_read_input(self):
+        def begin():
+            self.transaction.allowed=lambda:False
+            return self.native.token
+        with patch.object(self.native,'begin',side_effect=begin),patch.object(self.native,'read_input') as read:
+            self.transaction.run();read.assert_not_called()
+        self.service.translate.assert_not_called()
+
     def test_hotkey_validation_and_native_abi(self):
         self.assertEqual(parse_hotkey('Ctrl+Alt+T'),(3,ord('T')))
         self.assertEqual(parse_hotkey('Ctrl+Shift+F8'),(6,0x77))

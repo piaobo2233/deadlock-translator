@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """Desktop page services and compatibility entry identifiers.
 
-Three visible workspaces live in gui.workspace. home/ingame/cost address the
-translation workspace; dictionary/settings retain their existing entry names.
+Six visible task pages live in gui.workspace. home remains the receive page;
+ingame/cost retain compatibility routes to recognition/receive respectively.
 The UI calls existing configuration, glossary and accounting services.
 """
 
@@ -382,9 +382,8 @@ def _money(cost, cfg, dash="费用未知"):
 # ================================================================ ② 游戏内设置
 
 def build_ingame(parent, app):
-    from gui.workspace import build_settings
-    build_settings(parent,app)
-    app.settings_controls['show']('识别与显示')
+    from gui.workspace import build_recognition_settings
+    build_recognition_settings(parent,app)
 
 
 # ================================================================ ③ 消耗
@@ -409,7 +408,12 @@ def build_settings(parent, app):
 
 # ================================================================ 注册
 
-register("home", "翻译", build_home, width=420)
+from gui.workspace import build_sending, build_recognition_settings, build_api_settings
+
+register("home", "接收翻译", build_home, width=420)
+register("send", "发言翻译", build_sending, width=460)
+register("recognition", "识别与显示", build_recognition_settings, width=460)
+register("api", "翻译接口", build_api_settings, width=480)
 register("ingame", "游戏内设置", build_ingame, width=460)
 register("cost", "消耗", build_cost, width=460)
 register("dictionary", "词库", build_dictionary, width=580)

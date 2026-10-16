@@ -11,14 +11,21 @@ from gui.theme import COLORS as C
 def connection_button(parent, app, config, *, status_parent=None):
     from app.config import providers
     results = queue.Queue()
+    tested = [None]
     status = text(status_parent or parent, app.th, '', small=True, muted=True, wraplength=700,justify='left')
-    def run():
+    def effective_config():
         snapshot = config()
         # Match runtime precedence even while testing an unsaved endpoint/model draft.
         from gui.pages import _load_config
         active = _load_config(app.root_dir)
         if active.key_source == 'environment':
             snapshot['api_key'] = active['api_key']
+        return snapshot
+    def signature(snapshot):
+        return tuple(snapshot.get(k) for k in ('endpoint','model','api_key','translate_api'))
+    def run():
+        snapshot = effective_config()
+        tested[0] = signature(snapshot)
         button.configure(state='disabled')
         status.configure(text='正在测试…')
         def worker():
@@ -40,7 +47,10 @@ def connection_button(parent, app, config, *, status_parent=None):
             app.after_page(100,poll)
         else:
             button.configure(state='normal')
-            status.configure(text=why,fg=C['ok'] if ok else C['err'])
+            if tested[0] != signature(effective_config()):
+                status.configure(text='接口已改变，测试结果已过期',fg=C['warn'])
+            else:
+                status.configure(text=why,fg=C['ok'] if ok else C['err'])
     app.connection_controls = dict(button=button,status=status)
 
 
@@ -48,7 +58,10 @@ def connection_button(parent, app, config, *, status_parent=None):
 def hotkey_control(parent,app,key,label,config):
     from gui import pages as p
     row,holder=p._row(parent,app.th,label+'（重开生效）')
-    var=app.th.tk.StringVar(value=config[key])
+    drafts=getattr(app,'_hotkey_drafts',None)
+    if drafts is None:drafts=app._hotkey_drafts={}
+    var=app.th.tk.StringVar(value=drafts.get(key,config[key]))
+    var.trace_add('write',lambda *_:drafts.update({key:var.get()}))
     border,entry=app.th.entry(holder,var);border.pack()
     def save(_event=None):
         from app.platform.game_input import parse_hotkey
@@ -64,21 +77,31 @@ def hotkey_control(parent,app,key,label,config):
     return row
 
 
-def build_language_settings(parent,app):
+def language_control(parent,app,key,label,config):
     from gui import pages as p
     from app.translation.directions import LANGUAGES
+    row,holder=p._row(parent,app.th,label)
+    value=app.th.tk.StringVar(value=LANGUAGES[config[key]])
+    box=app.th.ttk.Combobox(holder,textvariable=value,values=tuple(LANGUAGES.values()),state='readonly',width=14)
+    box.pack()
+    def save(event=None):
+        if not p._save(key,next(code for code,name in LANGUAGES.items() if name==value.get()),app):
+            value.set(LANGUAGES[p._load_config(app.root_dir)[key]])
+    box.bind('<<ComboboxSelected>>',save)
+    return dict(value=value,box=box)
+
+
+def build_language_settings(parent,app):
+    from gui import pages as p
     config=p._load_config(app.root_dir);th=app.th
-    text(parent,th,'输入快捷键只在游戏前台使用；回填前核对原文，输入或焦点变化会取消回填。',
-         small=True,muted=True,wraplength=820).pack(anchor='w',pady=(0,12))
-    for key,label in (('send_target','我的发言译成'),('receive_target','收到的消息译成（重开生效）')):
-        row,holder=p._row(parent,th,label)
-        value=th.tk.StringVar(value=LANGUAGES[config[key]])
-        box=th.ttk.Combobox(holder,textvariable=value,values=tuple(LANGUAGES.values()),state='readonly',width=16)
-        box.pack()
-        box.bind('<<ComboboxSelected>>',lambda event,k=key,v=value:p._save(k,next(code for code,name in LANGUAGES.items() if name==v.get()),app))
-    hotkey_control(parent,app,'send_hotkey','输入翻译快捷键',config)
-    row,holder=p._row(parent,th,'成功回填后自动发送（默认关闭）')
-    p._switch(app,holder,'auto_send',config)
+    app.send_language=language_control(parent,app,'send_target','发言目标语言',config)
+    hotkey_control(parent,app,'send_hotkey','发言快捷键',config)
+    row,holder=p._row(parent,th,'自动发送')
+    var=p._switch(app,holder,'auto_send',config)
+    label=text(holder,th,'',small=True,muted=True);label.pack(side='left',padx=(8,0))
+    def state(*_):label.configure(text='已开启' if var.get() else '已关闭')
+    var.trace_add('write',state);state()
+    app.auto_send_control=dict(value=var,label=label)
 
 
 def build_recognition(parent,app):
@@ -141,7 +164,7 @@ def build_region_tools(parent,app):
     selected=th.tk.StringVar(value=names[PRESETS.index(config['capture_preset'])])
     chooser=th.ttk.Combobox(holder,textvariable=selected,values=names,state='readonly',width=23);chooser.pack()
     status=text(parent,th,'',small=True,muted=True,wraplength=820,justify='left');status.pack(anchor='w',pady=8)
-    text(parent,th,'适用于主屏16:9全屏/无边框。预设不改变系统或游戏分辨率。点击测试后有3秒切回游戏，截图完成后才打开预览。',
+    text(parent,th,'主屏 16:9；测试将在 3 秒后截图并打开预览。',
          small=True,muted=True,wraplength=820,justify='left').pack(anchor='w',pady=(0,8))
     state=dict(alive=True,busy=False,hidden=False,generation=0);results=queue.Queue();preview={}
     def refresh():
@@ -224,6 +247,8 @@ def build_input_recovery(parent,app):
             app.root.clipboard_clear();app.root.clipboard_append(last_input['original'])
             app.set_status('已复制上次游戏输入原文',C['ok'])
     button=app.th.button(parent,'复制上次输入原文',copy_original);button.pack(anchor='w',pady=(6,0))
+    status=text(parent,app.th,'',small=True,muted=True,wraplength=700,justify='left')
+    status.pack(anchor='w',pady=(6,0))
     def poll():
         current=store.read_json(str(Path(app.root_dir)/'.temp/panel-instance/translator.json'),{})
         snapshot=store.read_json(view_path(app.root_dir),{})
@@ -233,5 +258,6 @@ def build_input_recovery(parent,app):
         last_input.clear()
         if isinstance(value,dict):last_input.update(value)
         button.configure(state='normal' if last_input.get('original') else 'disabled')
+        status.configure(text=('上次输入：'+str(last_input.get('status',''))) if last_input else '')
     poll();app._feedback_refreshes.append(poll)
-    app.input_recovery=dict(copy=button,last_input=last_input)
+    app.input_recovery=dict(copy=button,last_input=last_input,status=status)
