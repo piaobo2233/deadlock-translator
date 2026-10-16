@@ -75,6 +75,21 @@ class AdmissionTests(unittest.TestCase):
         self.assertTrue(result.successful)
         self.assertEqual(result.source_tag,'词汇库')
 
+    def test_local_result_keeps_source_and_draw_receipts_for_diagnosis(self):
+        with tempfile.TemporaryDirectory() as folder:
+            evidence_log = RecognitionEvidenceLog(folder, log=lambda text: None)
+            engine, processor = self.processor(evidence_log)
+            engine.try_local_result.return_value = TranslationResult.from_legacy('敲门', 'glossary')
+            c = candidate(evidence=SourceEvidence(True, '', reading='knock knock', confidence=95))
+            result = processor.prepare(c)
+            self.assertTrue(result.successful)
+            monitor = DisplayMonitor(RuntimeHealth(), record=evidence_log.display)
+            monitor.observe([result], DrawFrame(1, 2, (DrawEntry(0, (10, 60, 100, 40)),)))
+            records = store.read_json(str(evidence_log.directory / 'index.json'))['records']
+            row = records[evidence_log.key(c)]
+            self.assertEqual(row['source']['reading'], 'knock knock')
+            self.assertTrue(any(event['stage'] == 'display' for event in row['events']))
+
 
 class EvidenceLogTests(unittest.TestCase):
     def setUp(self):

@@ -45,7 +45,11 @@ import numpy as np
 import pytesseract
 
 from app.vision.body import locate_body, padded_text
-from app.recognition.source import SourceEvidence, assess_source
+from app.recognition.source import SourceEvidence, assess_source, comparable
+from app.recognition.diagnostics import DIAGNOSTICS as _DIAGNOSTICS
+
+measure_stage = _DIAGNOSTICS.measure
+diagnostics_snapshot = _DIAGNOSTICS.snapshot
 
 # [!] 这里**绝对不能**写死本机路径。
 #     原来写的是 r"<本机私有目录>" —— 本机的私有目录。
@@ -228,11 +232,13 @@ LIGHT_RATIO_MIN = 0.20
 TESS_CONFIG = "--psm 7 -l eng"
 _RECEIVE_MODEL = 'eng'
 _RESIDENT = None
+_RESIDENT_SETTINGS = None
+_RESIDENT_RECOVERY_AT = None
 
 
 def configure_receive_languages(enabled=True, *, resident=True):
     """Select bundled models explicitly; missing models must not silently drop languages."""
-    global _RECEIVE_MODEL, _RESIDENT
+    global _RECEIVE_MODEL, _RESIDENT, _RESIDENT_SETTINGS
     from app.recognition.languages import RECEIVE_LANGUAGES
     model_dir = Path(__file__).resolve().parent / 'models'
     required = RECEIVE_LANGUAGES if enabled else ('eng',)
@@ -241,30 +247,70 @@ def configure_receive_languages(enabled=True, *, resident=True):
         raise RuntimeError('缺少接收语言模型：' + ', '.join(missing))
     _RECEIVE_MODEL = '+'.join(required)
     close_receive_backend()
+    _RESIDENT_SETTINGS = None
+    _DIAGNOSTICS.reset()
+    _DIAGNOSTICS.backend('cli')
     if enabled and resident:
         try:
             from app.recognition.resident import ResidentReader
             _RESIDENT = ResidentReader(pytesseract.pytesseract.tesseract_cmd,
                 model_dir, _RECEIVE_MODEL, _USER_WORDS)
+            _RESIDENT_SETTINGS = (pytesseract.pytesseract.tesseract_cmd,model_dir,_RECEIVE_MODEL,_USER_WORDS)
+            _DIAGNOSTICS.backend('resident')
             print('[info] 已启用常驻 OCR；原图中文复核独立保留')
         except Exception as exc:
+            _DIAGNOSTICS.backend('cli', type(exc).__name__)
             print(f'[warn] 常驻 OCR 不可用（{type(exc).__name__}），使用有超时保护的 OCR 进程')
 
 
 def close_receive_backend():
-    global _RESIDENT
+    global _RESIDENT, _RESIDENT_RECOVERY_AT
+    _RESIDENT_RECOVERY_AT = None
     reader, _RESIDENT = _RESIDENT, None
     if reader is not None:
         reader.close()
+    _DIAGNOSTICS.backend('stopped')
+
+
+def _degrade_receive_backend(exc):
+    global _RESIDENT_RECOVERY_AT
+    close_receive_backend()
+    _DIAGNOSTICS.backend('cli',type(exc).__name__)
+    if _RESIDENT_SETTINGS is not None:
+        _RESIDENT_RECOVERY_AT=time.monotonic()+30.
+
+
+def recover_receive_backend():
+    """Called only on an empty OCR frame; one bounded retry per 30 seconds."""
+    global _RESIDENT, _RESIDENT_RECOVERY_AT
+    if (_RESIDENT is not None or _RESIDENT_SETTINGS is None or _RESIDENT_RECOVERY_AT is None
+            or time.monotonic() < _RESIDENT_RECOVERY_AT):
+        return None
+    _RESIDENT_RECOVERY_AT=time.monotonic()+30.
+    try:
+        from app.recognition.resident import ResidentReader
+        _RESIDENT=ResidentReader(*_RESIDENT_SETTINGS)
+    except Exception as exc:
+        _DIAGNOSTICS.backend('cli',type(exc).__name__)
+        return None
+    _RESIDENT_RECOVERY_AT=None
+    _DIAGNOSTICS.backend('resident')
+    _DIAGNOSTICS.count('backend_recovered')
+    return _RESIDENT
 
 
 def _preferred_read(gray, mode, *, deadline=None):
+    with measure_stage('preferred'):
+        return _read_preferred(gray, mode, deadline=deadline)
+
+
+def _read_preferred(gray, mode, *, deadline=None):
     timeout = OCR_TIMEOUT if deadline is None else max(.001, min(OCR_TIMEOUT, deadline-time.monotonic()))
     if _RESIDENT is not None:
         try:
             return _RESIDENT.read(gray, mode, timeout=timeout).strip()
         except Exception as exc:
-            close_receive_backend()
+            _degrade_receive_backend(exc)
             print(f'[warn] 常驻 OCR 已停止（{type(exc).__name__}），后续使用 OCR 进程')
             return ''
     return (_read_ocr(gray, _mode_config(mode)) if deadline is None
@@ -415,7 +461,7 @@ def imread_unicode(path):
     return cv2.imdecode(data, cv2.IMREAD_COLOR) if data.size else None
 
 
-def find_bubbles(img, offset=(0, 0), screen=None):
+def find_bubbles(img, offset=(0, 0), screen=None, capture_rect=None):
     """在聊天锚点区里找气泡，返回 [(x, y, w, h), ...]（图像坐标）。
 
     用「行投影」而不是轮廓检测 —— 实测教训：
@@ -440,7 +486,9 @@ def find_bubbles(img, offset=(0, 0), screen=None):
     #     screen 参数一直都有，只是没用上。
     _scale = (screen[1] / REF_H) if screen else (h / REF_H)
     found = []
-    for idx, rect in enumerate(scaled_rects(w, h, offset, screen)):
+    # A selected region replaces only the search boundary, never detection thresholds.
+    rects = ([(0, 0, w, h)] if capture_rect is not None else scaled_rects(w, h, offset, screen))
+    for idx, rect in enumerate(rects):
         # 头像在气泡**左侧外面** → 必须跳开，否则头像被当成前两个字。
         # [!] 这里原来是「两套布局分开给」（大厅的头像在气泡右侧，跳了会切掉首字母）。
         #     大厅锚点 2026-10-07 已删除，只剩对局一套，取值退化为固定第 0 项。
@@ -751,15 +799,17 @@ def _find_by_blobs(mn, mx, bright_loose, dark, scale, min_h, origin=(0, 0), *, i
     return out
 
 
-def ocr_variants(img, box, *, screen=None, region=None, deadline=None):
-    """Yield body-first OCR, then parallel legacy fallbacks on validated bodies.
+def ocr_variants(img, box, *, screen=None, region=None, deadline=None, max_workers=4):
+    """Yield body-first OCR, then bounded fallbacks on validated bodies.
 
     The first call is lazy: a known-word early exit prevents starting fallback
-    jobs. Once fallbacks start they all run in parallel, even if the consumer
-    stops early. Screen height is explicit for cropped realtime captures.
+    jobs. max_workers=1 keeps every fallback lazy for realtime; larger limits
+    preserve batched offline reads. Screen height is explicit for ROI captures.
     Four/five-field boxes remain supported. Geometry supersedes avatar skipping;
     all variants read the same text region so fallback cannot reintroduce HUD.
     """
+    if type(max_workers) is not int or not 1 <= max_workers <= 4:
+        raise ValueError("OCR worker limit must be between one and four")
     scale = (screen[1] if screen else REF_H) / REF_H
     body = region if region is not None else locate_body(img, box, scale=scale)
     if not body.accepted:
@@ -782,12 +832,21 @@ def ocr_variants(img, box, *, screen=None, region=None, deadline=None):
         return
     jobs = _fallback_jobs(gray, multiline=body.line_count > 1,
                           short=body.line_count == 1 and body.glyph_count <= 3)
-    # Bound native OCR concurrency even when short-word evidence needs another
-    # independent threshold. Extra jobs queue instead of multiplying processes.
-    with ThreadPoolExecutor(max_workers=min(4, len(jobs))) as pool:
-        def read(im, config):
-            return (_read_ocr(im, config) if deadline is None else _read_ocr(im, config,
-                    timeout=max(.001, min(OCR_TIMEOUT, deadline-time.monotonic()))))
+    def read(im, config):
+        return _read_fallback(im, config, deadline=deadline, resident=max_workers == 1)
+    # Realtime uses lazy serial fallbacks: early exit starts no queued OCR, and
+    # even chat bursts cannot start four native workers in parallel.
+    if max_workers == 1:
+        for name, im, config in jobs:
+            if deadline is not None and time.monotonic() >= deadline:
+                return
+            try:
+                text = read(im, config)
+            except Exception:
+                text = ""
+            yield (name, text)
+        return
+    with ThreadPoolExecutor(max_workers=min(max_workers, len(jobs))) as pool:
         pending = [(name,
                     pool.submit(read, im, c))
                    for name, im, c in jobs]
@@ -803,9 +862,31 @@ def _mode_config(mode):
     return cfg + (f' --user-words "{_USER_WORDS}"' if _USER_WORDS else "")
 
 
+def _read_fallback(image, config, *, deadline=None, resident=False):
+    timeout = OCR_TIMEOUT if deadline is None else max(.001, min(OCR_TIMEOUT, deadline-time.monotonic()))
+    with measure_stage('fallback'):
+        if resident and _RESIDENT is not None:
+            # Match both language and word settings. English-only short-word
+            # jobs intentionally keep their existing CLI models and hints.
+            mode = next((m for m in (6, 7, 8, 13) if config == _mode_config(m)), None)
+            if mode is not None:
+                _DIAGNOSTICS.count('fallback_resident')
+                try:
+                    return _RESIDENT.read(image, mode, timeout=timeout).strip()
+                except Exception as exc:
+                    _degrade_receive_backend(exc)
+                    return ''
+        _DIAGNOSTICS.count('fallback_cli')
+        return (_read_ocr(image, config) if deadline is None else _read_ocr(image, config, timeout=timeout))
+
+
 def source_evidence(img, body, expected, *, scale=1.0, captured_at=None, origin=(0, 0), deadline=None):
-    evidence = (_read_source_evidence(img, body, expected, scale=scale) if deadline is None else
-                _read_source_evidence(img, body, expected, scale=scale, deadline=deadline))
+    with measure_stage('source'):
+        evidence = (_read_source_evidence(img, body, expected, scale=scale) if deadline is None else
+                    _read_source_evidence(img, body, expected, scale=scale, deadline=deadline))
+    _DIAGNOSTICS.count(evidence.reason or 'source_verified')
+    if evidence.reason == 'source_uncertain':
+        _DIAGNOSTICS.count('source_low_confidence' if comparable(evidence.reading) else 'source_empty')
     box = ((body.rect[0] + origin[0], body.rect[1] + origin[1], *body.rect[2:])
            if body.accepted else None)
     return replace(evidence, captured_at=captured_at, captured_box=box)
@@ -818,6 +899,8 @@ def _read_source_evidence(img, body, expected, *, scale, deadline=None):
     OCR files must not make a missing reading look like verified English.
     """
     started = time.monotonic()
+    if deadline is not None and started >= deadline:
+        return SourceEvidence(False,'source_ocr_timeout')
     timeout = OCR_TIMEOUT if deadline is None else max(.001, min(OCR_TIMEOUT, deadline-started))
     png = b""
     from app.recognition.languages import foreign_chat
@@ -843,8 +926,8 @@ def _read_source_evidence(img, body, expected, *, scale, deadline=None):
                     tsv = header + tsv
                 return assess_source(tsv, expected, png=png,
                     elapsed_ms=round((time.monotonic() - started) * 1000))
-            except Exception:
-                close_receive_backend()
+            except Exception as exc:
+                _degrade_receive_backend(exc)
                 return SourceEvidence(False, 'source_ocr_failed', png=png)
         ok, enlarged = cv2.imencode('.png', _enlarge(gray, 3))
         if not ok:

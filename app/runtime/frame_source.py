@@ -19,11 +19,12 @@ class CapturedFrame:
 
 class FrameSource:
     def __init__(self, capture, observe, unavailable, *, allowed=lambda: True,
-                 interval=.08, clock=time.monotonic, error=lambda reason: None):
+                 interval=.08, clock=time.monotonic, error=lambda reason: None, cadence=None):
         if not math.isfinite(interval) or interval <= 0:
             raise ValueError("Positive capture interval required")
         self.capture, self.observe, self.unavailable = capture, observe, unavailable
         self.allowed, self.interval, self.clock, self.error = allowed, interval, clock, error
+        self.cadence = cadence
         self._condition = threading.Condition()
         self._stop = threading.Event()
         self._latest, self._failure = None, "not_started"
@@ -54,7 +55,8 @@ class FrameSource:
         deadline = time.monotonic() + timeout
         with self._condition:
             while ((self._latest is None or (after_sequence is not None and
-                    self._latest.sequence <= after_sequence)) and not self._stop.is_set()):
+                    self._latest.sequence <= after_sequence) or
+                    self.clock() - self._latest.captured_at >= max_age) and not self._stop.is_set()):
                 if self._failure not in {"not_started", ""}:
                     raise FrameUnavailable(self._failure)
                 remaining = deadline - time.monotonic()
@@ -97,8 +99,14 @@ class FrameSource:
                             self._latest = CapturedFrame(image, at, self._sequence)
                             self._failure = ""
                             self._condition.notify_all()
+                except FrameUnavailable as exc:
+                    if str(exc) == 'replay_exhausted':
+                        self._stop.set()
+                        break
+                    self._unavailable('visual_capture_' + type(exc).__name__)
                 except Exception as exc:
                     self._unavailable("visual_capture_" + type(exc).__name__)
-                self._stop.wait(max(0, self.interval - (self.clock() - started)))
+                period = self.cadence() if self.cadence is not None else self.interval
+                self._stop.wait(max(0, period - (self.clock() - started)))
         finally:
             self._unavailable("capture_stopped")

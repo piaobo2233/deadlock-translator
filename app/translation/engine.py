@@ -109,6 +109,9 @@ class TranslationEngine:
         self.journal_error = ""
         self.retry_review_records()
 
+    def query_key(self, text):
+        return self.journal.query_key(text) if self.journal is not None else QueryKey.from_text(text)
+
     def _refresh_state(self):
         revision = None
         if self.learning is not None:
@@ -206,7 +209,7 @@ class TranslationEngine:
         """Register a queue subscriber without HTTP or request-ledger writes."""
         if context != self.request_context():
             return TranslationResult.from_legacy("", "config_changed")
-        key = QueryKey.from_text(text)
+        key = self.query_key(text)
         with self._flight_lock:
             flight = self._flights.get(key)
             if flight is not None and flight.context != context:
@@ -230,7 +233,7 @@ class TranslationEngine:
 
     def translate_reserved(self, text, reservation):
         control, flight = reservation.control, reservation.flight
-        if QueryKey.from_text(text) != reservation.key:
+        if self.query_key(text) != reservation.key:
             raise ValueError("Reservation query mismatch")
         decision = self._execute_flight(text, reservation.key, flight, control)
         return self._finalize_result(self._typed(decision), control)
@@ -264,7 +267,7 @@ class TranslationEngine:
             decision = (unavailable, False, 0) if unavailable is not None else None
         if decision is not None and decision[0][1] == 'outcome_unknown':
             with self._flight_lock:
-                if QueryKey.from_text(text) in self._flights:
+                if self.query_key(text) in self._flights:
                     return None  # Subscribe through the network worker, not a false failure.
         # Disk recovery never owns the local state lock. Other local messages
         # can resolve while a missing entry retries its formal commit.
@@ -278,15 +281,15 @@ class TranslationEngine:
         except JournalError as exc:
             return (("", exc.reason), False, 0)
         gate = self.journal.gate(record)
-        if gate == 'learning_recovery_required' and QueryKey.from_text(text) in self._learning_unsaved:
-            value, metadata = self._learning_unsaved[QueryKey.from_text(text)]
+        if gate == 'learning_recovery_required' and self.query_key(text) in self._learning_unsaved:
+            value, metadata = self._learning_unsaved[self.query_key(text)]
             receipt = self.learning_cache.save(text, value, **metadata)
             if receipt.saved:
                 try:
                     self.journal.learning_completed(text, record['request_id'], receipt)
                 except JournalError as exc:
                     self._record_journal_error(exc)
-                self._learning_unsaved.pop(QueryKey.from_text(text), None)
+                self._learning_unsaved.pop(self.query_key(text), None)
                 self.learning_storage_error = bool(self._learning_unsaved)
                 self._refresh_state()
                 return ((value, 'learning_cache'), False, 0, record['request_id'], receipt)
@@ -303,7 +306,7 @@ class TranslationEngine:
     def _recover_decision(self, text, decision):
         if decision[0][1] != "recovery_unsaved":
             return decision
-        key = QueryKey.from_text(text)
+        key = self.query_key(text)
         with self._state_lock:
             previous = self._save_retry_at.get(key, 0)
             if time.monotonic() < previous:
@@ -431,7 +434,7 @@ class TranslationEngine:
                 print(f'[warn] {self.accounting_error}。已暂停新增 API 请求，本地翻译继续。')
 
     def _cache_get(self, text: str):
-        text = QueryKey.from_text(text)
+        text = self.query_key(text)
         try:
             result = self.cache.pop(text)
         except KeyError:
@@ -442,7 +445,7 @@ class TranslationEngine:
     def _cache_put(self, text: str, result):
         if result[1] not in {'glossary', 'memory', 'cache', 'learning_cache', 'api', 'api_unsaved', 'api_disabled', 'api_recovery_failed'} or not result[0]:
             return result
-        text = QueryKey.from_text(text)
+        text = self.query_key(text)
         self.cache.pop(text, None)
         self.cache[text] = result
         if len(self.cache) > self.CACHE_LIMIT:
@@ -455,7 +458,7 @@ class TranslationEngine:
 
     def _translate_decision(self, text, control):
         local = self._resolve_decision(text)
-        key = QueryKey.from_text(text)
+        key = self.query_key(text)
         context = self.request_context()
         with self._flight_lock:
             flight = self._flights.get(key)
@@ -524,7 +527,7 @@ class TranslationEngine:
                 self._request.prices = {"input": self.price_in, "output": self.price_out}
                 self._request.save_receipt = None
                 before = self.api_attempts
-                key = QueryKey.from_text(text).normalized
+                key = self.query_key(text).normalized
             try:
                 result = self._translate_via_api(text, key)
                 with self._state_lock:
@@ -592,7 +595,7 @@ class TranslationEngine:
                 self._note(source)
                 if source == 'glossary' and self.glossary_hits is not None:
                     try:
-                        self.glossary_hits.hit(QueryKey.from_text(text).normalized)
+                        self.glossary_hits.hit(self.query_key(text).normalized)
                     except Exception:
                         pass
                 return self._cache_put(text, local), False
@@ -609,7 +612,7 @@ class TranslationEngine:
                 except Exception:
                     pass
             return self._cache_put(text, (self.glossary[gkey], 'glossary')), False
-        key = QueryKey.from_text(text).normalized
+        key = self.query_key(text).normalized
         if self.memory is not None:
             remembered = self.memory.get(key)
             if remembered:

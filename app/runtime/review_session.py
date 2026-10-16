@@ -1,4 +1,4 @@
-"""Explicit match boundary when the game exposes no reliable match-start event."""
+"""Process-local drawing provenance; never a guessed game match boundary."""
 import time
 import uuid
 

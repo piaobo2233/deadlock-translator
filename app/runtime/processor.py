@@ -83,6 +83,7 @@ class TranslationProcessor:
                 self._record(self.chatlog, candidate.text, "chinese", box=candidate.position)
                 self._increment("chinese_skipped")
                 return None
+            self.capture_evidence(candidate)
             if not callable(getattr(type(self.translator), "try_local_result", None)):
                 result = None
             else:
@@ -92,7 +93,6 @@ class TranslationProcessor:
                     result = self._error_result(exc)
             if result is not None:
                 return self._finish(candidate, result)
-            self.capture_evidence(candidate)
             source = candidate.evidence
             if (source is not None and not source.verified) or (self.require_evidence and source is None):
                 self._increment('source_unverified')

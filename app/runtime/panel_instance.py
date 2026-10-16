@@ -130,7 +130,7 @@ def end_translator(root, record):
 
 def request_exit(root, *, action='exit'):
     """One session-bound exit intent, handled by the existing assistant Tk loop."""
-    if action not in {'exit','retry_review','new_match'}:return False
+    if action not in {'exit','retry_review','pause','resume'}:return False
     current=owner(root)
     token=current.get('token','')
     if not isinstance(token,str) or len(token)!=32 or any(c not in '0123456789abcdef' for c in token):return False
@@ -148,7 +148,7 @@ def consume_action(root,record):
         and value.get('process')==record['process'] and alive(value.get('requester'))
         and type(value.get('at')) in (int,float) and 0<=time.time()-value['at']<10)
     action=value.get('action','exit') if valid else ''
-    return action if action in {'exit','retry_review','new_match'} else ''
+    return action if action in {'exit','retry_review','pause','resume'} else ''
 
 def consume_exit(root,record):
     return consume_action(root,record)=='exit'

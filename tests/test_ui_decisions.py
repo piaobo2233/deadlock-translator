@@ -24,11 +24,11 @@ from tests.test_presentation import overlay
 class UiDecisionTests(unittest.TestCase):
     def test_supported_keys_and_page_ownership_are_exact(self):
         from gui.pages import INGAME_KEYS, SETTINGS_KEYS, DICTIONARY_KEYS, _advanced_keys
-        self.assertEqual(len(BY_KEY),22)
+        self.assertEqual(len(BY_KEY),32)
         self.assertNotIn('dev_key_fallback', BY_KEY)
         self.assertEqual(set(default_config()),set(BY_KEY))
         self.assertFalse(RETIRED_UI_KEYS.intersection(BY_KEY))
-        self.assertEqual(len(INGAME_KEYS),6)
+        self.assertEqual(len(INGAME_KEYS),2)
         groups=[set(INGAME_KEYS),set(SETTINGS_KEYS),set(DICTIONARY_KEYS),set(_advanced_keys()),set(__import__("gui.pages",fromlist=["HIDDEN_KEYS"]).HIDDEN_KEYS)]
         self.assertEqual(set.union(*groups),set(BY_KEY))
         for index,group in enumerate(groups):
@@ -104,18 +104,15 @@ class UiDecisionTests(unittest.TestCase):
         self.assertNotIn('_poll_hotkeys', inspect.getsource(dt.Overlay.__init__))
 
     def test_current_message_limit_refresh_uses_live_history_not_old_last_messages(self):
-        view=overlay();view.max_messages=6;view.config={'max_messages':6}
+        view=overlay();view.config={'max_messages':6};view.font_size=15;view._build_fonts=Mock()
         current=[DisplayMessage('','en'+str(i),'中文'+str(i),'all',i,None,i+1) for i in range(3)]
-        view._last_messages=[current[0]]
-        view._current_messages=lambda:current
+        view._last_messages=[current[0]];view._current_messages=lambda:current
         report={}
-        with patch.object(dt,'live_box',return_value=(100,200,200,35)):
-            self.assertIn('max_messages',dt.apply_live_config({'max_messages':1},overlay=view,report=report))
+        with patch.object(dt,'live_box',side_effect=lambda bid:(100,100+bid*100,200,35)):
+            self.assertIn('font_size',dt.apply_live_config({'font_size':20},overlay=view,report=report))
         texts=[call.kwargs.get('text','') for call in view.canvas.create_text.call_args_list]
-        self.assertIn('中文2',texts)
-        self.assertNotIn('中文0',texts)
-        self.assertNotIn('中文1',texts)
-        self.assertEqual(report['max_messages']['state'],'applied')
+        self.assertTrue(all('中文'+str(i) in texts for i in range(3)))
+        self.assertEqual(report['font_size']['state'],'applied')
 
     def test_shared_tray_and_q_shutdown_destroys_window_even_when_callback_fails(self):
         view=dt.Overlay.__new__(dt.Overlay)
@@ -130,22 +127,22 @@ class UiDecisionTests(unittest.TestCase):
         view._last_messages=[]
         before=list(view._last_messages)
         applied=dt.apply_live_config({'fade_seconds':20,'fade_extension':9},overlay=view)
-        self.assertEqual(set(applied),{'fade_seconds','fade_extension'})
+        self.assertEqual(applied,[])
         view.render.assert_not_called()
         self.assertEqual(view._last_messages,before)
 
     def test_render_failure_is_not_acknowledged_as_applied_and_can_retry_same_values(self):
-        view=Mock();view.config={'width':300};view._last_messages=[]
+        view=Mock();view.config={'font_size':15};view.font_size=15;view._last_messages=[]
         view.render.side_effect=RuntimeError('private-detail')
         report={}
         with contextlib.redirect_stdout(io.StringIO()) as output:
-            applied=dt.apply_live_config({'width':420},overlay=view,report=report)
-        self.assertNotIn('width',applied)
-        self.assertEqual(report['width']['state'],'failed')
+            applied=dt.apply_live_config({'font_size':22},overlay=view,report=report)
+        self.assertNotIn('font_size',applied)
+        self.assertEqual(report['font_size']['state'],'failed')
         self.assertNotIn('private-detail',output.getvalue())
         view.render.side_effect=None
-        dt.apply_live_config({'width':420},overlay=view,report=report)
-        self.assertEqual(report['width']['state'],'applied')
+        dt.apply_live_config({'font_size':22},overlay=view,report=report)
+        self.assertEqual(report['font_size']['state'],'applied')
 
     def test_application_confirmation_is_bound_to_current_process_session_and_value(self):
         with tempfile.TemporaryDirectory() as directory:

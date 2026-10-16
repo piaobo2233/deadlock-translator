@@ -13,6 +13,7 @@ from app.translation.engine import TranslationEngine
 from app.translation.query import normalize_query
 from app.translation.rules import TranslationRules
 from app.translation.results import TranslationResult, TranslationStatus
+from app.translation.directions import prompt_for, quality_for, query_scope
 
 PROMPT = ('Translate the Chinese player message into concise natural English for Deadlock chat. '
           'Return only the translation. Preserve names, game terms, numbers and intent. '
@@ -27,21 +28,25 @@ def quality_report(source, value, glossary):
 
 
 class ManualEngine(TranslationEngine):
-    def __init__(self, root, config):
-        usage = UsageStats(store.data_path(root, 'stats.json'))
+    def __init__(self, root, config, *, outgoing=True, usage=None, hard_offline=False):
+        self.target = config.get('send_target' if outgoing else 'receive_target', 'en' if outgoing else 'zh-Hans')
+        prompt = PROMPT if outgoing and self.target == 'en' else prompt_for(self.target)
+        report = quality_report if outgoing and self.target == 'en' else lambda s, v, g: quality_for(self.target, s, v, g)
+        usage = usage if usage is not None else UsageStats(store.data_path(root, 'stats.json'))
         rules = TranslationRules(normalize_query, lambda text, glossary: None, lambda value: value.strip(),
-            lambda source, value, glossary: quality_report(source, value, glossary)['reason'], quality_report)
+            lambda source, value, glossary: report(source, value, glossary)['reason'], report)
         super().__init__(config.get('api_key', ''), config['endpoint'], config['model'],
-            not config.get('translate_api', False), hard_offline=False, rules=rules,
-            system_prompt=PROMPT, notify=lambda *args, **kwargs: None, usage=usage,
+            not config.get('translate_api', False), hard_offline=hard_offline, rules=rules,
+            system_prompt=prompt, notify=lambda *args, **kwargs: None, usage=usage,
             allow_popup=False, price_in=config.get('price_in', 0), price_out=config.get('price_out', 0),
             budget_session=config.get('budget_session', 0), budget_daily=config.get('budget_daily', 0))
         # Manual previews remain useful after a screen bubble would disappear.
         # Bound HTTP itself, without discarding a completed reply or its error.
         self.TIMEOUT = HTTP_TIMEOUT
         self.RETRY_MAX = 0  # A second HTTP wait cannot fit the five-second target.
-        self.journal = RequestJournal(Path(store.data_path(root, 'requests')),
-            query_scope=dict(source_language='zh-Hans', target_language='en', domain='deadlock-manual'))
+        scope = (dict(source_language='zh-Hans', target_language='en', domain='deadlock-manual')
+                 if outgoing and self.target == 'en' else query_scope(self.target, prompt, outgoing=outgoing))
+        self.journal = RequestJournal(Path(store.data_path(root, 'requests')), query_scope=scope)
         self._request_accounting = True
         usage.attach_requests(self.journal, session_id=config.get('_request_session_id', ''))
 
@@ -55,7 +60,7 @@ class ManualEngine(TranslationEngine):
         if decision[1] == 'api' and getattr(self._request, 'request_id', ''):
             try:
                 self.journal.qualified(text, self._request.request_id, decision[0],
-                    quality_checks=quality_report(text, decision[0], {}))
+                    quality_checks=self.rules.quality_report(text, decision[0], {}))
             except JournalError as exc:
                 self._record_journal_error(exc)
         return decision
@@ -91,13 +96,14 @@ class ManualTranslator:
                 reason='请输入 1–500 字、含中文的聊天内容', reason_code='manual_input')
         with self._lock:
             config = self._config()
-            if self.engine is None:
+            if self.engine is None or self.engine.target != config.get('send_target', 'en'):
                 self.engine = ManualEngine(self.root, config)
             else:
                 self.engine.reconfigure(config)
                 self.engine.budget_session = config.get('budget_session', 0)
                 self.engine.budget_daily = config.get('budget_daily', 0)
-            snapshot = tuple(config.get(key) for key in ('api_key','endpoint','model','translate_api'))
+            fields = ('api_key','endpoint','model','translate_api','send_target')
+            snapshot = tuple(config.get(key) for key in fields)
             cancelled = ''
             def current():
                 nonlocal cancelled
@@ -105,7 +111,7 @@ class ManualTranslator:
                     cancelled = 'manual_cancelled'
                     return False
                 latest = self._config()
-                if snapshot != tuple(latest.get(key) for key in ('api_key','endpoint','model','translate_api')):
+                if snapshot != tuple(latest.get(key) for key in fields):
                     cancelled = 'config_changed'
                     return False
                 return True

@@ -31,13 +31,13 @@ class LiveConfigVisibilityTests(unittest.TestCase):
         self.view = self.overlay()
 
     def test_bad_width_is_reported_not_swallowed(self):
-        _applied, printed = self.apply({"width": "宽一点"})
-        self.assertIn("宽度热更失败", printed)
-        self.assertIn("没生效", printed)
+        applied,printed=self.apply({'width':'legacy'})
+        self.assertEqual(applied,[]);self.assertEqual(printed,'')
+        self.view.render.assert_not_called()
 
     def test_bad_max_messages_is_reported_not_swallowed(self):
-        _applied, printed = self.apply({"max_messages": "很多"})
-        self.assertIn("最大条数热更失败", printed)
+        applied,printed=self.apply({'max_messages':'legacy'})
+        self.assertEqual(applied,[]);self.assertEqual(printed,'')
 
     def test_retired_position_does_not_change_geometry_or_trigger_hot_apply(self):
         self.view.config['position'] = ['legacy',{'retain':True}]
@@ -50,12 +50,10 @@ class LiveConfigVisibilityTests(unittest.TestCase):
         self.view.render.assert_not_called()
 
     def test_valid_values_apply_silently(self):
-        applied, printed = self.apply({"width": 420, "max_messages": 5})
-        self.assertIn("width", applied)
-        self.assertIn("max_messages", applied)
-        self.assertEqual(self.view.width, 420)
-        self.assertEqual(self.view.max_messages, 5)
-        self.assertNotIn("热更失败", printed)   # 成功路径不许有噪声
+        self.view.font_size=15
+        applied,printed=self.apply({'font_size':22})
+        self.assertIn('font_size',applied);self.assertEqual(self.view.font_size,22)
+        self.assertNotIn('热更失败',printed)
 
 
 if __name__ == "__main__":

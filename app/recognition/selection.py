@@ -53,6 +53,14 @@ def select_candidate(variants, glossary, rules: RecognitionRules, *, early_known
         text = rules.fix_digits(raw, glossary)
         if text != raw:
             tried.append(text)
+        evidence = None
+        if kind in BODY_VARIANTS and verify_body is not None:
+            # The preferred Latin model often rejects Chinese as gibberish.
+            # Check the existing unrestricted model before trying more Latin
+            # variants; otherwise the same Chinese bubble consumes them all.
+            evidence = verify_body(text)
+            if evidence.reason == 'native_chinese':
+                return CandidateSelection(reason='native_chinese', tried=tuple(tried), variants=tuple(consumed))
         if not rules.is_chat(text, glossary) or rules.is_garbage(text, glossary):
             continue
         normalized = rules.normalize(text)
@@ -62,10 +70,7 @@ def select_candidate(variants, glossary, rules: RecognitionRules, *, early_known
                  sum(t in rules.common_words for t in tokens), rules.word_count(text))
         if best is None or score > best[0]:
             best = score, text, kind
-        if kind in BODY_VARIANTS and verify_body is not None:
-            evidence = verify_body(text)
-            if evidence.reason == 'native_chinese':
-                return CandidateSelection(reason='native_chinese', tried=tuple(tried), variants=tuple(consumed))
+        if evidence is not None:
             if evidence.verified:
                 # A separate unrestricted source model agrees on these pixels.
                 # More preprocessing cannot provide another temporal vote.

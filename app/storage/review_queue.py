@@ -1,6 +1,7 @@
 """Explicit review with compare-and-set and retryable two-file commit receipts."""
 from dataclasses import dataclass
 from pathlib import Path
+import math
 
 from app.storage import store
 from app.storage.locking import config_lock
@@ -81,9 +82,9 @@ class ReviewQueue:
         except (OSError, ValueError, TypeError, KeyError):
             return '审核记录读取异常，已暂停新 API'
 
-    def mark_displayed(self, original, *, request_id, session_id, identity, at):
+    def mark_displayed(self, original, *, request_id, session_id, identity, at, translation=None):
         """Only a real UI acknowledgement may make a qualified version reviewable."""
-        if not request_id or not session_id or not identity:
+        if not self._valid_receipt(dict(session_id=session_id,identity=identity,at=at,request_id=request_id)):
             return False
         try:
             with config_lock(self.path):
@@ -91,9 +92,13 @@ class ReviewQueue:
                 matched = False
                 for row in rows.values():
                     if (request_id in row.get('request_ids', [])
+                            and (translation is None or row.get('api_translation',row['translation'])==translation)
                             and normalize_query(row.get('original', '')) == normalize_query(original)
                             and qualified_evidence(row.get('quality_checks'))):
-                        receipt = dict(session_id=session_id, identity=list(identity), at=at, request_id=request_id)
+                        if row.get('status')!='pending':return True
+                        if self.reviewable(row):return True  # Retain the original acknowledgement across runs.
+                        receipt = dict(session_id=session_id, identity=list(identity), at=at, request_id=request_id,
+                                       version_id=row.get('version_id',''))
                         if row.get('display_receipt') == receipt:
                             return True
                         row['display_receipt'] = receipt
@@ -103,12 +108,32 @@ class ReviewQueue:
             return False
 
     @staticmethod
-    def reviewable(row, session_id):
-        receipt = row.get('display_receipt', {})
-        return bool(session_id and row.get('status') == 'pending'
-                    and qualified_evidence(row.get('quality_checks'))
-                    and isinstance(receipt, dict) and receipt.get('session_id') == session_id
-                    and receipt.get('identity') and receipt.get('request_id') in row.get('request_ids', []))
+    def _valid_receipt(receipt):
+        def session(value):
+            return isinstance(value,str) and len(value)==32 and all(c in '0123456789abcdef' for c in value)
+        identity=receipt.get('identity') if isinstance(receipt,dict) else None
+        at=receipt.get('at') if isinstance(receipt,dict) else None
+        return bool(isinstance(receipt,dict) and session(receipt.get('session_id'))
+                    and isinstance(identity,(list,tuple)) and len(identity)==3 and session(identity[0])
+                    and all(type(v) is int and v>0 for v in identity[1:])
+                    and type(at) in (int,float) and math.isfinite(at) and at>=0
+                    and isinstance(receipt.get('request_id'),str) and receipt['request_id'])
+
+    @staticmethod
+    def reviewable(row, session_id=None):
+        """Validate original version/quality/request/drawing evidence, independent of the current clock."""
+        receipt=row.get('display_receipt',{})
+        if (row.get('status')!='pending' or row.get('source')!='api' or not qualified_evidence(row.get('quality_checks'))
+                or not ReviewQueue._valid_receipt(receipt)
+                or receipt['request_id'] not in row.get('request_ids',[])):
+            return False
+        original=row.get('original','')
+        translation=row.get('api_translation',row.get('translation',''))
+        if not original or not translation or row.get('translation')!=translation:return False
+        version=fingerprint(dict(query=QueryKey.from_text(original).as_dict(),translation=translation))
+        # Legacy acknowledgements predate the explicit receipt version. They still
+        # require a recomputable candidate version and the original request identity.
+        return row.get('version_id')==version and receipt.get('version_id',version)==version
 
     @staticmethod
     def _aliases(entries, original):

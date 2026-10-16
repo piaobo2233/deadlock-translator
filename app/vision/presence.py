@@ -8,10 +8,12 @@ import numpy as np
 @dataclass(frozen=True)
 class VisualBody:
     box: tuple
-    mask: np.ndarray
+    mask: np.ndarray | None
+    text_box: tuple | None = None
+    context: tuple | None = None
 
 
-def visual_body(image, region):
+def visual_body(image, region, *, with_context=False):
     if not region.accepted:
         return None
     x, y, width, height = region.text_rect
@@ -19,7 +21,40 @@ def visual_body(image, region):
     if not mask.size or np.count_nonzero(mask) < 3:
         return None
     mask.setflags(write=False)
-    return VisualBody(tuple(region.tracking_box), mask)
+    context=_body_context(image,region) if with_context else None
+    return VisualBody(tuple(region.tracking_box), mask, tuple(region.text_rect),context)
+
+
+def _body_context(image,region):
+    """Protect blank text gutters; moving scenery is never a border template."""
+    x,y,width,height=region.rect
+    tx,ty,tw,th=region.text_rect
+    crop=image[y:y+height,x:x+width]
+    valid=np.zeros(crop.shape[:2],np.uint8)
+    valid[6:height-6,max(6,tx+tw-x):width-6]=1
+    valid[max(6,ty+th-y):height-6,6:width-6]=1
+    valid[6:height-6,6:min(width-6,tx-x)]=1
+    valid[(crop.max(axis=2)<120)]=0
+    valid.setflags(write=False)
+    return (x,y,width,height),None,valid
+
+
+def shifted_context(context,dx,dy):
+    if context is None:
+        return None
+    (x,y,width,height),mask,valid=context
+    return (x+dx,y+dy,width,height),mask,valid
+
+
+def context_matches(image,context,dx=0,dy=0):
+    if context is None:
+        return False
+    (x,y,width,height),_,valid=context
+    x,y=x+dx,y+dy
+    if x<0 or y<0 or x+width>image.shape[1] or y+height>image.shape[0]:
+        return False
+    crop=image[y:y+height,x:x+width]
+    return not np.any((crop.max(axis=2)<120)&valid.astype(bool))
 
 
 def same_glyphs(first, second):
@@ -51,6 +86,18 @@ def nearby(first, second):
     ax, ay = first[0] + first[2] / 2, first[1] + first[3] / 2
     bx, by = second[0] + second[2] / 2, second[1] + second[3] / 2
     return abs(ax - bx) <= max(40, first[2] * .5) and abs(ay - by) <= max(40, first[3] * 1.5)
+
+
+def same_body_box(first,second,*,scale=1.):
+    """Two proposals for one physical body, not two neighbouring messages."""
+    ax,ay,aw,ah=first[:4]
+    bx,by,bw,bh=second[:4]
+    tolerance=max(1,3*scale)
+    if abs(ax+aw/2-bx-bw/2)>tolerance or abs(ay+ah/2-by-bh/2)>tolerance:
+        return False
+    overlap=max(0,min(ax+aw,bx+bw)-max(ax,bx))*max(0,min(ay+ah,by+bh)-max(ay,by))
+    union=aw*ah+bw*bh-overlap
+    return union>0 and overlap/union>=.9
 
 
 def distance(first, second):

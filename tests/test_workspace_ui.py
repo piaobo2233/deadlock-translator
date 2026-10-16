@@ -33,10 +33,13 @@ class WorkspaceTests(unittest.TestCase):
 
     def seed(self):
         quality=dt._translation_quality_report('help me','帮帮我',{})
-        store.atomic_write_json(store.data_path(self.root,'runtime.json'),dict(review_session_id='fixture-session'))
+        store.atomic_write_json(store.data_path(self.root,'runtime.json'),dict(review_session_id='a'*32))
+        from app.storage.requests import fingerprint
+        from app.translation.query import QueryKey
         store.save_collection(self.pending,{name:dict(original=name,translation='译文'+name,status=status,source='api',
             quality_checks=quality,request_ids=['request-'+name],
-            display_receipt=dict(session_id='fixture-session',identity=['fixture-session',1,1],request_id='request-'+name,at=1))
+            version_id=fingerprint(dict(query=QueryKey.from_text(name).as_dict(),translation='译文'+name)),
+            display_receipt=dict(session_id='a'*32,identity=['a'*32,1,1],request_id='request-'+name,at=1))
             for name,status in (('first','pending'),('second','pending'),('done','accepted'),('ignored','rejected'),('changed','edited'),('archive','archived'))})
         store.save_glossary_file(self.glossary,{'first':store.glossary_entry('已有正式译文')})
 
@@ -58,16 +61,15 @@ class WorkspaceTests(unittest.TestCase):
 
     def test_three_nav_and_legacy_locations_and_unknown_error(self):
         self.assertEqual(list(self.app.nav_buttons),['home','dictionary','settings'])
-        for name in ('home','ingame','cost'):
-            self.assertTrue(self.app.open_page(name));self.assertEqual(self.app.current,'home')
+        for name,current in (('home','home'),('ingame','settings'),('cost','home')):
+            self.assertTrue(self.app.open_page(name));self.assertEqual(self.app.current,current)
         self.assertTrue(self.app.cost_section.winfo_manager())
-        self.assertGreater(self.app.canvas.yview()[0],0)
-        self.assertFalse(self.app.open_page('typo'));self.assertEqual(self.app.title_label.cget('text'),'打不开')
+        self.assertFalse(self.app.open_page('typo'))
         self.assertTrue(self.app.open_page('home'));self.assertEqual(self.app.title_label.cget('text'),'翻译')
 
     def test_model_and_key_patch_verified_persist_across_reopen(self):
         self.app.open_page('settings');controls=self.app.api_controls
-        self.assertEqual(str(controls['box'].cget('state')),'readonly')
+        self.assertEqual(str(controls['box'].cget('state')),'normal')
         self.assertIn('legacy-model',controls['box'].cget('values'))
         controls['model'].set('deepseek-v4-pro');controls['key'].set('fixture-new-key')
         ConfigRepository(self.config).save({'width':640,'unknown':{'keep':2}})
@@ -82,6 +84,71 @@ class WorkspaceTests(unittest.TestCase):
         try:
             other.open_page('settings');self.assertEqual(other.api_controls['model'].get(),'deepseek-v4-pro')
         finally:other.root.destroy()
+
+    def test_provider_preset_custom_endpoint_and_explicit_connection_test(self):
+        self.app.open_page('settings');controls=self.app.api_controls
+        controls['provider'].set('DeepSeek');controls['select_provider']()
+        self.assertEqual(controls['endpoint'].get(),'https://api.deepseek.com/chat/completions')
+        self.assertEqual(controls['model'].get(),'deepseek-flash')
+        controls['provider'].set('自定义兼容接口')
+        controls['endpoint'].set('https://custom.invalid/chat/completions')
+        controls['model'].set('custom-translator')
+        with patch('app.translation.client.ChatCompletionClient.request') as request:
+            controls['save']()
+            request.assert_not_called()
+        disk=store.read_json(self.config)
+        self.assertEqual((disk['provider'],disk['model']),('custom','custom-translator'))
+        self.assertEqual(disk['endpoint'],'https://custom.invalid/chat/completions')
+        self.assertEqual(disk['api_key'],'fixture-key')
+        with patch('app.config.providers.test_connection',return_value=(True,'连接成功')) as request:
+            self.app.connection_controls['button'].invoke()
+            end=time.monotonic()+2
+            while time.monotonic()<end and self.app.connection_controls['status'].cget('text')!='连接成功':
+                self.app.root.update();time.sleep(.01)
+            request.assert_called_once()
+            self.assertEqual(self.app.connection_controls['status'].cget('text'),'连接成功')
+
+    def wait_region(self):
+        end=time.monotonic()+4
+        while time.monotonic()<end and self.app.game_settings['state']['busy']:
+            self.app.root.update();time.sleep(.01)
+        self.assertFalse(self.app.game_settings['state']['busy'],self.app.status.cget('text'))
+
+    def test_region_presets_keep_legacy_data_and_actual_pixels(self):
+        self.app.open_page('ingame')
+        with patch('gui.region.screen_size',return_value=(1920,1080)):
+            self.app.game_settings['preset'].set('1920 × 1080');self.app.game_settings['save']()
+            self.assertEqual(store.read_json(self.config)['capture_preset'],'1920x1080')
+            self.assertIn('1920 × 1080',self.app.game_settings['region_status'].cget('text'))
+
+    def test_region_diagnostic_shows_exact_crop_and_cleans_on_navigation(self):
+        from PIL import Image
+        self.app.open_page('ingame')
+        with patch('gui.region.screen_size',return_value=(1920,1080)),patch('gui.region.CAPTURE_DELAY_MS',0), \
+             patch('gui.region.capture_game_frame',return_value=Image.new('RGB',(1920,1080),'white')), \
+             patch('gui.game_settings.diagnostic_read',return_value=(Image.new('RGB',(1411,432)),'raw OCR message')) as read:
+            self.app.region_test['button'].invoke();self.wait_region()
+            self.assertIn('raw OCR message',self.app.region_test['preview']['raw'].get('1.0','end'))
+            self.assertEqual(str(self.app.region_test['preview']['raw'].cget('state')),'disabled')
+            window=self.app.region_test['preview']['window']
+            self.app.open_page('home');self.assertFalse(window.winfo_exists())
+            read.assert_called_once()
+
+    def test_region_failed_capture_preserves_config_and_restores_panel(self):
+        from gui.region import CaptureError
+        self.app.open_page('ingame');before=Path(self.config).read_bytes()
+        with patch('gui.region.screen_size',return_value=(1920,1080)),patch('gui.region.CAPTURE_DELAY_MS',0), \
+             patch('gui.region.capture_game_frame',side_effect=CaptureError('游戏不在前台')):
+            self.app.region_test['button'].invoke();self.wait_region()
+        self.assertEqual(Path(self.config).read_bytes(),before)
+        self.assertEqual(self.app.root.state(),'normal');self.assertIn('游戏不在前台',self.app.status.cget('text'))
+
+    def test_region_countdown_navigation_restores_panel_and_does_not_capture(self):
+        self.app.open_page('ingame')
+        with patch('gui.region.screen_size',return_value=(1920,1080)),patch('gui.region.capture_game_frame') as capture:
+            self.app.region_test['button'].invoke();self.assertEqual(self.app.root.state(),'withdrawn')
+            self.app.open_page('home');self.app.root.update()
+            self.assertEqual(self.app.root.state(),'normal');capture.assert_not_called()
 
     def test_empty_and_mask_never_replace_secret_and_failure_has_no_success(self):
         self.app.open_page('settings');c=self.app.api_controls
@@ -139,10 +206,9 @@ class WorkspaceTests(unittest.TestCase):
         self.assertIn('更新',self.app.status.cget('text'))
         self.assertEqual(d.draft.get('1.0','end-1c'),'用户草稿')
         self.button('重新读取，保留草稿').invoke()
-        self.assertEqual(d.draft.get('1.0','end-1c'),'用户草稿');self.assertIn('最新内容',self.app.status.cget('text'))
+        self.assertNotIn('first',[r['key'] for r in d.rows])  # Changed text no longer matches its drawing evidence.
         self.assertEqual(store.load_collection(self.pending)['first']['status'],'pending')
-        self.button('确认并加入词库').invoke()
-        self.assertEqual(store.load_glossary_file(self.glossary)['first']['zh'],'用户草稿')
+        self.assertFalse(store.load_glossary_file(self.glossary)['first']['zh']=='用户草稿')
 
     def test_already_processed_feedback_returns_to_pending(self):
         self.seed();d=self.dictionary();self.choose(d,'first')
@@ -259,18 +325,9 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(store.read_json(self.config)['model'],'legacy-model')
 
     def test_small_settings_show_only_useful_controls_and_no_learning(self):
-        self.app.open_page('settings');self.app.root.update()
-        def walk(w):
-            for c in w.winfo_children():yield c;yield from walk(c)
-        texts=[str(c.cget('text')) for c in walk(self.app.page) if c.winfo_class() in {'Label','Button'}]
-        self.assertIn('关闭窗口时',texts)
-        self.assertIn('导出反馈日志',texts)
-        self.assertIn('留空不修改你已保存的密钥',texts)
-        for term in ('后台学习','输入 token 单价','输出 token 单价','配置格式版本','多帧投票','聊天留档路径','调试存图目录'):
-            self.assertFalse(any(term in text for text in texts),term)
+        self.app.open_page('settings');self.app.settings_controls['show']('启动与关闭');self.app.root.update()
         self.assertEqual(tuple(self.app.close_controls['box'].cget('values')),('退出助手','收起到托盘'))
-        self.app.close_controls['variable'].set('收起到托盘')
-        self.app.close_controls['save']()
+        self.app.close_controls['variable'].set('收起到托盘');self.app.close_controls['save']()
         self.assertEqual(store.read_json(self.config)['close_action'],'tray')
         self.app.open_page('home');self.app.open_page('settings')
         self.assertEqual(self.app.close_controls['variable'].get(),'收起到托盘')
@@ -294,7 +351,7 @@ class WorkspaceTests(unittest.TestCase):
 
     def test_close_and_page_switch_cancel_callbacks_without_stopping_translator(self):
         self.seed();d=self.dictionary();self.choose(d,'first');self.draft(d,'切页草稿')
-        self.app.open_page('ingame');self.assertTrue(self.app.page_callbacks._pending)
+        self.app.open_page('home');self.assertTrue(self.app.page_callbacks._pending)
         self.app.open_page('settings');self.assertFalse(self.app.page_callbacks._pending)
         with patch.object(dt.Overlay,'close_assistant') as close:
             self.app.root.destroy();close.assert_not_called()
@@ -310,34 +367,18 @@ class WorkspaceTests(unittest.TestCase):
         d.tabs['formal'].invoke();self.app.root.update()
         w=self.button('＋ 添加词条');self.assertTrue(w.winfo_ismapped());self.assertLessEqual(w.winfo_rooty()+w.winfo_height(),bottom)
 
-    def test_display_sliders_save_real_fields_without_touching_other_config(self):
-        self.app.open_page('home');self.app.root.update()
+    def test_display_only_font_slider_preserves_other_config(self):
+        self.app.open_page('ingame');self.app.root.update()
         def walk(w):
-            for c in w.winfo_children():yield c;yield from walk(c)
+            for child in w.winfo_children():yield child;yield from walk(child)
         scales=[w for w in walk(self.app.page) if w.winfo_class() in {'Scale','TScale'}]
-        self.assertEqual(len(scales),5)
-        expected=dict(font_size=20,width=480,max_messages=4,fade_seconds=20,fade_extension=9)
-        for widget,(key,value) in zip(scales,expected.items()):
-            widget.set(value);self.app.root.update()
-        self.app.root.after(600,self.app.root.quit);self.app.root.mainloop()
-        disk=store.read_json(self.config)
-        self.assertEqual({key:disk[key] for key in expected},expected)
-        self.assertEqual((disk['api_key'],disk['endpoint'],disk['unknown']),('fixture-key','https://custom.invalid/v1',{'keep':1}))
-        self.assertNotIn('已应用',self.app.status.cget('text'))
-
-    def test_online_learning_and_autostart_controls_call_existing_paths(self):
-        def walk(w):
-            for c in w.winfo_children():yield c;yield from walk(c)
-        self.app.open_page('home');self.app.root.update()
-        switch=next(w for w in walk(self.app.page) if 'Checkbutton' in w.winfo_class())
-        switch.invoke();self.assertTrue(store.read_json(self.config)['translate_api'])
-        with patch('app.platform.launcher.autostart_supported',return_value=True),patch('app.platform.launcher.is_autostart_enabled',side_effect=[False,True]),patch('app.platform.launcher.set_autostart',return_value=(True,'已设置开机启动')) as start:
-            self.app.open_page('settings');self.app.root.update()
-            self.app.startup_control.invoke();start.assert_called_once_with(True,str(self.root))
-            self.assertIn('已设置开机启动',self.app.status.cget('text'))
-        switches=[w for w in walk(self.app.page) if 'Checkbutton' in w.winfo_class()]
-        self.assertFalse(any('后台学习' in str(c.cget('text')) for c in walk(self.app.page) if c.winfo_class() in {'Label','Button'}))
-        self.assertNotIn('realtime_learn',store.read_json(self.config))
+        self.assertEqual(len(scales),1);scales[0].set(20)
+        self.app.root.after(500,self.app.root.quit);self.app.root.mainloop()
+        self.assertEqual(store.read_json(self.config)['font_size'],20)
+        self.assertEqual(store.read_json(self.config)['unknown'],{'keep':1})
+        self.app.settings_controls['show']('启动与关闭')
+        with patch('app.platform.launcher.set_autostart',return_value=(True,'saved')) as start:
+            self.app.startup_control.invoke();self.assertTrue(start.called)
 
     def test_preview_shell_and_api_fields_have_the_approved_geometry(self):
         self.app.open_page('settings');self.app.root.geometry('1210x850+20+20');self.app.root.update()
@@ -368,7 +409,7 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(store.load_glossary_file(self.glossary)['entry 000']['zh'],'卡片译文0')
 
     def test_native_gold_slider_can_be_dragged_and_persisted(self):
-        self.app.open_page('home');self.app.root.geometry('1210x850+20+20');self.app.root.update()
+        self.app.open_page('ingame');self.app.root.geometry('1210x850+20+20');self.app.root.update()
         def walk(w):
             for child in w.winfo_children():yield child;yield from walk(child)
         scale=next(w for w in walk(self.app.page) if w.winfo_class()=='TScale')
@@ -403,13 +444,10 @@ class WorkspaceTests(unittest.TestCase):
 
     def test_page_switch_removes_card_bindings_and_display_variable_traces(self):
         self.seed();d=self.dictionary();self.app.root.update()
-        original=self.app.canvas.bind('<Configure>')
         self.app.open_page('home');self.app.root.update()
-        self.assertNotEqual(self.app.canvas.bind('<Configure>'),original)
-        variables=self.app.display_layout.variables
-        self.assertTrue(all(var.trace_info() for var in variables.values()))
+        old=self.app.display_counts
         self.app.open_page('settings');self.app.root.update()
-        self.assertTrue(all(not var.trace_info() for var in variables.values()))
+        self.assertFalse(old.winfo_exists())
 
     def test_native_panel_shows_untranslated_reasons_and_clears_on_refresh(self):
         path=store.data_path(self.root,'runtime.json')

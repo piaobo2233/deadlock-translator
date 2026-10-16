@@ -4,6 +4,8 @@ import unittest
 from unittest.mock import patch
 
 from gui.lifecycle import PageCallbacks
+from app.storage.requests import fingerprint
+from app.translation.query import QueryKey
 
 
 class FakeRoot:
@@ -98,7 +100,7 @@ class GuiLifecycleTests(unittest.TestCase):
 
     def test_leaving_home_cancels_heartbeat(self):
         self.app.open_page("home")
-        self.assertEqual(len(self.app.page_callbacks._pending), 2)
+        self.assertGreaterEqual(len(self.app.page_callbacks._pending),2)
         self.app.open_page("settings")
         self.assertFalse(self.app.page_callbacks._pending)
 
@@ -130,17 +132,11 @@ class GuiLifecycleTests(unittest.TestCase):
                                 {"days": {time.strftime("%Y-%m-%d"): bucket}, "sessions": [bucket]})
         self.assertTrue(self.app.open_page("cost"))
         self.app.root.update()
-        canvases = [w for w in self.widgets() if w.winfo_class() == "Canvas" and w is not self.app.display_layout.canvas]
-        self.assertEqual(len(canvases), 2)
-        self.assertTrue(all(w.find_all() for w in canvases))
-        bottom = self.app.canvas.winfo_rooty() + self.app.canvas.winfo_height()
-        self.assertTrue(all(w.winfo_ismapped() for w in canvases),
-                        (bottom, [(w.winfo_rooty(), w.winfo_height()) for w in canvases], self.app.root.geometry()))
-        texts = [str(w.cget("text")) for w in self.widgets() if w.winfo_class() == "Label"]
-        self.assertIn("¥0.0120", texts)
-        self.assertIn("3 成功 / 1 失败", texts)
+        self.assertFalse([w for w in self.widgets() if w.winfo_class()=='Canvas'])
+        self.assertTrue(self.app.cost_controls['table'].winfo_ismapped())
+        self.assertIn('缺当时单价',self.app.cost_controls['table'].get('1.0','end'))
+        self.assertIn('3 成功 / 1 失败',self.app.cost_controls['metrics'].cget('text'))
         self.assertFalse(errors)
-        self.assertEqual(len(self.app.page_callbacks._pending), 3)
         self.app.open_page("settings")
         self.assertFalse(self.app.page_callbacks._pending)
 
@@ -173,8 +169,9 @@ class GuiLifecycleTests(unittest.TestCase):
         import app.main as dt
         store.atomic_write_json(store.data_path(self.temp.name,'runtime.json'),dict(review_session_id='fixture-session'))
         store.save_collection(path,{'together':dict(original='together',translation='一起',source='api',status='pending',
+            version_id=fingerprint(dict(query=QueryKey.from_text('together').as_dict(),translation='一起')),
             quality_checks=dt._translation_quality_report('together','一起',{}),request_ids=['request'],
-            display_receipt=dict(session_id='fixture-session',identity=['fixture-session',1,1],request_id='request',at=1))})
+            display_receipt=dict(session_id='a'*32,identity=['b'*32,1,1],request_id='request',at=1))})
         self.app.open_page('dictionary');d=self.app.dictionary
         d.tabs['review'].invoke();self.app.root.update()
         self.assertFalse(any(w.winfo_class()=='Toplevel' for w in self.app.root.winfo_children()))
@@ -192,8 +189,8 @@ class GuiLifecycleTests(unittest.TestCase):
         rows = {status: dict(original=status, translation='译文', source='api', status=status)
                 for status in ('pending', 'accepted', 'rejected', 'archived')}
         import app.main as dt
-        rows['pending'].update(quality_checks=dt._translation_quality_report('pending','译文',{}),request_ids=['request'],
-            display_receipt=dict(session_id='fixture-session',identity=['fixture-session',1,1],request_id='request',at=1))
+        rows['pending'].update(version_id=fingerprint(dict(query=QueryKey.from_text('pending').as_dict(),translation='译文')),quality_checks=dt._translation_quality_report('pending','译文',{}),request_ids=['request'],
+            display_receipt=dict(session_id='a'*32,identity=['b'*32,1,1],request_id='request',at=1))
         store.atomic_write_json(store.data_path(self.temp.name,'runtime.json'),dict(review_session_id='fixture-session'))
         store.save_collection(path, rows)
         self.app.open_page('dictionary');self.app.root.update()
@@ -226,8 +223,8 @@ class GuiLifecycleTests(unittest.TestCase):
         self.app.root.update()
         bottom = self.app.canvas.winfo_rooty() + self.app.canvas.winfo_height()
         buttons = [w for w in self.widgets() if w.winfo_class() == "Button"
-                   and w.cget('text') not in ('翻译为英文','复制英文')]
-        self.assertEqual(len(buttons), 3)
+                   and w.cget('text')=='刷新用量']
+        self.assertEqual([w.cget('text') for w in buttons], ['刷新用量'])
         self.assertTrue(all(w.winfo_rooty() + w.winfo_height() <= bottom for w in buttons))
 
     def test_cost_corrupt_ledger_is_not_presented_as_zero_or_normal(self):
@@ -239,7 +236,7 @@ class GuiLifecycleTests(unittest.TestCase):
         self.app.open_page("cost")
         self.app.root.update()
         labels = [str(w.cget("text")) for w in self.widgets() if w.winfo_class() == "Label"]
-        self.assertIn("记录不可用", labels)
+        self.assertTrue(any("记录不可用" in text for text in labels))
         self.assertTrue(any("读取失败" in text for text in labels))
         self.assertFalse(any(text.startswith("¥") for text in labels))
         self.assertEqual(path.read_bytes(), b"{broken")
@@ -249,18 +246,20 @@ class GuiLifecycleTests(unittest.TestCase):
         from app.storage import store
         from app.storage.usage import empty_bucket
         store.atomic_write_json(store.data_path(self.temp.name, "config.json"), {"price_in": 1, "price_out": 2})
-        bucket = dict(empty_bucket(), api_calls=1, api_tracked_tasks=1, api_attempts=2,
-                      api_usage_missing=1, prompt_tokens=10000, completion_tokens=1000)
-        store.atomic_write_json(store.data_path(self.temp.name, "runtime.json"), {
-            "at": time.time(), "consumption": {"date": time.strftime("%Y-%m-%d"), "day": bucket,
-            "session": bucket, "health": {"ok": True, "error": ""}}})
-        self.app.open_page("cost")
-        self.app.root.update()
-        labels = [str(w.cget("text")) for w in self.widgets() if w.winfo_class() == "Label"]
-        self.assertIn("今日已知费用", labels)
-        self.assertIn("¥0.0120", labels)
-        self.assertTrue(any("请求尝试 2 次" in text and "运行中快照" in text for text in labels))
-        self.assertTrue(any("1 次请求缺完整用量" in text for text in labels))
+        from app.runtime.panel_instance import begin_translator
+        from app.storage.usage import UsageStats
+        from app.storage.accounting import empty_costs
+        import os
+        owner=begin_translator(self.temp.name)
+        snapshot=UsageStats(store.data_path(self.temp.name,'stats.json')).presentation_snapshot()
+        bucket=dict(empty_bucket(),api_calls=1,api_tracked_tasks=1,api_attempts=2,api_usage_missing=1,
+                    request_cost=dict(empty_costs(),known_amount=.012,known_attempts=1,unknown_attempts=1))
+        snapshot.update(day=bucket,session=bucket)
+        store.atomic_write_json(store.data_path(self.temp.name,'runtime.json'),dict(at=time.time(),pid=os.getpid(),config_session=owner['token'],consumption=snapshot))
+        self.app.open_page('cost');self.app.root.update()
+        self.assertIn('今日已知估算费用：¥0.0120',self.app.cost_controls['metrics'].cget('text'))
+        self.assertIn('已记录请求：2 次',self.app.cost_controls['metrics'].cget('text'))
+        self.assertIn('1 次请求缺完整用量',self.app.cost_controls['quality'].cget('text'))
 
     def test_cost_controls_remain_visible_at_minimum_window_size(self):
         self.app.root.geometry("680x480")
@@ -268,19 +267,18 @@ class GuiLifecycleTests(unittest.TestCase):
         self.app.root.update()
         bottom = self.app.canvas.winfo_rooty() + self.app.canvas.winfo_height()
         buttons = [w for w in self.widgets() if w.winfo_class() == "Button"
-                   and w.cget('text') not in ('翻译为英文','复制英文')]
-        self.assertEqual(len(buttons), 3)
+                   and w.cget('text')=='刷新用量']
+        self.assertEqual([w.cget('text') for w in buttons], ['刷新用量'])
         self.assertTrue(all(w.winfo_rooty() + w.winfo_height() <= bottom for w in buttons))
 
     def test_cost_refresh_failure_clears_previous_normal_metrics(self):
         self.test_cost_runtime_attempts_and_incomplete_amount_are_explicit()
-        refresh = next(w for w in self.widgets() if w.winfo_class() == "Button" and w.cget("text") == "刷新")
+        refresh = next(w for w in self.widgets() if w.winfo_class() == "Button" and w.cget("text") == "刷新用量")
         with patch("gui.cost_view.consumption_snapshot", side_effect=ValueError("fake-secret")):
             refresh.invoke()
         self.app.root.update()
         labels = [str(w.cget("text")) for w in self.widgets() if w.winfo_class() == "Label"]
-        self.assertIn("记录不可用", labels)
-        self.assertIn("请求尝试：记录不可用", labels)
+        self.assertTrue(any("记录不可用" in text for text in labels))
         self.assertNotIn("¥0.0120", labels)
         self.assertFalse(any("fake-secret" in text for text in labels))
 

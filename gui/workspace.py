@@ -8,7 +8,7 @@ import app.translation.memory_ops as memory_ops
 from app.storage import store
 from app.storage.review_queue import ReviewQueue
 from gui.theme import COLORS as C
-from gui.appearance import EntryCards, DisplayLayout, panel, text, heading, section, bordered_button, placeholder
+from gui.appearance import EntryCards, panel, text, heading, section, bordered_button, placeholder
 
 MODELS = ('deepseek-flash', 'deepseek-v4-pro')
 SOURCE_NAMES = {'api':'API 翻译','builtin':'内置词表','user':'我的词条','user_corrected':'人工审核','import':'导入'}
@@ -80,11 +80,9 @@ def display_feedback(data, *, running, now):
 
 def build_translation(parent, app):
     from gui import pages as p
-    from gui.cost_view import consumption_snapshot, _amount_text, quality_note
-    from app.storage import usage as usage_mod
     import time
     th=app.th
-    heading(parent,th,'翻译','运行状态、联网开关和游戏内显示放在一起。')
+    heading(parent,th,'翻译','运行状态、日常输入和用量。')
     hero=panel(parent,th,bg='#edf4ec');hero.pack(fill='x',pady=(0,22))
     rail=panel(hero,th,bg=C['ok'],width=3);rail.pack(side='left',fill='y')
     inner=panel(hero,th,bg='#edf4ec');inner.pack(fill='both',padx=20,pady=17)
@@ -99,6 +97,31 @@ def build_translation(parent, app):
             app.set_status('已提交重新保存请求，等待实际结果',C['muted'])
         else:app.set_status('未能提交重试，请重新打开面板或导出诊断',C['err'])
     retry_button=th.button(inner,'重试保存审核记录',retry_review)
+    runbar=panel(inner,th);runbar.pack(anchor='w',pady=(8,0))
+    starting=[None,0.]
+    def run_action():
+        import app.main as dt
+        from app.runtime.panel_instance import request_exit
+        word,why,color=p.status_of(app.root_dir)
+        if word!='未运行':
+            action='resume' if word=='已暂停' else 'pause'
+            sent=request_exit(app.root_dir,action=action)
+            app.set_status('已提交操作，等待运行状态确认' if sent else '操作未提交；未确认当前后台，请重试',C['muted'] if sent else C['err'])
+            return
+        try:
+            import subprocess,sys
+            script=Path(app.root_dir)/'scripts/run.py'
+            if not getattr(sys,'frozen',False) and not script.is_file():raise OSError('当前目录缺少启动程序')
+            command=[sys.executable,'--no-panel'] if getattr(sys,'frozen',False) else [sys.executable,'-X','utf8',str(script),'--no-panel']
+            starting[:]=[subprocess.Popen(command,cwd=app.root_dir,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0)),time.monotonic()]
+            run_button.configure(state='disabled')
+            app.set_status('已请求启动，等待后台心跳确认',C['muted'])
+        except OSError as exc:app.set_status('启动失败：'+str(exc),C['err'])
+    run_button=th.button(runbar,'启动翻译',run_action);run_button.pack(side='left')
+    th.link(runbar,'语言与输入设置',lambda:open_settings('语言与输入')).pack(side='left',padx=12)
+    def open_settings(group):
+        app._settings_group=group;app.open_page('settings')
+    app.run_controls=dict(button=run_button,action=run_action)
     online=panel(parent,th);online.pack(fill='x')
     controls=panel(online,th);controls.pack(side='right')
     config=p._load_config(app.root_dir)
@@ -110,53 +133,29 @@ def build_translation(parent, app):
          small=True,muted=True,wraplength=820,justify='left').pack(anchor='w',pady=(7,0))
     from gui.composer import build_composer
     build_composer(parent,app)
-    display=section(parent,th,'游戏内显示');app.display_section=display
-    grid=panel(display,th);grid.pack(fill='x')
-    grid.columnconfigure(0,weight=1,uniform='display');grid.columnconfigure(1,weight=1,uniform='display')
-    left,right=panel(grid,th),panel(grid,th)
-    left.grid(row=0,column=0,sticky='nsew',padx=(0,22));right.grid(row=0,column=1,sticky='nsew')
-    definitions=(('font_size','译文字号','更新当前有效译文','px'),('width','译文最大宽度','控制长句换行','px'),
-                 ('max_messages','同时显示条数','减少后立即收起多余译文','条'),('fade_seconds','译文停留','只用于后续新消息','秒'),
-                 ('fade_extension','新消息延长旧译文','原气泡有效时才能延长','秒'))
-    variables={}
-    for key,label,hint,unit in definitions:
-        row=panel(left,th);row.pack(fill='x',pady=(0,8))
-        holder=panel(row,th);holder.pack(side='right')
-        names=panel(row,th);names.pack(side='left',fill='x',expand=True)
-        text(names,th,label).pack(anchor='w',pady=(2,0))
-        text(names,th,hint,small=True,muted=True,wraplength=230,justify='left').pack(anchor='w',pady=(5,0))
-        spec=p.settings_spec.BY_KEY[key]
-        variables[key]=p._number(app,holder,key,config,spec['lo'],spec['hi'],spec['step'],unit)
-        th.hairline(left,pady=(0,10))
-    app.display_layout=DisplayLayout(right,th,variables)
+    from gui.game_settings import build_input_recovery
+    app._feedback_refreshes = []
+    build_input_recovery(parent, app)
     summary=section(parent,th,'API 用量')
-    metrics=panel(summary,th);metrics.pack(fill='x')
-    today=panel(metrics,th);today.pack(side='left',padx=(0,28))
-    text(today,th,'今天',small=True,muted=True).pack(anchor='w')
-    amount=th.label(today,'',font=th.font_big);amount.pack(anchor='w')
-    requests=panel(metrics,th);requests.pack(side='left')
-    text(requests,th,'已记录请求尝试',small=True,muted=True).pack(anchor='w')
-    attempts=th.label(requests,'',font=th.font_heading);attempts.pack(anchor='w',pady=(5,0))
-    quality=text(summary,th,'',small=True,muted=True,wraplength=820,justify='left');quality.pack(anchor='w',pady=(8,0))
-    app.cost_toggle,app.cost_section,toggle=fold(summary,app,'展开费用明细',lambda body:p.build_cost(body,app))
-    app.expand_cost=lambda:toggle() if not app.cost_section.winfo_manager() else None
-    stamp=[0]
-    def unavailable(exc):
-        amount.configure(text='记录不可用');attempts.configure(text='记录不可用')
-        quality.configure(text='消费记录读取失败：'+type(exc).__name__,fg=C['err'])
-    def apply_summary(consumption,cfg):
-        info=usage_mod.cost_info(consumption['day'],cfg.get('price_in',0),cfg.get('price_out',0))
-        health=consumption['health']
-        amount.configure(text=_amount_text(info,cfg,p._money) if health['ok'] else '记录不可用')
-        attempts.configure(text=f"{info['attempts']} 次" if health['ok'] else '记录不可用')
-        quality.configure(text=quality_note(info,health),fg=C['muted'] if health['ok'] else C['err'])
-    app._usage_unavailable=unavailable
-    app._apply_usage_summary=apply_summary
+    p.build_cost(summary,app)
     def tick():
+        for refresh in app._feedback_refreshes:
+            refresh()
         word,why,color=p.status_of(app.root_dir)
         status.configure(text=word,fg=color if word in {'未运行','没有响应','已暂停'} else C['ok'])
         note.configure(text=why)
+        run_button.configure(text='启动翻译' if word=='未运行' else '恢复翻译' if word=='已暂停' else '暂停翻译')
+        if starting[0] is not None:
+            if word!='未运行':
+                starting[0]=None;run_button.configure(state='normal');app.set_status('后台已启动',C['ok'])
+            elif starting[0].poll() is not None or time.monotonic()-starting[1]>15:
+                starting[0]=None;run_button.configure(state='normal');app.set_status('启动未获确认，请查看诊断记录',C['err'])
         data=store.read_json(store.data_path(app.root_dir,'runtime.json'),None)
+        if (word not in {'未运行','没有响应'} and isinstance(data,dict)
+                and type(data.get('at')) in (int,float) and 0<=time.time()-data['at']<10):
+            notice=p._ocr_backend_notice(data)
+            if notice:
+                note.configure(text=why+'；'+notice)
         if (word not in {'未运行','没有响应'} and isinstance(data,dict) and data.get('review_record_error')
             and type(data.get('at')) in (int,float) and 0<=time.time()-data['at']<10):
             retry_button.pack(anchor='w',pady=(8,0))
@@ -172,25 +171,22 @@ def build_translation(parent, app):
             app.display_feedback.pack(anchor='w',pady=(5,0))
         else:
             app.display_feedback.pack_forget()
-        if time.monotonic()-stamp[0]>=5:
-            stamp[0]=time.monotonic()
-            try:
-                consumption=consumption_snapshot(app.root_dir)
-                cfg=p._load_config(app.root_dir)
-                apply_summary(consumption,cfg)
-            except (OSError,ValueError,TypeError,KeyError) as exc:
-                unavailable(exc)
         app.after_page(1500,tick)
     tick()
 
 
-def build_settings(parent, app):
+def build_api_settings(parent, app):
     from gui import pages as p
     from gui.secret_entry import bind_secret_entry, SOURCE_LABELS
     th = app.th
-    heading(parent,th,'设置','设置自己的接口、启动和关闭偏好。')
     th.label(parent,'翻译接口',font=th.font_heading).pack(anchor='w',pady=(0,17))
     config=p._load_config(app.root_dir)
+    from app.config.providers import DEEPSEEK, PROVIDERS
+    provider = th.tk.StringVar(value=PROVIDERS[config.get('provider', 'deepseek')]
+        if config['endpoint'] == DEEPSEEK['endpoint'] else PROVIDERS['custom'])
+    text(parent,th,'服务商',small=True,muted=True).pack(anchor='w')
+    provider_box=th.ttk.Combobox(parent,textvariable=provider,values=tuple(PROVIDERS.values()),state='readonly',font=th.font)
+    provider_box.pack(fill='x',pady=(6,12))
     text(parent,th,'推荐使用自己的 DeepSeek API Key；程序不提供共享密钥，也不读取其他软件的凭据。',small=True,muted=True,wraplength=820).pack(anchor='w',pady=(0,12))
     fields=panel(parent,th);fields.pack(fill='x')
     fields.columnconfigure(0,weight=1,uniform='api');fields.columnconfigure(1,weight=1,uniform='api')
@@ -199,7 +195,7 @@ def build_settings(parent, app):
     text(model_field,th,'模型',small=True,muted=True).pack(anchor='w',pady=(0,6))
     model=th.tk.StringVar(value=config['model'])
     options=tuple(dict.fromkeys((*MODELS,config['model'])))
-    box=th.ttk.Combobox(model_field,textvariable=model,values=options,state='readonly',font=th.font)
+    box=th.ttk.Combobox(model_field,textvariable=model,values=options,state='normal',font=th.font)
     box.pack(fill='x',ipady=5)
     text(key_field,th,'API Key',small=True,muted=True).pack(anchor='w',pady=(0,6))
     key=th.tk.StringVar()
@@ -208,6 +204,15 @@ def build_settings(parent, app):
     text(key_field,th,'留空不修改你已保存的密钥',small=True,muted=True).pack(anchor='w',pady=(4,0))
     bind_secret_entry(entry,key,lambda value:p._save('api_key',value,app),source=config.key_source,hint=hint,
                       invalid=lambda:app.set_status('保存失败：不能保存掩码',C['err']))
+    text(parent,th,'接口地址（完整 chat/completions 地址，可编辑）',small=True,muted=True).pack(anchor='w',pady=(12,6))
+    endpoint=th.tk.StringVar(value=config['endpoint'])
+    endpoint_border,endpoint_entry=th.entry(parent,endpoint)
+    endpoint_border.pack(fill='x')
+    def select_provider(_event=None):
+        if provider.get() == PROVIDERS['deepseek']:
+            endpoint.set(DEEPSEEK['endpoint'])
+            model.set(DEEPSEEK['model'])
+    provider_box.bind('<<ComboboxSelected>>',select_provider)
     def save():
         from app.config.credentials import is_key_placeholder
         value = key.get().strip()
@@ -215,12 +220,17 @@ def build_settings(parent, app):
             app.set_status('保存失败：不能保存掩码；草稿保留', C['err']); return
         repo = p._config_repository(app.root_dir)
         try:
+            from app.config.validation import _value
+            patch = dict(model=model.get().strip(), endpoint=endpoint.get().strip(),
+                         provider=next(k for k,v in PROVIDERS.items() if v == provider.get()))
+            for name,setting in patch.items():
+                _value(name,setting,p.settings_spec.BY_KEY[name])
             if value and not repo.save_key(value):
                 raise OSError('密钥写入失败')
-            if not repo.save({'model':model.get()}):
+            if not repo.save(patch):
                 raise OSError('模型写入失败')
             disk = store.read_json(repo.path, None)
-            if not isinstance(disk, dict) or disk.get('model') != model.get() or (value and disk.get('api_key') != value):
+            if not isinstance(disk, dict) or any(disk.get(k)!=v for k,v in patch.items()) or (value and disk.get('api_key') != value):
                 raise OSError('写后核对不一致')
         except (OSError, ValueError, TypeError) as exc:
             app.set_status(f'保存失败：{exc}；草稿保留，可重试（部分字段可能已保存）', C['err']); return
@@ -228,14 +238,39 @@ def build_settings(parent, app):
         latest = p._load_config(app.root_dir)
         hint.configure(text=SOURCE_LABELS[latest.key_source])
         if latest.key_source == 'environment':
-            app.watch_application_fields({'model':model.get()}, prefix='运行密钥仍由环境变量优先提供；模型')
+            app.watch_application_fields({k:v for k,v in patch.items() if k!='provider'}, prefix='运行密钥仍由环境变量优先提供；接口')
         else:
-            app.watch_application_fields({'model':model.get(), **({'api_key':value} if value else {})})
+            app.watch_application_fields({k:v for k,v in patch.items() if k!='provider'} | ({'api_key':value} if value else {}))
     savebar=panel(parent,th);savebar.pack(fill='x',pady=(17,23))
-    th.button(savebar,'保存接口设置',save,kind='primary').pack(side='left')
-    feedback=text(savebar,th,'',small=True,muted=True,wraplength=520,justify='left');feedback.pack(side='left',padx=14)
+    actions=panel(savebar,th);actions.pack(fill='x')
+    th.button(actions,'保存接口设置',save,kind='primary').pack(side='left')
+    from gui.game_settings import connection_button
+    connection_button(actions,app,lambda:dict(p._load_config(app.root_dir),endpoint=endpoint.get().strip(),
+        model=model.get().strip(),api_key=key.get().strip() or p._load_config(app.root_dir)['api_key']),status_parent=savebar)
+    feedback=text(savebar,th,'',small=True,muted=True,wraplength=700,justify='left');feedback.pack(anchor='w',fill='x',pady=(6,0))
+    feedback.bind('<Configure>',lambda event:feedback.configure(wraplength=max(180,event.width-12)))
     app._page_feedback=feedback
-    app.api_controls=dict(key=key,entry=entry,model=model,box=box,save=save,hint=hint)
+    app.api_controls=dict(key=key,entry=entry,model=model,box=box,save=save,hint=hint,
+                          endpoint=endpoint,provider=provider,select_provider=select_provider)
+    # Existing budgets stay effective; no price guesses and no silent reset.
+    if config.get('budget_session') or config.get('budget_daily'):
+        area=section(parent,th,'已有费用保护')
+        text(area,th,'已设置金额上限；费用依据不足时会暂停 API，本地翻译继续。',small=True,muted=True,wraplength=820).pack(anchor='w')
+        def release():
+            from tkinter import messagebox
+            if not messagebox.askyesno('处理已有费用保护','是否解除已有金额上限？\n之后 API 仍可能产生费用，需要重新启动助手后生效。',parent=app.root):return
+            repo=p._config_repository(app.root_dir)
+            if repo.save({'budget_session':0.0,'budget_daily':0.0}):
+                latest=repo.load()
+                if latest['budget_session']==latest['budget_daily']==0:app.set_status('已保存解除限制，重新启动助手后生效',C['warn']);return
+            app.set_status('解除限制保存失败；原有保护保留',C['err'])
+        th.button(area,'处理费用保护',release).pack(anchor='w',pady=8)
+
+
+def build_preferences(parent, app):
+    from gui import pages as p
+    th=app.th
+    config=p._load_config(app.root_dir)
     preferences=section(parent,th,'个人偏好')
     import app.platform.launcher as launcher
     row,holder=p._row(preferences,th,'开机启动助手')
@@ -258,28 +293,53 @@ def build_settings(parent, app):
         else:action.set(labels[p._load_config(app.root_dir).get('close_action','exit')])
     chooser.bind('<<ComboboxSelected>>',choose)
     app.close_controls=dict(variable=action,box=chooser,save=choose)
-    # Existing budgets stay effective; no price guesses and no silent reset.
-    if config.get('budget_session') or config.get('budget_daily'):
-        area=section(parent,th,'已有费用保护')
-        text(area,th,'已设置金额上限；费用依据不足时会暂停 API，本地翻译继续。',small=True,muted=True,wraplength=820).pack(anchor='w')
-        def release():
-            from tkinter import messagebox
-            if not messagebox.askyesno('处理已有费用保护','是否解除已有金额上限？\n之后 API 仍可能产生费用，需要重新启动助手后生效。',parent=app.root):return
-            repo=p._config_repository(app.root_dir)
-            if repo.save({'budget_session':0.0,'budget_daily':0.0}):
-                latest=repo.load()
-                if latest['budget_session']==latest['budget_daily']==0:app.set_status('已保存解除限制，重新启动助手后生效',C['warn']);return
-            app.set_status('解除限制保存失败；原有保护保留',C['err'])
-        th.button(area,'处理费用保护',release).pack(anchor='w',pady=8)
+    from gui.feedback import build
+    build(parent,app)
+
+
+def build_recognition_settings(parent, app):
+    from gui import pages as p
+    from gui.game_settings import build_recognition, build_region_tools
+    th=app.th
+    config=p._load_config(app.root_dir)
+    build_recognition(parent,app)
+    build_region_tools(parent,app)
+    display=section(parent,th,'译文显示')
+    p._render_spec(app,display,('font_size',),config)
+    text(display,th,'宽度、同时显示数量和停留由正文、可用空间及原气泡状态自动安排。空间不足会在翻译页提示。',
+         small=True,muted=True,wraplength=820,justify='left').pack(anchor='w')
     try:
         import app.recognition.ocr as ocr
         if not ocr.find_tesseract(config.get('tesseract','')):
             area=section(parent,th,'OCR 需要修复')
             text(area,th,'未找到 Tesseract，请选择已安装的程序文件。',small=True,muted=True).pack(anchor='w')
             p._render_spec(app,area,('tesseract',),config)
-    except ImportError:pass
-    from gui.feedback import build
-    build(parent,app)
+    except ImportError:
+        text(parent,th,'识别组件不可用，请修复安装后重新打开助手。',small=True,muted=True).pack(anchor='w')
+
+
+def build_settings(parent, app):
+    from gui.game_settings import build_language_settings
+    th=app.th
+    heading(parent,th,'设置','选择一组设置。保存结果与运行时应用状态见底栏。')
+    names=('语言与输入','识别与显示','翻译接口','启动与关闭')
+    group=th.tk.StringVar(value=getattr(app,'_settings_group','翻译接口'))
+    chooser=th.ttk.Combobox(parent,textvariable=group,values=names,state='readonly',font=th.font)
+    chooser.pack(fill='x',pady=(0,18))
+    body=panel(parent,th);body.pack(fill='both',expand=True)
+    builders=dict(zip(names,(build_language_settings,build_recognition_settings,build_api_settings,build_preferences)))
+    def show(name=None):
+        if name is not None:group.set(name)
+        app.page_callbacks.cancel_all()
+        for child in body.winfo_children():child.destroy()
+        app._feedback_refreshes=[]
+        app._settings_group=group.get()
+        builders[group.get()](body,app)
+        app.canvas.yview_moveto(0)
+        app.refresh_layout()
+    chooser.bind('<<ComboboxSelected>>',lambda event:show())
+    app.settings_controls=dict(group=group,chooser=chooser,show=show,body=body)
+    show()
 
 
 class Dictionary:
@@ -297,12 +357,6 @@ class Dictionary:
         self.subtitle=head.subtitle
         self.add_button=th.button(head,'＋ 添加词条',self.add,kind='primary')
         self.add_button.pack(side='right',before=head.winfo_children()[0])
-        def new_match():
-            from app.runtime.panel_instance import request_exit
-            sent=request_exit(app.root_dir,action='new_match')
-            app.set_status('已请求开始新对局，等待助手确认' if sent else '请先启动助手，再开始新对局',
-                           C['muted'] if sent else C['warn'])
-        th.link(head,'开始新对局',new_match).pack(side='right',padx=(0,18))
         tabs=panel(parent,th);tabs.pack(fill='x')
         self.tabs={};self.tab_rails={}
         for name,label in (('formal','使用中的词库'),('review','待审核'),('processed','已处理')):
@@ -386,9 +440,7 @@ class Dictionary:
         try:
             for path in (self.gpath,self.service.path, self.mpath if self.state['tab']=='memory' else self.gpath):self.read(path)
             queue=self.service.items()
-            runtime=store.read_json(store.data_path(self.app.root_dir,'runtime.json'),{})
-            session_id=runtime.get('review_session_id','') if isinstance(runtime,dict) else ''
-            review=[r for r in queue if self.service.reviewable(r,session_id)]
+            review=[r for r in queue if self.service.reviewable(r)]
             self.processed_records=[r for r in queue if r.get('status') in {'accepted','edited','rejected'} and not r.get('hidden_at')]
             self.clear_processed_button.configure(state='normal' if self.processed_records else 'disabled')
             self.tabs['review'].configure(text=f"待审核 {len(review)}")

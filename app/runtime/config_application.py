@@ -41,38 +41,42 @@ def apply_config(config, overlay=None, translator=None, *, api_toggle=True, repo
     applied = []
     evidence = report if report is not None else {}
     visual = []
-    labels = dict(font_size='字号', width='宽度', max_messages='最大条数',
-                  fade_seconds='停留时间', fade_extension='续命时间')
+    labels = dict(font_size='字号')
 
     def failed(key, exc, label=None):
         evidence[key] = result(key, config[key], 'failed', type(exc).__name__)
         print(f'[warn] {label or labels.get(key,key)}热更失败：{type(exc).__name__}（设置已存进文件，但本次运行没生效）')
 
     if overlay is not None:
+        check_region = vars(overlay).get('_capture_region_applied')
+        if 'capture_preset' in config and callable(check_region):
+            try:
+                state = 'applied' if check_region(config['capture_preset']) else 'pending'
+                evidence['capture_preset'] = result('capture_preset',config['capture_preset'],state)
+                if state == 'applied':
+                    applied.append('capture_preset')
+            except Exception as exc:
+                failed('capture_preset',exc,'识别区域')
         for key in labels:
             if key not in config:
                 continue
             # Disk merge is a persistence snapshot, not evidence of application.
             # Failed font/attribute updates must retry even after that merge.
-            previous = (getattr(overlay, key, None) if key in {'width', 'max_messages', 'font_size'}
-                        else overlay.config.get(key))
+            previous = getattr(overlay,key,None)
             try:
                 value = _value(key, config[key], BY_KEY[key])
                 if previous != value:
-                    if key in {'width', 'max_messages', 'font_size'}:
-                        old_attribute = getattr(overlay, key, None)
-                        setattr(overlay, key, int(value))
-                        old_fonts = {name: getattr(overlay, name, None) for name in ('font_name', 'font_text')}
-                        try:
-                            if key == 'font_size':
-                                overlay._build_fonts()
-                        except Exception:
-                            setattr(overlay, key, old_attribute)
-                            for name, font in old_fonts.items():
-                                if font is not None:
-                                    setattr(overlay, name, font)
-                            raise
-                        visual.append(key)
+                    old_attribute = previous
+                    old_fonts = {name:getattr(overlay,name,None) for name in ('font_name','font_text')}
+                    setattr(overlay,key,int(value))
+                    try:
+                        overlay._build_fonts()
+                    except Exception:
+                        setattr(overlay,key,old_attribute)
+                        for name,font in old_fonts.items():
+                            if font is not None:setattr(overlay,name,font)
+                        raise
+                    visual.append(key)
                     overlay.config[key] = value
                     applied.append(key)
                 evidence[key] = result(key, value)
@@ -87,14 +91,14 @@ def apply_config(config, overlay=None, translator=None, *, api_toggle=True, repo
                 overlay._config_redraw_pending = False
             except Exception as exc:
                 overlay._config_redraw_pending = True
-                for key in ('font_size', 'width', 'max_messages'):
+                for key in labels:
                     if key in config:
                         failed(key, exc, '重绘')
                         if key in applied:
                             applied.remove(key)
     if translator is not None:
         backend = ('api_key', 'endpoint', 'model', 'translate_api', 'realtime_learn',
-                   'builtins_enabled', 'price_in', 'price_out')
+                   'builtins_enabled', 'price_in', 'price_out', 'send_target', 'auto_send')
         try:
             if callable(getattr(type(translator), 'reconfigure', None)):
                 applied.extend(translator.reconfigure(config, api_toggle=api_toggle))

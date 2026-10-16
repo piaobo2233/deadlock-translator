@@ -223,9 +223,13 @@ class ConsumptionTests(unittest.TestCase):
         day = dict(empty_bucket(), api_calls=1, api_tracked_tasks=1, api_attempts=3)
         now = time.time()
         consumption = {"date": time.strftime("%Y-%m-%d"), "day": day, "session": day,
-                       "health": {"ok": True, "error": ""}, "accounting_error": "消费记录失败"}
+                       "health": {"ok": True, "error": ""}, "accounting_error": "消费记录失败",
+                       "trend": self.ledger.presentation_snapshot()["trend"]}
+        from app.runtime.panel_instance import begin_translator
+        import os
+        owner=begin_translator(self.temp.name)
         store.atomic_write_json(store.data_path(self.temp.name, "runtime.json"),
-                                {"at": now, "consumption": consumption})
+                                {"at": now, "consumption": consumption,"pid":os.getpid(),"config_session":owner['token']})
         snapshot = consumption_snapshot(self.temp.name, now=now + 1)
         self.assertEqual(snapshot["day"]["api_attempts"], 3)
         self.assertTrue(snapshot["fresh"])

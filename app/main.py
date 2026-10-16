@@ -1677,7 +1677,12 @@ def is_chat_text(text: str, glossary: dict) -> bool:
     toks = [w.lower() for w in _WORDISH.findall(text)]
     if len(toks) == 1 and toks[0] not in (glossary or {}) and not _elongated_lol(toks[0]):
         vocab = set(glossary or {}) | COMMON_WORDS
-        if not _splittable(toks[0], vocab):
+        # Keep short chat such as "thank u" without admitting lone UI words.
+        words = re.findall(r"[A-Za-z]+", text.lower())
+        short_chat = (len(words) > 1 and any(len(w) == 1 for w in words)
+                      and all(w in {'a', 'i', 'u', 'r'} if len(w) == 1 else w in vocab
+                              for w in words))
+        if not short_chat and not _splittable(toks[0], vocab):
             return False
     return True
 
@@ -1988,7 +1993,9 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                     stop_event=None,
                     message_snapshots: bool = False, visual_tracking: bool = False,
                     capture_owner=None, health=None, visual_notify=None,
-                    frame_provider=None, screen_size=None, multilingual=False):
+                    frame_provider=None, screen_size=None, multilingual=False,
+                    capture_config=None, recognition_gate=None, adaptive=True,
+                    capture_changed=lambda: False, capture_ready=lambda: None):
     """屏幕 OCR 抓取源 —— 聊天不在日志里，只能看屏幕。
 
     每 interval 秒截一次「头像栏下方」那块区域；找气泡 → OCR → 多帧投票。
@@ -2079,6 +2086,17 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
     x1 = max(r[2] for r in rects)
     y1 = max(r[3] for r in rects)
     box = (x0, y0, x1, y1)
+    selected_rect = None
+    if capture_config is not None:
+        from app.recognition.region import resolve_region
+        try:
+            box = resolve_region(capture_config, (sw, sh))
+        except ValueError as exc:
+            if visual_notify:
+                visual_notify(str(exc) + '；请在设置的识别与显示中检查画面预设')
+            raise
+        x0, y0, x1, y1 = box
+        selected_rect = box
     print(f"[info] 屏幕抓取区域 {box}  ({x1 - x0}x{y1 - y0})，每 {interval:g} 秒一帧")
     if frame_provider is not None:
         print(f"[info] 帧来源：调用方提供（回放），屏幕基准 {sw}x{sh}")
@@ -2106,6 +2124,10 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
     selection_rules = recognition_rules()
     from app.recognition.reuse import RejectedPixels
     rejected_pixels = RejectedPixels()
+    from app.recognition.reuse import QuickChatPixels, QuickChatTemplates
+    from app.recognition.quick_chat import QuickChat
+    quick_chat, quick_pixels = QuickChat(), QuickChatPixels()
+    quick_templates=QuickChatTemplates(os.path.join(os.path.dirname(CONFIG_PATH),'quick_chat_visual.json'),quick_chat)
     con = ocr.Consensus(threshold=threshold, clock=time.monotonic, clock_domain="monotonic")
     # [!] 2026-10-07：静态 UI 黑名单由**调用方注入**（调用方负责加载与落盘）。
     #     原来这份名单只在内存，进程一退就没了 —— 于是同一个静态 UI 元素
@@ -2135,10 +2157,64 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
 
     from app.runtime.frame_source import FrameSource, FrameUnavailable
     from app.runtime.visual_pulse import VisualPulse
-    from app.vision.presence import mask_exclusions
+    from app.runtime.recognition_cadence import RecognitionCadence
+    from app.vision.presence import mask_exclusions, visual_body, same_body_box, VisualBody
     pulse, visual_source, frame_sequence = None, None, None
+    cadence = RecognitionCadence(interval) if visual_tracking and adaptive else None
+    def detect_chat_bubbles(image):
+        found=ocr.find_bubbles(image,offset=(x0,y0),screen=(sw,sh),
+                               **({'capture_rect':selected_rect} if selected_rect else {}))
+        if selected_rect is None:
+            return found
+        from app.recognition.chat_area import candidate_inside, chat_body_sized, typing_indicator, ChatAreaBox
+        kept=[b for b in found if candidate_inside(b,image.shape,scale=sh/ocr.REF_H)]
+        if stats is not None:
+            stats['chat_area_clipped_skipped']=stats.get('chat_area_clipped_skipped',0)+len(found)-len(kept)
+        shaped=[]
+        shape_rejected=0
+        typing_count=0
+        from app.vision.body import BodyRegion
+        for candidate in kept:
+            skip=''
+            if typing_indicator(image,candidate,scale=sh/ocr.REF_H):
+                typing_count+=1
+                skip='typing'
+                region=BodyRegion(rect=tuple(candidate[:4]),text_rect=tuple(candidate[:4]))
+            else:
+                with ocr.measure_stage('locate_body'):
+                    region=ocr.locate_body(image,candidate,scale=sh/ocr.REF_H)
+                if not chat_body_sized(region,scale=sh/ocr.REF_H):
+                    shape_rejected+=1
+                    continue
+                if quick_templates.matches(image,region,scale=sh/ocr.REF_H):
+                    skip='native_template'
+                    if stats is not None:
+                        stats['quick_chat_template_skipped']=stats.get('quick_chat_template_skipped',0)+1
+            # Untranslated native/typing boxes remain layout obstacles. Their
+            # geometry cannot wake OCR, vote on text or own a message identity.
+            visual=VisualBody(region.tracking_box,None) if skip else visual_body(image,region)
+            value=ChatAreaBox(candidate,region,visual,skip)
+            duplicate=next((i for i,old in enumerate(shaped)
+                if same_body_box(old.region.rect,region.rect,scale=sh/ocr.REF_H)),None)
+            if duplicate is None:
+                shaped.append(value)
+            else:
+                old=shaped[duplicate]
+                if ((skip and not old.skip_ocr) or (not skip and not old.skip_ocr
+                        and region.text_rect[2]*region.text_rect[3]>old.region.text_rect[2]*old.region.text_rect[3])):
+                    shaped[duplicate]=value
+                if stats is not None:
+                    stats['chat_body_duplicate_skipped']=stats.get('chat_body_duplicate_skipped',0)+1
+        if stats is not None:
+            stats['chat_area_shape_skipped']=stats.get('chat_area_shape_skipped',0)+shape_rejected
+            stats['typing_indicator_skipped']=stats.get('typing_indicator_skipped',0)+typing_count
+        return shaped
+    manual_mode = getattr(recognition_gate, 'mode', 'realtime') == 'manual'
+    def manual_active():
+        return manual_mode and recognition_gate.allowed()
     if visual_tracking:
         error_notice = {"reason": "", "at": 0.0}
+        geometry_notice = [False]
         def visual_error(reason):
             if health is not None:
                 health.record(PipelineStage.CAPTURE, reason, error=True)
@@ -2157,7 +2233,12 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                 if exclude:
                     mask_exclusions(pixels, exclude(), (x0, y0))
                 return pixels
+            if capture_changed():
+                raise FrameUnavailable('capture_region_changed')
             if (ctypes.windll.user32.GetSystemMetrics(0), ctypes.windll.user32.GetSystemMetrics(1)) != (sw, sh):
+                if not geometry_notice[0] and visual_notify is not None:
+                    geometry_notice[0] = True
+                    visual_notify('屏幕分辨率已变化，正在按比例更新识别区域；可在翻译页检查裁图')
                 raise FrameUnavailable("capture_geometry_changed")
             captured = ImageGrab.grab(bbox=box)
             pixels = cv2.cvtColor(np.asarray(captured), cv2.COLOR_RGB2BGR)
@@ -2166,12 +2247,18 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
             if exclude:
                 mask_exclusions(pixels, exclude(), (x0, y0))
             return pixels
-        pulse = VisualPulse(con, lambda image: ocr.find_bubbles(image, offset=(x0, y0), screen=(sw, sh)),
+        pulse = VisualPulse(con, detect_chat_bubbles,
             scale=sh / ocr.REF_H,
+            activity=(lambda at, changed, tracking: cadence.observe(at, changed and not manual_mode, tracking)) if cadence else None,
             event=lambda reason: health.record(PipelineStage.CAPTURE, reason) if health is not None else None)
         _LIVE['pulse'] = pulse
-        visual_source = FrameSource(sample_pixels, pulse.update, pulse.unavailable,
-            allowed=lambda: not is_paused() and (not only_in_game or game_in_foreground()), error=visual_error)
+        def visual_unavailable(at):
+            pulse.unavailable(at)
+            if cadence is not None:
+                cadence.unavailable()
+        visual_source = FrameSource(sample_pixels, pulse.update, visual_unavailable,
+            allowed=lambda: not capture_changed() and not is_paused() and (not only_in_game or game_in_foreground()), error=visual_error,
+            cadence=(lambda: cadence.capture_interval(force=manual_active())) if cadence else None)
         if capture_owner is not None:
             if not capture_owner(visual_source):
                 return
@@ -2210,7 +2297,10 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
         last_report = time.time()
         paused = False
         stop_event = stop_event if stop_event is not None else threading.Event()
+        capture_ready()
         while not stop_event.is_set():
+            if capture_changed():
+                return
             if is_paused():
                 stop_event.wait(0.1)
                 continue
@@ -2228,6 +2318,10 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                 print("[ocr ] 游戏回到前台，恢复抓取")
                 paused = False
 
+            if recognition_gate is not None and not recognition_gate.allowed():
+                stop_event.wait(.05)
+                continue
+
             try:
                 if visual_source is not None:
                     sampled = visual_source.latest(after_sequence=frame_sequence)
@@ -2244,11 +2338,26 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                     captured_at = time.monotonic()
                     img = cv2.cvtColor(np.asarray(frame), cv2.COLOR_RGB2BGR)
             except Exception as exc:
+                if frame_provider is not None and getattr(frame_provider, 'exhausted', False):
+                    if health is not None and str(exc) != 'replay_exhausted':
+                        health.record(PipelineStage.CAPTURE, 'replay_finished')
+                    return
+                if capture_changed():
+                    return
                 print(f"[warn] 截屏失败：{exc}")
                 if visual_source is not None:
                     visual_error("visual_capture_wait_" + type(exc).__name__)
                 stop_event.wait(1.0)
                 continue
+
+            if capture_changed():
+                return
+            if cadence is not None:
+                due = cadence.ocr_due(force=manual_mode)
+                if stats is not None:
+                    stats.update(cadence.snapshot())
+                if not due:
+                    continue
 
             # [!] 调试用：把**程序实际抓到的画面**存盘。
             #     博士实机不翻，但拿他发的截图跑我的离线管线却一切正常 ——
@@ -2295,7 +2404,13 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
             if exclude:
                 mask_exclusions(img, exclude(), (x0, y0))
 
-            boxes = ocr.find_bubbles(img, offset=(x0, y0), screen=(sw, sh))
+            with ocr.measure_stage('find_bubbles'):
+                boxes = detect_chat_bubbles(img)
+            if not boxes:
+                recovered=ocr.recover_receive_backend()
+                if recovered is not None and capture_owner is not None and not capture_owner(recovered):
+                    ocr.close_receive_backend()
+                    return
             # [!] 曾经在这里加过「只在聊天锚点区里翻译」—— **已撤销**。
             #     理由：拿博士自己的真实聊天截图回放，真气泡全在**上面那块**
             #     （long_chat/wait2 的 'wait for me to fight' 在 y=200，
@@ -2311,10 +2426,26 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                 else:
                     stats["empty_frames"] += 1
             for b in boxes:
-                body = ocr.locate_body(img, b, scale=sh / ocr.REF_H)
+                if getattr(b,'skip_ocr',''):
+                    if stats is not None:
+                        stats['geometry_only_ocr_skipped']=stats.get('geometry_only_ocr_skipped',0)+1
+                    continue
+                body=getattr(b,'region',None)
+                if body is None:
+                    with ocr.measure_stage('locate_body'):
+                        body = ocr.locate_body(img, b, scale=sh / ocr.REF_H)
                 if body.accepted:
                     # Only the bright body anchors tracking/display; text_rect is OCR-only.
                     b = body.tracking_box
+                tracking_box=pulse.project_box(img,body,captured_at) if pulse is not None else b
+                if tracking_box is None:
+                    if stats is not None:
+                        stats['stale_source_frame_skipped']=stats.get('stale_source_frame_skipped',0)+1
+                    continue
+                if pulse is not None and pulse.unchanged_verified(img, body, captured_at):
+                    if stats is not None:
+                        stats['verified_pixels_skip'] = stats.get('verified_pixels_skip',0)+1
+                    continue
                 # 这个位置刚产出过译文 → 直接跳过，连 OCR 都不跑。
                 # 气泡存活 10 秒、每 0.4 秒一帧 = 同一个气泡会被看 25 次，
                 # 后面 24 次的 OCR（每次约 575ms）全是白算的。这是延迟的大头。
@@ -2325,20 +2456,22 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                 #     现在超过 con.recheck 秒就复核一次：只跑**最便宜的一个变体**，
                 #     文字没变 → 还是同一条，touch() 续期继续跳过；
                 #     文字变了 → 那是新消息，往下走完整流程（正常翻译）。
-                if con.handled(b):
+                if con.handled(tracking_box):
                     if stats is not None:
                         stats["handled_skip"] += 1
                         stats["handled"] += 1        # 诊断新增，口径不动
                     if debug:
                         print(f"[DROP] reason=handled box={tuple(int(v) for v in b[:4])}")
                     continue
-                prev_text = con.emitted_text(b)
+                prev_text = con.emitted_text(tracking_box)
                 if prev_text is not None:
                     quick = ""
-                    for _kind, _t in ocr.ocr_variants(img, b, screen=(sw, sh), region=body):
+                    for _kind, _t in ocr.ocr_variants(img, b, screen=(sw, sh), region=body,
+                            **({'max_workers': 1} if cadence else {})):
                         quick = _t or ""
                         break
-                    if same_text(quick, prev_text) and con.touch(b, text=quick):
+                    if same_text(quick, prev_text) and (pulse.touch_current(img,body,captured_at,quick)
+                            if pulse is not None else con.touch(b,text=quick)):
                         if stats is not None:
                             stats["handled_skip"] += 1
                             stats["handled_recheck"] += 1   # 诊断新增，口径不动
@@ -2359,6 +2492,10 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                 #     另一个方向的坑：完全不换算，浮窗把抓屏图坐标当屏幕坐标用，
                 #     译文就画在气泡左上 332x144 像素处（博士报的"位置不对"）。
                 #     两边都是同一个疏忽：**搞混了两套坐标系**。
+                if body.accepted and quick_pixels.skip(img,body,captured_at):
+                    if stats is not None:
+                        stats['quick_chat_pixel_skipped']=stats.get('quick_chat_pixel_skipped',0)+1
+                    continue
                 pixel_key = rejected_pixels.key(img, body.rect if body.accepted else b)
                 first_seen_at = rejected_pixels.first_seen(pixel_key, captured_at)
                 if rejected_pixels.skip(pixel_key, captured_at):
@@ -2366,16 +2503,26 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                         stats['unchanged_rejected_skip'] = stats.get('unchanged_rejected_skip', 0) + 1
                     continue
                 early_evidence = []
-                def verify_body(text):
+                def read_source(text,deadline):
                     evidence = ocr.source_evidence(img, body, text, scale=sh/ocr.REF_H,
-                        captured_at=captured_at, origin=(x0,y0), deadline=first_seen_at+4.0)
+                        captured_at=captured_at, origin=(x0,y0), deadline=deadline)
+                    return evidence
+                def verify_body(text):
+                    evidence=read_source(text,first_seen_at+4.0)
                     early_evidence.append(evidence)
                     return evidence
                 decision = select_candidate(ocr.ocr_variants(img, b, screen=(sw, sh), region=body,
-                    deadline=first_seen_at+4.0), glossary, selection_rules,
-                    verify_body=verify_body if message_snapshots and ocr._RESIDENT is not None else None)
+                    deadline=first_seen_at+4.0, **({'max_workers': 1} if cadence else {})), glossary, selection_rules,
+                    verify_body=verify_body if message_snapshots else None)
                 tried = list(decision.tried)
                 if not decision.accepted:
+                    if decision.reason == 'native_chinese':
+                        if stats is not None:
+                            stats['native_chinese_filtered']=stats.get('native_chinese_filtered',0)+1
+                        if any(quick_chat.matches(e.reading) for e in early_evidence):
+                            quick_pixels.remember(img,body,captured_at)
+                            if stats is not None:
+                                stats['quick_chat_confirmed']=stats.get('quick_chat_confirmed',0)+1
                     rejected_pixels.reject(pixel_key, captured_at)
                     # 复盘留档：被拒的也要记 —— 想学的新词正是被这一关拦下的
                     cand = decision.rejected_text
@@ -2425,7 +2572,19 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                           f"全部变体={tried!r} -> {picked!r}")
                 elif verbose:
                     print(f"[ocr ] 抓到 {picked!r}  box={b}  变体={tried!r}  选中={decision.kind}")
-                confirmed = con.feed(picked, width=b[2], box=b, captured_at=first_seen_at)
+                if capture_changed():
+                    return
+                if pulse is not None:
+                    from app.recognition.source import for_text
+                    source_verified=bool(early_evidence and for_text(early_evidence[0],picked).verified)
+                    current,confirmed=pulse.feed_current(img,body,captured_at,picked,first_seen_at,
+                        source_verified=source_verified)
+                else:
+                    current,confirmed=True,con.feed(picked,width=b[2],box=b,captured_at=first_seen_at)
+                if not current:
+                    if stats is not None:
+                        stats['stale_source_frame_skipped']=stats.get('stale_source_frame_skipped',0)+1
+                    continue
                 if stats is not None:
                     # 静态名单挡掉几次 —— 原来这件事**完全不可见**，现已入统计。
                     stats["static_suppressed"] = con.static_suppressed
@@ -2485,9 +2644,18 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                             from app.recognition.source import for_text
                             evidence = for_text(early_evidence[0], candidate.text)
                         else:
-                            evidence = ocr.source_evidence(img, body, candidate.text, scale=sh / ocr.REF_H,
-                                captured_at=captured_at, origin=(x0, y0),
-                                deadline=identity.first_seen_at+4.0 if identity.first_seen_at is not None else None)
+                            evidence = read_source(candidate.text,
+                                identity.first_seen_at+4.0 if identity.first_seen_at is not None else None)
+                        if evidence.reason == 'native_chinese':
+                            if stats is not None:
+                                stats['native_chinese_filtered']=stats.get('native_chinese_filtered',0)+1
+                            if quick_chat.matches(evidence.reading):
+                                quick_pixels.remember(img,body,captured_at)
+                                if stats is not None:
+                                    stats['quick_chat_confirmed']=stats.get('quick_chat_confirmed',0)+1
+                            continue
+                        if pulse is not None and evidence.verified:
+                            pulse.mark_source_verified(identity)
                         yield ChatCandidate(candidate.who, candidate.text, candidate.channel,
                             current_box[:4], candidate.bubble_id, candidate.variants,
                             identity, evidence)
@@ -2503,12 +2671,15 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                               f"text={picked!r}")
 
             # The interval is a minimum frame period, not another delay after OCR.
-            stop_event.wait(max(0.0, interval - (time.monotonic() - captured_at)))
+            if cadence is None:
+                stop_event.wait(max(0.0, interval - (time.monotonic() - captured_at)))
 
     finally:
         ocr.close_receive_backend()
         if visual_source is not None and not visual_source.stop():
             visual_error("visual_shutdown_timeout")
+        if callable(getattr(frame_provider, 'close', None)):
+            frame_provider.close()
         if _LIVE.get('pulse') is pulse:
             _LIVE['pulse'] = None
 
@@ -2637,8 +2808,7 @@ class Overlay:
         self.user32 = ctypes.windll.user32
 
         self.config = config
-        self.width = int(config.get("width", 300))
-        self.max_messages = int(config.get("max_messages", DEFAULT_CONFIG['max_messages']))
+        self.width = 300  # Initial hidden canvas only; each message derives its own width.
         # [!] 2026-10-07 重构：原来的 self.team_only 已删除（对屏幕 OCR 无效）。
         self.font_size = int(config.get("font_size", 15))
         self.on_exit = config.get("_on_exit")
@@ -2865,15 +3035,9 @@ class Overlay:
             self._notify_display(originals, revision, entries)
             return
 
-        bubble_w_max = self.width - BUBBLE_X - BUBBLE_SHADOW - 2
-        text_max = bubble_w_max - BUBBLE_PAD_X * 2
+        from app.presentation.adaptive import widths
         line_height = getattr(self, 'line_height', LINE_H)
-
         blocks: list = []
-        limit = max(1, int(getattr(self, 'max_messages', DEFAULT_CONFIG['max_messages'])))
-        eligible = [i for i, item in enumerate(originals)
-                    if (not isinstance(item, DisplayMessage) or item.successful) and messages[i][2]]
-        selected = set(eligible[-limit:])
         for index, msg in enumerate(messages):
             if not self._within_display_deadline(originals[index]):
                 entries[index] = DrawEntry(index, reason='display_expired')
@@ -2900,27 +3064,11 @@ class Overlay:
             if not translated:
                 entries[index] = DrawEntry(index, reason='panel_only')
                 continue
-            if index not in selected:
-                entries[index] = DrawEntry(index, reason='message_limit')
-                continue
+            # Width candidates are fitted against source, obstacles and screen below.
             body = translated
-
-            # [!] max_lines 从默认 3 提到 5 —— 长句子的中文译文一行放不下，
-            #     3 行会被截断成 "……"。博士 2026-10-07 问「长句子翻译不了吗」，
-            #     检测端修好之后，显示端也不能再截。
-            rendered = [(line, self.font_text, TEXT_COLOR, line_height)
-                        for line in self._wrap(body, self.font_text,
-                                               max(60, text_max), 5)]
-
-            widest = max((font.measure(text) for text, font, _, _ in rendered), default=0)
-            width = int(max(BUBBLE_MIN_W,
-                            min(bubble_w_max, widest + BUBBLE_PAD_X * 2)))
-            height = max(BUBBLE_MIN_H,
-                         sum(step for _, _, _, step in rendered) + BUBBLE_PAD_Y * 2)
             blocks.append({
-                "kind": "msg", "height": height, "width": width,
+                "kind": "msg", "body": body,
                 "index": index, "bubble_id": bid,
-                "lines": rendered,
                 "top": BUBBLE_ALL_TOP if channel == "all" else BUBBLE_ALLY_TOP,
                 "bottom": BUBBLE_ALL_BOTTOM if channel == "all" else BUBBLE_ALLY_BOTTOM,
                 "accent": None,      # 左侧强调条已删除（游戏原版没有）
@@ -2935,15 +3083,24 @@ class Overlay:
         occupied = list(live_obstacles()) + [(p[0], p[1], p[0] + p[2], p[1] + p[3])
                     for p in source_boxes.values() if len(p) >= 4
                     and all(type(value) in (int, float) and math.isfinite(value) for value in p[:4])]
-        for block in blocks:
+        for block in reversed(blocks):
             pos = block.get("pos")
             if block.get("bubble_id") is not None and not block["has_pos"]:
                 entries[block["index"]] = DrawEntry(block["index"], reason="invalid_geometry")
                 continue
             if block["kind"] == "msg" and pos and len(pos) >= 4:
-                placement = below_bubble(pos[:4], (block["width"] + BUBBLE_SHADOW,
-                                                   block["height"] + BUBBLE_SHADOW),
-                                         (sw, sh), occupied=occupied, pointer=6)
+                for bubble_w_max in widths(pos,(sw,sh),getattr(self,'font_size',15),len(block['body'])):
+                    text_max=max(60,bubble_w_max-BUBBLE_PAD_X*2)
+                    # Do not silently truncate a long translation to five lines.
+                    rendered=[(line,self.font_text,TEXT_COLOR,line_height) for line in
+                              self._wrap(block['body'],self.font_text,text_max,len(block['body'])+1)]
+                    widest=max((font.measure(text) for text,font,_,_ in rendered),default=0)
+                    block['width']=max(BUBBLE_MIN_W,min(bubble_w_max,widest+BUBBLE_PAD_X*2))
+                    block['height']=max(BUBBLE_MIN_H,sum(row[3] for row in rendered)+BUBBLE_PAD_Y*2)
+                    block['lines']=rendered
+                    placement=below_bubble(pos[:4],(block['width']+BUBBLE_SHADOW,block['height']+BUBBLE_SHADOW),
+                                           (sw,sh),occupied=occupied,pointer=6)
+                    if placement.rect is not None:break
                 if placement.rect is None:
                     entries[block["index"]] = DrawEntry(block["index"], reason=placement.reason)
                     continue
@@ -3682,53 +3839,13 @@ def print_usage_report(config: dict) -> int:
 
 # ---------- 主流程 ----------
 def replay_frame_provider(video: str, *, rate: float = 1.0, start: float = 0.0,
-                          seconds=None, ffmpeg: str = "ffmpeg", ffprobe: str = "ffprobe"):
-    """把录像变成 `iter_ocr_source` 能用的整屏帧来源。
-
-    为什么放在主程序而不是回放脚本里：北极星验收线必须走**生产入口**。
-    「帧从哪来」是回放与实机唯一的分叉点（见 `iter_ocr_source` 的说明），
-    解码这件事没有存在第二份实现的价值，放这里两边共用。
-
-    返回 `(provider, (width, height))`；`provider()` 返回 HxWx3 BGR 帧，
-    录像放完返回 None（`iter_ocr_source` 见到 None 即收尾）。
-    """
-    import subprocess
-
-    import numpy as np
-
-    probed = subprocess.run(
-        [ffprobe, "-v", "error", "-select_streams", "v:0",
-         "-show_entries", "stream=width,height", "-of", "csv=p=0:s=x", str(video)],
-        capture_output=True, text=True, timeout=30)
-    if probed.returncode != 0 or not probed.stdout.strip():
-        raise RuntimeError(f"ffprobe 读不出录像尺寸：{probed.stderr.strip()[:200]}")
-    width, height = (int(v) for v in probed.stdout.strip().splitlines()[0].split("x"))
-
-    command = [ffmpeg, "-hide_banner", "-nostdin", "-v", "error",
-               "-threads", "2", "-filter_threads", "1"]
-    if start:
-        command.extend(["-ss", str(start)])          # 输入定位：快，够用
-    command.extend(["-i", str(video), "-map", "0:v:0", "-an"])
-    if seconds:
-        command.extend(["-t", str(seconds)])
-    command.extend(["-vf", f"fps={rate}", "-pix_fmt", "bgr24",
-                    "-f", "rawvideo", "pipe:1"])
-    process = subprocess.Popen(command, stdout=subprocess.PIPE,
-                               stderr=subprocess.DEVNULL)
-    frame_bytes = width * height * 3
-
-    def provider():
-        raw = process.stdout.read(frame_bytes)
-        if not raw or len(raw) < frame_bytes:
-            try:
-                process.stdout.close()
-                process.wait(timeout=10)
-            except Exception:
-                process.kill()
-            return None
-        return np.frombuffer(raw, np.uint8).reshape(height, width, 3)
-
-    return provider, (width, height)
+                          seconds=None, ffmpeg: str = "ffmpeg", ffprobe: str = "ffprobe",
+                          realtime=False):
+    """Decode full-screen frames; real-time mode follows elapsed video time."""
+    from app.runtime.video_replay import VideoReplay
+    provider = VideoReplay(video, rate=rate, start=start, seconds=seconds,
+                           ffmpeg=ffmpeg, ffprobe=ffprobe, realtime=realtime)
+    return provider, provider.size
 
 
 def format_delivery(message) -> str:
@@ -3821,6 +3938,8 @@ def main() -> int:
                         help="配合 --replay：打开视觉寿命门（生产默认开启）。"
                              "关掉时回放看不到那道门的丢弃；打开才能量出它的丢弃率。"
                              "注意：回放里时间是压缩的，视觉租期语义只能近似复现")
+    parser.add_argument('--replay-realtime', action='store_true',
+                        help='按原速推进录像，启用实机视觉寿命/活动调度；默认解码 10Hz（时间量化 0.1 秒）')
     parser.add_argument("--stats", action="store_true",
                         help="打印用量台账（真实 token / 成本 / 本地命中率）后退出")
     parser.add_argument("--dashboard", action="store_true",
@@ -3867,9 +3986,8 @@ def main() -> int:
     #     放一个"接受参数但什么都不做"的开关比没有更糟：用户会以为它在保护数据。
     args = parser.parse_args()
     if args.replay:
-        # [!] 回放必须无界面，而且必须用 reliable 模式：没有 Tk 也照样要验证
-        #     「识别 → 翻译 → 产出」这条判断链；reliable 保证帧不被丢弃，
-        #     否则回放会因为"队列繁忙"少跑帧，验收结果不可复现。
+        # Sequential diagnostics retain reliable delivery. Real-time replay uses
+        # production deadlines/queues so slow work cannot stretch the movie.
         args.headless = True
         args.once = True
 
@@ -4100,8 +4218,10 @@ def main() -> int:
         allow_popup=not (args.headless or args.simulate),
         learning=LearnedGlossary(GLOSSARY_PATH, DEFAULT_GLOSSARY),
     )
-    max_messages = int(config.get("max_messages", DEFAULT_CONFIG['max_messages']))
-    fade_seconds = float(config.get("fade_seconds", 10))
+    if config.get('receive_target', 'zh-Hans') != 'zh-Hans':
+        from app.translation.manual import ManualEngine
+        translator = ManualEngine(APP_DIR, config, outgoing=False, usage=usage_stats,
+                                  hard_offline=bool(args.offline) or bool(_DIAGNOSTIC_ROOT))
 
     # 现场统计：让「钱花在哪、有没有漏抓」变成可查的数据，而不是靠估。
     # 抓取层和翻译层都会往这个 dict 里累加，退出时汇总打印。
@@ -4137,6 +4257,9 @@ def main() -> int:
     capture_stop = threading.Event()
     ui_notices = queue.Queue()
     config["_notice_queue"] = ui_notices
+    from app.recognition.region import RecognitionGate
+    recognition_gate = RecognitionGate(config.get('recognition_mode', 'realtime'))
+    region_capture = None
     if args.simulate:
         def make_source():
             return iter_simulate_source(args.simulate, loop=not args.once)
@@ -4144,14 +4267,17 @@ def main() -> int:
     elif args.replay:
         def make_source():
             interval = float(config.get("ocr_interval", 0.25) or 0.25)
-            rate = float(args.replay_fps or 0.0) or (1.0 / interval if interval > 0 else 4.0)
+            rate = float(args.replay_fps or 0.0) or (10.0 if args.replay_realtime else 1.0 / interval)
             provider, size = replay_frame_provider(
                 args.replay, rate=rate,
                 start=float(args.replay_start or 0.0),
-                seconds=(float(args.replay_seconds) if args.replay_seconds else None))
+                seconds=(float(args.replay_seconds) if args.replay_seconds else None),
+                realtime=args.replay_realtime)
             print(f"[info] 回放输入：{args.replay}（{size[0]}x{size[1]}，{rate:g} 帧/秒）")
-            return iter_ocr_source(interval=0.0,
-                                   threshold=int(config.get("ocr_votes", 2)),
+            return iter_ocr_source(interval=interval if args.replay_realtime else 0.0,
+                                   threshold=max(3, int(config.get("ocr_votes", 3))),
+                                   multilingual=True, capture_config=config,
+                                   recognition_gate=recognition_gate,
                                    glossary=glossary, exclude=None, only_in_game=False,
                                    debug=bool(getattr(args, "ocr_debug", False)),
                                    tesseract_path=str(config.get("tesseract", "") or ""),
@@ -4164,7 +4290,8 @@ def main() -> int:
                                    static_screen=static_ui_screen,
                                    stop_event=capture_stop,
                                    message_snapshots=True,
-                                   visual_tracking=bool(args.replay_visual),
+                                   visual_tracking=bool(args.replay_visual or args.replay_realtime),
+                                   capture_owner=lambda owner: pipeline.register_capture_owner(owner),
                                    health=runtime_health,
                                    frame_provider=provider, screen_size=size)
         print("[info] 抓取方式：录像回放（走生产识别链，不截屏）")
@@ -4182,8 +4309,11 @@ def main() -> int:
             except Exception:
                 return []
 
-        def make_source():
-            developer_mode=bool(args.headless or args.ocr_debug)
+        from app.recognition.region import RegionCapture, primary_game_screen
+        region_capture = RegionCapture(load_config, primary_game_screen, stamp=config_stamp,
+            notify=lambda text: ui_notices.put(FailureNotice('capture_region', text)))
+
+        def capture_source(**geometry):
             return iter_ocr_source(interval=float(config.get("ocr_interval", 0.25)),
                                    threshold=max(3, int(config.get("ocr_votes", 3))),
                                    multilingual=True,
@@ -4199,16 +4329,19 @@ def main() -> int:
                                    static_screen=static_ui_screen,
                                    stop_event=capture_stop,
                                    message_snapshots=True, visual_tracking=True,
+                                   recognition_gate=recognition_gate, **geometry,
                                    capture_owner=lambda owner: pipeline.register_capture_owner(owner),
                                    health=runtime_health,
                                    visual_notify=None if args.headless else lambda text: ui_notices.put(FailureNotice('visual_capture', text)))
+        def make_source():
+            return region_capture.iter_source(capture_source, capture_stop)
         print("[info] 抓取方式：屏幕 OCR（聊天不写日志，只能看屏幕）")
         if config.get("only_in_game", True):
             print(f"[info] 只在前台是 {GAME_EXE} 时抓取 —— 切出去看网页不会花一分钱")
 
     print(f"[info] 模型：{config['model']}｜"
           f"API Key：{mask_key(config['api_key'])}")
-    print(f"[info] 同屏 {max_messages} 条｜{fade_seconds:g} 秒淡出｜"
+    print(f"[info] 显示宽度、数量及停留自动适配｜"
           f"DPI aware {'是' if DPI_AWARE else '否'}")
     print("[info] 托盘右键：打开面板、暂停、恢复或退出助手")
 
@@ -4223,9 +4356,10 @@ def main() -> int:
         require_evidence=not bool(args.simulate))
     pipeline = TranslationPipeline(
         make_source, processor, health=runtime_health, paused=is_paused,
-        stop_event=capture_stop, reliable=args.once, task_timeout=4.0,
+        stop_event=capture_stop, reliable=args.once and not args.replay_realtime, task_timeout=4.0,
         is_current=lambda candidate: (bool(args.simulate) or bool(args.replay) or
                    (not config.get("only_in_game", True) or game_in_foreground()))
+                   and (region_capture is None or region_capture.current())
                    and (candidate.bubble_id is None or live_message_box(candidate) is not None))
     pending_q, outbox = pipeline.pending, pipeline.outbox
     from app.runtime.panel_instance import begin_translator, end_translator
@@ -4234,9 +4368,14 @@ def main() -> int:
         panel_owner = begin_translator(APP_DIR)
     except Exception as exc:
         print(f'[warn] 面板关联未建立：{type(exc).__name__}；请关闭独立面板后重开')
+    from app.runtime.session_view import SessionView
+    session_view = SessionView(APP_DIR, (panel_owner or {}).get('token', ''))
+    game_controls = None
     pipeline.start()
 
     def stop_pipeline():
+        if game_controls is not None:
+            game_controls.close()
         if panel_owner:
             try:
                 end_translator(APP_DIR, panel_owner)
@@ -4294,6 +4433,8 @@ def main() -> int:
             overlay.panel_status=translator.review_error+'；退出未完成，请修复后重试'
             return False
         overlay._exit_pending=True
+        if game_controls is not None:
+            game_controls.close()
         if not pipeline.stop(timeout=0):
             overlay.panel_status='正在结束当前识别或请求并保存；完成后自动退出'
             return False
@@ -4332,6 +4473,18 @@ def main() -> int:
 
     config["_on_exit"] = on_exit
     overlay = Overlay(config)
+    if region_capture is not None:
+        overlay._capture_region_applied = region_capture.applied
+    if not (args.simulate or args.replay or _DIAGNOSTIC_ROOT):
+        from app.runtime.game_controls import GameControls
+        def input_config():
+            fresh = load_config()
+            if args.offline:
+                fresh['translate_api'] = False
+            return fresh
+        game_controls = GameControls(APP_DIR, input_config, recognition_gate, session_view,
+            lambda message: overlay.status_queue.put(FailureNotice('game_input', message)), paused=is_paused)
+        game_controls.start()
     last_save = {"at": time.time()}
 
     # ---- 系统托盘（阶段 5 · §三）----
@@ -4431,7 +4584,7 @@ def main() -> int:
             print(f"[info] 当前运行已应用：{'、'.join(applied)}")
             overlay.status_queue.put("设置已生效：" + "、".join(applied[:3]))
         elif persisted:
-            print(f"[info] 设置已记录，**重开翻译器后生效**：{'、'.join(persisted)}")
+            print(f"[info] 设置已记录（非即时设置重开后生效）：{'、'.join(persisted)}")
 
     print('[info] 设置在主面板调整；译文浮窗始终穿透，不显示英文原文。')
 
@@ -4466,54 +4619,48 @@ def main() -> int:
             del bucket[:-512]
         if translator.review_queue is not None and message.request_id and review_session.includes(message):
             if not translator.review_queue.mark_displayed(message.text, request_id=message.request_id,
-                    session_id=review_session.session_id, identity=message.identity.key, at=at):
+                    session_id=review_session.session_id, identity=message.identity.key, at=at, translation=message.translated):
                 overlay.status_queue.put('字幕审核回执保存失败；本条暂不进入待审核')
     display_monitor = DisplayMonitor(runtime_health, notify=display_notice, record=evidence_log.display,
                                      on_drawn=translation_drawn)
     overlay._display_observer = display_monitor.observe
     overlay._display_enabled = lambda: (not is_paused() and
+        (region_capture is None or region_capture.current()) and
         (bool(args.simulate) or not config.get("only_in_game", True) or game_in_foreground()))
     overlay._current_messages = lambda: [item.message for item in history
         if time.time() < item.expires_at] if overlay._display_enabled() else []
 
     def pump_body() -> None:
+        if region_capture is not None:
+            config_application['capture_preset'] = application_result('capture_preset', config['capture_preset'],
+                'applied' if region_capture.applied(config['capture_preset']) else 'pending')
         from app.runtime.panel_instance import consume_action
         intent=consume_action(APP_DIR, panel_owner)
         if intent=='exit':
             overlay.close_assistant()
             return
+        if intent in {'pause','resume'}:
+            set_paused(intent=='pause')
+            runtime_watch['at']=0.0
+            overlay.panel_status='已暂停翻译' if intent=='pause' else '已恢复翻译'
         if intent=='retry_review':
             overlay.panel_status=('审核记录已保存' if translator.retry_review_records() else translator.review_error)
-        if intent=='new_match':
-            review_session.reset()
-            for bucket in latency_samples.values():
-                bucket.clear()
-            runtime_watch['at']=0.0
-            overlay.panel_status='已开始新对局审核，旧记录已保留'
         if getattr(overlay,'_exit_pending',False) and pipeline.finished:
             overlay.close_assistant()
             return
         changed = False
         now = time.time()
 
-        # 存活时间照抄游戏的 convar（实测值，见 ref/convars.json）：
-        #     citadel_chat_fade_time            10   基础存活 10 秒
-        #     citadel_chat_fade_time_extension   7   每来一条新消息，已有气泡续命 7 秒
-        #     chat_top_bar_max_messages          6   同屏最多 6 条
-        # 「续命」是游戏的关键行为 —— 群聊时老气泡不会立刻消失，
-        # 所以多人同时说话时，屏幕上会同时挂着好几个气泡。
-        fade = float(overlay.config.get("fade_seconds", 10))
-        extension = float(overlay.config.get("fade_extension", 7))
-
-        got_new = False
+        from app.presentation.adaptive import lifetime
         while True:
             try:
                 msg = outbox.get_nowait()
             except (queue.Empty, ChannelClosed):
                 break
             from app.presentation.reasons import add_visible
-            add_visible(history,VisibleMessage(msg, now + fade))
-            got_new = True
+            if not session_view.incoming(msg) and msg.successful and msg.translated:
+                overlay.status_queue.put(FailureNotice('session_view', '本次会话记录未保存，请检查目录写入权限'))
+            add_visible(history,VisibleMessage(msg, now + lifetime(msg)))
             changed = True
 
         while True:
@@ -4522,11 +4669,7 @@ def main() -> int:
             except queue.Empty:
                 break
             overlay.panel_status = status.detail if isinstance(status, FailureNotice) else str(status)
-        # 新消息到达 → 给所有还在屏幕上的旧气泡续命（游戏行为）
-        if got_new:
-            for m in history:
-                m.expires_at = max(m.expires_at, now + extension)
-
+        # A stale visual sample can recover; the renderer hides it meanwhile.
         fresh = [m for m in history if now < m.expires_at]
         if len(fresh) != len(history):
             history[:] = fresh
@@ -4622,6 +4765,7 @@ def main() -> int:
         if now2 - runtime_watch["at"] >= 3.0:
             runtime_watch["at"] = now2
             try:
+                from app.recognition.diagnostics import DIAGNOSTICS
                 write_runtime_status(paused=is_paused(),
                                      game_running=process_running(GAME_EXE),
                                      game_foreground=game_in_foreground(),
@@ -4637,15 +4781,14 @@ def main() -> int:
                                      hard_offline=translator.hard_offline,
                                      request_session_id=usage_stats.request_session_id,
                                      latency_drawn_ms=latency_samples,
+                                     recognition_ocr=DIAGNOSTICS.snapshot(),
                                      translation_unavailable=display_monitor.unavailable_reasons,
                                      config_application=config_application,
                                      config_session=(panel_owner or {}).get('token', ''),
                                      ui_status=overlay.panel_status,
-                                     consumption={"date": time.strftime("%Y-%m-%d"),
-                                                  "day": usage_stats.day(),
-                                                  "session": usage_stats.session(),
-                                                  "health": usage_stats.health(),
-                                                  "accounting_error": translator.accounting_error},
+                                     consumption=dict(usage_stats.presentation_snapshot(),accounting_error=translator.accounting_error),
+                                     **{key: value for key, value in stats.copy().items()
+                                        if key.startswith('capture_adaptive_')},
                                      **runtime_health.snapshot(
                                          pending_depth=pipeline.pending_depth,
                                          display_depth=outbox.qsize()))

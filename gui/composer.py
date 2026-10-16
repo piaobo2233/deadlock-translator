@@ -10,8 +10,8 @@ from app.translation.manual import ManualTranslator
 def build_composer(parent, app):
     from gui.pages import _load_config
     th = app.th
-    body = section(parent, th, '中文转英文')
-    text(body, th, '输入中文，翻译后检查预览，再复制到游戏发送。使用设置中的 API 与联网开关。',
+    body = section(parent, th, '输入翻译预览')
+    text(body, th, '输入中文，按所选目标语言翻译，再检查预览、复制。游戏快捷键可在设置的“语言与输入”中修改。',
          small=True, muted=True, wraplength=820, justify='left').pack(anchor='w', pady=(0, 10))
     source = th.tk.Text(body, height=3, wrap='word', font=th.font, relief='flat',
                         bg=C['bg'], fg=C['fg'], padx=10, pady=8, undo=True,
@@ -71,11 +71,11 @@ def build_composer(parent, app):
             return
         app.root.clipboard_clear()
         app.root.clipboard_append(state['translation'])
-        status.configure(text='已复制英文，可粘贴到游戏。')
+        status.configure(text='已复制译文，可粘贴到游戏。')
 
-    translate = th.button(row, '翻译为英文', submit, kind='primary')
+    translate = th.button(row, '翻译输入', submit, kind='primary')
     translate.pack(side='left')
-    copy = th.button(row, '复制英文', copy_result)
+    copy = th.button(row, '复制译文', copy_result)
     copy.configure(state='disabled')
     copy.pack(side='left', padx=(12, 0))
     source.bind('<<Modified>>', changed)
@@ -97,7 +97,7 @@ def build_composer(parent, app):
                 state['translation'] = result.text
                 show(result.text)
                 copy.configure(state='normal')
-                status.configure(text=result.warning or '请检查英文预览，再点击复制。')
+                status.configure(text=result.warning or '请检查译文预览，再点击复制。')
             else:
                 status.configure(text=result.reason)
         app.after_page(80, poll)

@@ -2,6 +2,7 @@
 
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import cv2
 import numpy as np
@@ -32,6 +33,171 @@ class VisualPulseTests(unittest.TestCase):
         self.pulse.update(image, self.now)
         self.assertTrue(self.pulse.bind(identity, image, body, self.now))
         return identity
+
+    def test_local_pixel_recheck_survives_coarse_detector_miss_but_not_absence(self):
+        image = synthetic_chat(("wait for me",))
+        identity = self.bind(image, "wait for me")
+        self.boxes = []
+        for _ in range(2):
+            self.now += .1
+            self.pulse.update(image, self.now)
+        self.assertTrue(self.tracker.identity_matches(identity))
+        for _ in range(2):
+            self.now += .1
+            self.pulse.update(np.zeros_like(image), self.now)
+        self.assertFalse(self.tracker.identity_matches(identity))
+
+    def test_only_verified_fresh_unchanged_pixels_can_skip_repeated_ocr(self):
+        image = synthetic_chat(("wait for me",))
+        region = locate_body(image,(0,0,*image.shape[1::-1]))
+        identity = self.bind(image,"wait for me")
+        self.assertFalse(self.pulse.unchanged_verified(image,region,self.now))
+        self.pulse.mark_source_verified(identity)
+        self.assertTrue(self.pulse.unchanged_verified(image,region,self.now))
+        changed = synthetic_chat(("not for me",))
+        other = locate_body(changed,(0,0,*changed.shape[1::-1]))
+        self.assertFalse(self.pulse.unchanged_verified(changed,other,self.now))
+        self.assertFalse(self.pulse.unchanged_verified(image,region,self.now-.3))
+        self.now += .1
+        self.pulse.unavailable(self.now)
+        self.assertFalse(self.pulse.unchanged_verified(image,region,self.now))
+
+    def test_attached_bright_header_cannot_replace_unchanged_confirmed_glyphs(self):
+        image=synthetic_chat(("wait for me",))
+        identity=self.bind(image,"wait for me")
+        self.pulse.mark_source_verified(identity)
+        noisy=image.copy()
+        noisy[:23,30:258]=(216,214,205)
+        cv2.putText(noisy,'HEAD',(40,18),cv2.FONT_HERSHEY_SIMPLEX,.5,(10,10,10),1)
+        region=locate_body(noisy,(0,0,*noisy.shape[1::-1]))
+        self.assertTrue(region.accepted)
+        for _ in range(2):
+            self.now+=.1
+            self.pulse.update(noisy,self.now)
+        self.assertIsNotNone(self.tracker.box_for(identity))
+        self.assertTrue(self.pulse.unchanged_verified(noisy,region,self.now))
+
+    def test_verified_pixels_do_not_hide_a_second_identical_bubble(self):
+        part = synthetic_chat(("go",))
+        canvas = np.zeros((150,part.shape[1],3),np.uint8)
+        canvas[:part.shape[0]] = part
+        identity = self.bind(canvas,"go",box=(0,0,*part.shape[1::-1]))
+        self.pulse.mark_source_verified(identity)
+        region = locate_body(part,(0,0,*part.shape[1::-1]))
+        x,y,width,height=region.rect
+        canvas[y+60:y+60+height,x:x+width]=part[y:y+height,x:x+width]
+        second = locate_body(canvas,(x,y+60,width,height))
+        self.boxes.append((x,y+60,width,height))
+        self.now += .1
+        self.pulse.update(canvas,self.now)
+        self.assertFalse(self.pulse.unchanged_verified(canvas,second,self.now))
+
+    def test_verified_text_moves_one_row_when_coarse_body_location_fails(self):
+        part=synthetic_chat(('wait for me',))
+        image=np.zeros((250,350,3),np.uint8)
+        image[100:100+part.shape[0],:part.shape[1]]=part
+        identity=self.bind(image,'wait for me',box=(0,100,*part.shape[1::-1]))
+        self.pulse.mark_source_verified(identity)
+        moved=np.zeros_like(image)
+        moved[44:44+part.shape[0],:part.shape[1]]=part
+        self.boxes=[]
+        self.now+=.1
+        with patch('app.runtime.visual_pulse.locate_body',side_effect=AssertionError('coarse path unavailable')):
+            self.pulse.update(moved,self.now)
+        self.assertEqual(self.tracker.box_for(identity)[:2],(30,69))
+
+    def test_fixed_text_cannot_hide_new_suffix_or_new_line(self):
+        for first,lines in (('go',('go now',)),('wait 10',('wait 10 now',)),
+                            ('go',('go','now')),('go',('no','go'))):
+            with self.subTest(lines=lines):
+                self.setUp()
+                part=synthetic_chat((first,))
+                image=np.zeros((180,350,3),np.uint8)
+                image[:part.shape[0],:part.shape[1]]=part
+                identity=self.bind(image,first,box=(0,0,*part.shape[1::-1]))
+                self.pulse.mark_source_verified(identity)
+                changed=synthetic_chat(lines)
+                current=np.zeros_like(image)
+                current[:changed.shape[0],:changed.shape[1]]=changed
+                self.boxes=[(0,0,*changed.shape[1::-1])]
+                self.now+=.1
+                self.pulse.update(current,self.now)
+                self.assertIsNone(self.tracker.box_for(identity))
+
+    def test_stack_animation_checks_extra_text_at_followed_position(self):
+        first=synthetic_chat(('wait for me',))[25:76,30:258]
+        second=synthetic_chat(('all good',))[25:76,30:258]
+        image=np.zeros((260,350,3),np.uint8)
+        image[100:151,50:278]=first
+        identity=self.bind(image,'wait for me',box=(50,100,228,51))
+        self.pulse.mark_source_verified(identity)
+        moved=np.zeros_like(image)
+        moved[65:116,50:278]=first
+        moved[125:176,50:278]=second
+        self.boxes=[(50,125,228,51)]
+        self.now+=.1
+        self.pulse.update(moved,self.now)
+        self.assertEqual(self.tracker.box_for(identity)[:2],(50,65))
+
+    def test_candidate_region_is_reused_only_with_its_own_frame(self):
+        from app.recognition.chat_area import ChatAreaBox
+        image=synthetic_chat(('go',))
+        box=(0,0,*image.shape[1::-1])
+        self.boxes=[ChatAreaBox(box,locate_body(image,box))]
+        with patch('app.runtime.visual_pulse.locate_body',side_effect=AssertionError('duplicate work')):
+            self.pulse.update(image,self.now)
+        self.assertEqual(len(self.pulse._latest[2]),1)
+
+    def test_duplicate_detector_proposals_do_not_suspend_one_identity(self):
+        image=synthetic_chat(('go',))
+        identity=self.bind(image)
+        self.pulse.mark_source_verified(identity)
+        self.boxes.append(self.boxes[0])
+        self.now+=.1
+        self.pulse.update(image,self.now)
+        self.assertEqual(len(self.pulse._latest[2]),1)
+        self.assertIsNotNone(self.tracker.box_for(identity))
+
+    def test_geometry_only_native_box_reserves_layout_without_waking_ocr(self):
+        from app.recognition.chat_area import ChatAreaBox
+        from app.vision.body import BodyRegion
+        from app.vision.presence import VisualBody
+        events=[]
+        self.pulse.activity=lambda *args:events.append(args)
+        region=BodyRegion(rect=(40,30,100,40),text_rect=(40,30,100,40))
+        self.boxes=[ChatAreaBox((40,30,100,40),region,VisualBody(region.tracking_box,None),'native_template')]
+        image=np.zeros((120,200,3),np.uint8)
+        self.pulse.update(image,self.now)
+        self.assertEqual(self.pulse.visible_boxes(self.now),((40,30,140,70),))
+        self.assertEqual(events,[(self.now,False,False)])
+        self.assertEqual(len(self.tracker.confirmed),0)
+
+    def test_slow_ocr_is_projected_before_touching_an_adjacent_live_message(self):
+        first=synthetic_chat(('its uh',))[25:76,30:258]
+        second=synthetic_chat(('fair trade',))[25:76,30:258]
+        image=np.zeros((260,350,3),np.uint8)
+        image[100:151,50:278]=first
+        image[160:211,50:278]=second
+        self.boxes=[(50,100,228,51),(50,160,228,51)]
+        a,b=[locate_body(image,box) for box in self.boxes]
+        self.tracker.feed('its uh',box=a.tracking_box)
+        one=self.tracker.snapshot_of(self.tracker.last_id)
+        self.tracker.feed('fair trade',box=b.tracking_box)
+        two=self.tracker.snapshot_of(self.tracker.last_id)
+        self.pulse.update(image,self.now)
+        self.assertTrue(self.pulse.bind(one,image,a,self.now))
+        self.assertTrue(self.pulse.bind(two,image,b,self.now))
+        moved=np.zeros_like(image)
+        moved[40:91,50:278]=first
+        moved[100:151,50:278]=second
+        self.boxes=[(50,40,228,51),(50,100,228,51)]
+        self.now+=.1
+        self.pulse.update(moved,self.now)
+        projected=self.pulse.project_box(image,a,10.)
+        self.assertEqual(projected[:2],(50,40))
+        self.assertEqual(self.tracker.emitted_text(projected),'its uh')
+        self.tracker.feed('its uh',box=projected,captured_at=10.)
+        self.assertIsNotNone(self.tracker.box_for(two))
 
     def test_identical_frame_and_small_move_preserve_only_existing_identity(self):
         original = synthetic_chat(("go",))

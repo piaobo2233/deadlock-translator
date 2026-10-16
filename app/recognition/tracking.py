@@ -342,6 +342,10 @@ class Consensus:
                 return False  # Only fresh exact OCR confirmation may resume.
             group.update(visual_last=at, visual_missing=None, box=observation.box, last=at)
             self.live[message.bubble_id] = [observation.box, at]
+            for entry in self.recent_pos:
+                if len(entry)>5 and entry[5]==message.bubble_id:
+                    entry[0]=observation.box[0]+observation.box[2]/2
+                    entry[1]=observation.box[1]+observation.box[3]/2
         elif state is Presence.UNKNOWN:
             self._suspend(group)
         elif state is Presence.MISSING:

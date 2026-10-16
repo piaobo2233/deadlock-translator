@@ -624,7 +624,7 @@ class UsageStats:
         days, projection = self._days_view()
         return days.get(date_str or self._today(), self._combined(empty_bucket(), {}, projection))
 
-    def session(self) -> dict:
+    def session(self, *, projection=None) -> dict:
         with self._lock:
             out = empty_bucket()
             session_id = self._active_session_id
@@ -634,7 +634,7 @@ class UsageStats:
                 _merge(out, self.sessions[-1])
                 session_id = session_id or self.sessions[-1].get("id", "")
                 started = self.sessions[-1].get("started", "")
-        projection = self.request_accounting.snapshot()
+        projection = projection if projection is not None else self.request_accounting.snapshot()
         try:
             started_at = time.mktime(time.strptime(started, "%Y-%m-%dT%H:%M:%S")) if started else 0
         except (ValueError, OverflowError):
@@ -685,6 +685,24 @@ class UsageStats:
             stamp = time.strftime("%Y-%m-%d", time.localtime(self._now() - offset * 86400))
             out.append((stamp, views.get(stamp, self._combined(empty_bucket(), {}, projection))))
         return out
+
+    def presentation_snapshot(self, *, now=None):
+        """One request projection and one locked local view for all UI ranges."""
+        from datetime import date, timedelta
+        now=self._now() if now is None else now
+        today=time.strftime('%Y-%m-%d',time.localtime(now))
+        projection=self.request_accounting.snapshot()
+        with self._lock:
+            views={key:self._combined(copy.deepcopy(self.days.get(key,empty_bucket())),
+                                     projection.days.get(key,{}),projection)
+                   for key in set(self.days)|set(projection.days)}
+            blank=lambda:self._combined(empty_bucket(),{},projection)
+            session=self.session(projection=projection)
+            error=self._error or projection.error
+            health=dict(ok=not bool(error),error=error,dirty=self.dirty,saved_at=self._saved_at)
+        dates=[(date.fromisoformat(today)-timedelta(days=offset)).isoformat() for offset in range(6,-1,-1)]
+        return dict(date=today,day=views.get(today,blank()),session=session,health=health,
+                    trend=[(stamp,views.get(stamp,blank())) for stamp in dates])
 
     # ---- 给界面用 ----
     def summary(self, name: str, price_in: float = 0.0, price_out: float = 0.0) -> dict:

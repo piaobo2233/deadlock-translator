@@ -259,7 +259,7 @@ class App:
             self._fail(key, UnknownPage(key))
             return False
         requested = key
-        key = {'ingame':'home', 'cost':'home'}.get(key, key)
+        key = {'ingame':'settings', 'cost':'home'}.get(key, key)
         if key == self.current and not self._page_failed:
             self._locate(requested)
             return True
@@ -300,12 +300,12 @@ class App:
         return True
 
     def _locate(self, requested):
-        if requested == 'cost':
+        if requested == 'ingame':
+            self.settings_controls['show']('识别与显示')
+        elif requested == 'cost':
             self.expand_cost()
-        target = getattr(self, 'cost_section' if requested == 'cost' else 'display_section', None)
-        if requested in {'ingame','cost'} and target is not None:
             self.root.update_idletasks()
-            y = target.winfo_rooty() - self.page.winfo_rooty()
+            y = self.cost_summary.winfo_rooty() - self.page.winfo_rooty()
             self.canvas.yview_moveto(y / max(self.page.winfo_height(), 1))
 
     def watch_application_fields(self, values, prefix=''):

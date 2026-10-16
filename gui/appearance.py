@@ -161,32 +161,3 @@ class EntryCards:
         if key is not None and not any(r['key']==key for r in self.rows):return
         self.selected_key=key;self._paint_selection();self.on_select(key)
 
-
-class DisplayLayout:
-    """A diagram of placement using real parameters, without fabricated chat."""
-    def __init__(self,parent,th,variables):
-        self.th,self.variables=th,variables
-        self.canvas=th.tk.Canvas(parent,height=260,bg='#e0e7db',highlightthickness=0)
-        self.canvas.pack(fill='x')
-        self.canvas.bind('<Configure>',lambda _e:self.draw())
-        self.traces=[(var,var.trace_add('write',lambda *_:self.draw())) for var in variables.values()]
-        self.canvas.bind('<Destroy>',self.close)
-        text(parent,th,'位置示意，按当前字号和宽度显示。',small=True,muted=True).pack(anchor='w',pady=(10,0))
-        self.draw()
-
-    def draw(self):
-        if not self.canvas.winfo_exists():return
-        width=max(self.canvas.winfo_width(),240)
-        values={key:var.get() for key,var in self.variables.items()}
-        self.canvas.delete('all')
-        self.canvas.create_rectangle(20,28,width-20,86,fill='#f3f3e9',outline='#bdc7b6')
-        self.canvas.create_text(34,56,text='原气泡位置',anchor='w',font=self.th.font_small,fill='#59665c')
-        bubble_width=min(width-44,max(150,values['width']))
-        self.canvas.create_rectangle(23,107,23+bubble_width,159,fill='#293a2e',outline='')
-        self.canvas.create_rectangle(20,104,20+bubble_width,156,fill='#d9ffee',outline='#293a2e')
-        self.canvas.create_text(34,130,text='译文显示区域',anchor='w',font=('Microsoft YaHei UI',-int(values['font_size']),'bold'),fill='#1d2c22')
-        self.canvas.create_text(22,195,text='默认在下方左对齐\n拥挤时移到右侧\n不接收鼠标，不抢焦点',anchor='nw',font=self.th.font_small,fill='#3f5343')
-
-    def close(self,event):
-        if event.widget is self.canvas:
-            for var,token in self.traces:var.trace_remove('write',token)

@@ -1,8 +1,10 @@
 # 异锁聊天翻译助手 · Deadlock Translator
 
-Windows《异锁》（Deadlock）聊天翻译工具。当前发布版本：**1.0.0-test.1（测试版）**。
+Windows《异锁》（Deadlock）聊天翻译工具。当前发布版本：**1.0.0-test.2（测试版）**。
 
-**[下载 Windows 测试包](https://github.com/piaobo2233/deadlock-translator/releases/tag/v1.0.0-test.1)** · [直接下载 ZIP](https://github.com/piaobo2233/deadlock-translator/releases/download/v1.0.0-test.1/DeadlockTranslator-1.0.0-test.1-windows-x64.zip) · [反馈问题](https://github.com/piaobo2233/deadlock-translator/issues)
+**[下载 Windows 测试包](https://github.com/piaobo2233/deadlock-translator/releases/tag/v1.0.0-test.2)** · [直接下载 ZIP](https://github.com/piaobo2233/deadlock-translator/releases/download/v1.0.0-test.2/DeadlockTranslator-1.0.0-test.2-windows-x64.zip) · [反馈问题](https://github.com/piaobo2233/deadlock-translator/issues)
+
+本版简化设置与用量展示，并修复字幕短暂丢失定位后无法恢复、部分英文短句被误过滤的问题。正常首字母大写短句仍可能漏译，详见发布说明。
 
 ## 功能
 
@@ -10,9 +12,9 @@ Windows《异锁》（Deadlock）聊天翻译工具。当前发布版本：**1.0
 - 输入中文，检查英文预览后复制，自行粘贴到游戏发送。
 - 优先使用本地词库和已保存的翻译；需要时调用配置的 API。
 
-![主界面，使用演示数据，未连接游戏或 API](docs/assets/app-overview.png)
+![上一测试版主界面示例，当前版设置已重组](docs/assets/app-overview.png)
 
-![中文转英文界面，使用演示数据，未调用真实 API](docs/assets/app-compose.png)
+![上一测试版中文转英文示例](docs/assets/app-compose.png)
 
 ## 使用
 

@@ -36,11 +36,11 @@ class DictionaryControlTests(unittest.TestCase):
 
     def seed(self, dictionary, original, action='reject'):
         service = dictionary.service
-        store.atomic_write_json(store.data_path(self.temp.name,'runtime.json'),dict(review_session_id='fixture-session'))
+        store.atomic_write_json(store.data_path(self.temp.name,'runtime.json'),dict(review_session_id='a'*32))
         service.record(original, '确认的译文', request_id='request-'+original,
                        quality_checks=dt._translation_quality_report(original,'确认的译文',{}))
-        service.mark_displayed(original,request_id='request-'+original,session_id='fixture-session',
-                               identity=['fixture-session',1,1],at=1)
+        service.mark_displayed(original,request_id='request-'+original,session_id='a'*32,
+                               identity=['a'*32,1,1],at=1)
         row = next(row for row in service.items() if row['original'] == original)
         if action:
             self.assertTrue(service.decide(row['key'], action, token=row['token'],
@@ -115,7 +115,7 @@ class DictionaryControlTests(unittest.TestCase):
         labels = [widget.cget('text') for widget in visit(self.app.page)
                   if widget.winfo_class() in {'Button', 'TButton'}]
         self.assertNotIn('设置与预算', labels)
-        self.assertIn('刷新', labels)
+        self.assertIn('刷新用量', labels)
         config = store.read_json(self.config)
         self.assertEqual((config['budget_session'], config['budget_daily']), (3.5, 8.0))
 

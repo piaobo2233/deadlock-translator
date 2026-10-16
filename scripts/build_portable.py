@@ -99,6 +99,7 @@ def main():
             '--distpath', str(work/'dist'), '--workpath', str(work/'build'), '--specpath', str(work),
             '--add-data', f'{source / "VERSION"};.',
             '--add-data', f'{source / "app/translation/game_terms.json"};app/translation',
+            '--add-data', f'{source / "app/recognition/quick_chat.json"};app/recognition',
             '--add-data', f'{source / "app/recognition/models"};app/recognition/models',
             '--collect-data', 'ttkbootstrap']
         for name in ('pystray', 'pandas', 'scipy', 'matplotlib', 'IPython', 'pytest'):

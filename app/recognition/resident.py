@@ -1,7 +1,7 @@
 """Optional resident Tesseract C API in a killable, hidden helper process.
 
-Only preferred body reads and independent source verification use this helper.
-Fallback variants retain the existing CLI. A crash or timeout cannot strand OCR.
+Body reads and compatible serial fallbacks reuse one context; source verification
+has independent language contexts. CLI remains the bounded fallback.
 """
 import base64
 import ctypes

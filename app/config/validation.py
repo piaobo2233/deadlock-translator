@@ -10,6 +10,9 @@ MONEY_KEYS = frozenset(("price_in", "price_out", "budget_session", "budget_daily
 
 def _value(key, value, spec):
     kind = spec["type"]
+    if key == 'capture_region':
+        from app.recognition.region import validate_region
+        return validate_region(value)
     if kind == "bool":
         if isinstance(value, bool):
             return value
@@ -34,6 +37,15 @@ def _value(key, value, spec):
         return value
     if not isinstance(value, str):
         raise ValueError("Expected text")
+    if key in {'send_target','receive_target','provider','recognition_mode','capture_preset'} and value not in spec['options']:
+        raise ValueError('Invalid choice')
+    if key in {'send_hotkey', 'recognize_hotkey'}:
+        from app.platform.game_input import parse_hotkey
+        parse_hotkey(value)
+    if key == 'endpoint':
+        from app.config.providers import valid_endpoint
+        if not valid_endpoint(value):
+            raise ValueError('Invalid endpoint')
     if key == 'close_action' and value not in {'exit','tray'}:
         raise ValueError('Invalid close preference')
     if key in ("model", "endpoint") and not value.strip():
@@ -54,6 +66,12 @@ def normalize_config(raw):
         except (ValueError, TypeError, OverflowError):
             result[key] = default_config()[key]
             invalid.append(key)
+    from app.platform.game_input import parse_hotkey
+    if parse_hotkey(result['send_hotkey']) == parse_hotkey(result['recognize_hotkey']):
+        for key in ('send_hotkey','recognize_hotkey'):
+            result[key] = default_config()[key]
+            if key not in invalid:
+                invalid.append(key)
     if MONEY_KEYS.intersection(invalid):
         # An invalid budget must not silently turn into unlimited paid API calls.
         result["translate_api"] = False

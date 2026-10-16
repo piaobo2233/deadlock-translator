@@ -1,6 +1,8 @@
 """Deterministic selection policy tests; no Tesseract or paid API calls."""
 
 import unittest
+from unittest.mock import Mock
+from app.recognition.source import SourceEvidence
 
 from app.recognition.selection import RecognitionRules, select_candidate
 
@@ -18,6 +20,22 @@ def rules(**changes):
 
 
 class RecognitionSelectionTests(unittest.TestCase):
+    def test_chinese_source_stops_fallbacks_when_preferred_latin_text_is_rejected(self):
+        def variants():
+            yield 'body7', 'MY'
+            self.fail('Chinese source must not start Latin fallbacks')
+        verify = Mock(return_value=SourceEvidence(False,'native_chinese',reading='谢了'))
+        result = select_candidate(variants(), {}, rules(is_chat=lambda *_: False), verify_body=verify)
+        self.assertEqual(result.reason,'native_chinese')
+        self.assertFalse(result.accepted)
+        verify.assert_called_once_with('MY')
+
+    def test_source_verification_does_not_bypass_text_rules(self):
+        verify = Mock(return_value=SourceEvidence(True, ''))
+        result = select_candidate([('body7','invalid')],{},rules(is_chat=lambda *_: False),verify_body=verify)
+        self.assertFalse(result.accepted)
+        self.assertEqual(result.reason,'bad_ocr')
+
     def test_human_laughter_extension_passes_shared_gates_without_changing_query(self):
         import app.main as dt
         variants = [('body7', '»b;lolll'), ('otsu3x13', '“brlolt'),

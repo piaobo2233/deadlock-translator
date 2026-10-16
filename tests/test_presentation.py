@@ -27,6 +27,7 @@ def overlay():
     view._wrap = lambda text, *_: [text]
     view._draw_bubble, view._animate_appear = Mock(), Mock()
     view.width, view.x, view.bottom = 400, 400, 800
+    view.font_size=15
     view.settings_mode, view.show_original = False, False
     view._label_x, view._last_key = {}, None
     view._display_observer = Mock()

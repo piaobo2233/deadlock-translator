@@ -1,0 +1,1592 @@
+{
+  "version": 1,
+  "build_id": "25950029",
+  "source": "citadel_main/citadel_main_schinese.txt",
+  "sha256": "454fc693f7ceb8a95ae4221e09c6b1679f30d132415da8084bc89a8da0817f15",
+  "definition_sources": [
+    "scripts/ping_targets.vdata_c",
+    "scripts/ping_wheel_message_types.vdata_c",
+    "scripts/ping_wheel_messages.vdata_c"
+  ],
+  "boundary": "Official message tokens; not all are proven enabled. Chinese-only full-template matching; no English blacklist.",
+  "ability_source": "citadel_heroes/citadel_heroes_schinese.txt",
+  "ability_sha256": "f309d32e0138fe519abbcfbb77b5eb5de37f34a3ebf36cec60f5b477ff2a1eae",
+  "messages": [
+    {
+      "token": "citadel_chatwheel_message_Care",
+      "chinese": "小心",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_BRB",
+      "chinese": "我马上回来！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_Stun",
+      "chinese": "眩晕！",
+      "definition_referenced": false
+    },
+    {
+      "token": "citadel_chatwheel_message_Help",
+      "chinese": "需要帮助！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_Help_yellow",
+      "chinese": "约克需要支援！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_Help_blue",
+      "chinese": "百老汇需要支援！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_Help_purple",
+      "chinese": "紫路需要帮助！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_Help_green",
+      "chinese": "格林威治需要支援！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_lane_needs_help",
+      "chinese": "这条路需要支援！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_lane_needs_help_yellow",
+      "chinese": "约克需要支援！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_lane_needs_help_blue",
+      "chinese": "百老汇需要支援！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_lane_needs_help_purple",
+      "chinese": "紫路需要支援！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_lane_needs_help_green",
+      "chinese": "格林威治需要支援！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_guardian_needs_help",
+      "chinese": "我方卫士需要支援",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_guardian_needs_help_yellow",
+      "chinese": "约克卫士需要支援",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_guardian_needs_help_blue",
+      "chinese": "百老汇卫士需要支援",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_guardian_needs_help_purple",
+      "chinese": "紫路卫士需要支援",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_guardian_needs_help_green",
+      "chinese": "格林威治卫士需要支援",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_Request_Follow",
+      "chinese": "跟我来！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_gank",
+      "chinese": "准备抓人",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_Rejuv_Drop",
+      "chinese": "复生石掉落了",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_need_cover",
+      "chinese": "掩护我！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_nevermind",
+      "chinese": "算了",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_no_teamfight",
+      "chinese": "我还没准备好团战",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_press_advantage",
+      "chinese": "我们要乘胜追击！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_lets_hide",
+      "chinese": "我们在这躲躲",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_danger_area",
+      "chinese": "这里很危险…",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_clear_troopers",
+      "chinese": "我来对付步兵",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_meet_here",
+      "chinese": "我们在这碰头吧",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_flank",
+      "chinese": "我来包抄他们",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_leaving_area",
+      "chinese": "我要离开这个区域了！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_Push",
+      "chinese": "推进！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_push_yellow",
+      "chinese": "推进约克",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_push_blue",
+      "chinese": "推进百老汇",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_push_green",
+      "chinese": "推进格林威治",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_push_purple",
+      "chinese": "推进紫路",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_push_guardian",
+      "chinese": "推进卫士",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_defend_guardian",
+      "chinese": "防守卫士",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_push_walker",
+      "chinese": "推进机甲",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_defend_walker",
+      "chinese": "防守机甲",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_push_guardian_yellow",
+      "chinese": "推进约克卫士",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_push_guardian_blue",
+      "chinese": "推进百老汇卫士",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_push_guardian_green",
+      "chinese": "推进格林威治卫士",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_push_guardian_purple",
+      "chinese": "推进紫路卫士",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_defend_guardian_yellow",
+      "chinese": "防守黄路卫士",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_defend_guardian_blue",
+      "chinese": "防守百老汇卫士",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_defend_guardian_green",
+      "chinese": "防守格林威治卫士",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_defend_guardian_purple",
+      "chinese": "防守紫路卫士",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_push_walker_yellow",
+      "chinese": "推进约克机甲",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_push_walker_blue",
+      "chinese": "推进百老汇机甲",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_push_walker_green",
+      "chinese": "推进格林威治机甲",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_push_walker_purple",
+      "chinese": "推进紫路机甲",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_defend_walker_yellow",
+      "chinese": "防守黄路机甲",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_defend_walker_blue",
+      "chinese": "防守百老汇机甲",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_defend_walker_green",
+      "chinese": "防守格林威治机甲",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_defend_walker_purple",
+      "chinese": "防守紫路机甲",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_heading_to_lane_generic",
+      "chinese": "正在前往分路",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_push_patron",
+      "chinese": "推进守护神",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_defend_patron",
+      "chinese": "防卫守护神",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_patron_under_attack",
+      "chinese": "他们在打我们的守护神",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_push_shrine",
+      "chinese": "推进圣坛",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_defend_shrine",
+      "chinese": "防守圣坛",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_push_base_guardian",
+      "chinese": "推进基地卫士",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_push_base_guardian_yellow",
+      "chinese": "推进约克基地卫士",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_push_base_guardian_blue",
+      "chinese": "推进百老汇基地卫士",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_push_base_guardian_green",
+      "chinese": "推进格林威治基地卫士",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_push_base_guardian_purple",
+      "chinese": "推进紫路基地卫士",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_defend_base_guardian",
+      "chinese": "防守基地卫士",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_defend_base_guardian_yellow",
+      "chinese": "防守黄路基地卫士",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_defend_base_guardian_blue",
+      "chinese": "防守百老汇基地卫士",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_defend_base_guardian_green",
+      "chinese": "防守格林威治基地卫士",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_defend_base_guardian_purple",
+      "chinese": "防守紫路基地卫士",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_Missing",
+      "chinese": "敌人消失！",
+      "definition_referenced": false
+    },
+    {
+      "token": "citadel_chatwheel_message_GoodJob",
+      "chinese": "干得漂亮！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_thanks",
+      "chinese": "谢了！",
+      "definition_referenced": false
+    },
+    {
+      "token": "citadel_chatwheel_message_Go",
+      "chinese": "上啊！",
+      "definition_referenced": false
+    },
+    {
+      "token": "citadel_chatwheel_message_OMW",
+      "chinese": "来了！",
+      "definition_referenced": false
+    },
+    {
+      "token": "citadel_chatwheel_message_missing_hero",
+      "chinese": "不见了",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_hero_is_dead",
+      "chinese": "倒下了",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_hero_almost_respawned",
+      "chinese": "马上复活了",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_enemy_low_health",
+      "chinese": "马上倒下了",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_door_here",
+      "chinese": "传送门在这里",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_sinners_here",
+      "chinese": "迷失者抉择在这里",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_loose_souls",
+      "chinese": "这里有魂魄袋",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_someone_was_here",
+      "chinese": "有人来过这里",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_shop_closed",
+      "chinese": "商店已关闭",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_visit_shop",
+      "chinese": "访问商店",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_ignore_shop",
+      "chinese": "忽略商店",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_missing_yellow",
+      "chinese": "约克敌人失踪！",
+      "definition_referenced": false
+    },
+    {
+      "token": "citadel_chatwheel_message_missing_blue",
+      "chinese": "百老汇敌人失踪！",
+      "definition_referenced": false
+    },
+    {
+      "token": "citadel_chatwheel_message_missing_green",
+      "chinese": "格林威治敌人失踪！",
+      "definition_referenced": false
+    },
+    {
+      "token": "citadel_chatwheel_message_missing_purple",
+      "chinese": "格林威治敌人失踪！",
+      "definition_referenced": false
+    },
+    {
+      "token": "citadel_chatwheel_message_GetBack",
+      "chinese": "撤退！",
+      "definition_referenced": false
+    },
+    {
+      "token": "citadel_chatwheel_message_ImBack",
+      "chinese": "我回来了",
+      "definition_referenced": false
+    },
+    {
+      "token": "citadel_chatwheel_message_GoingIn",
+      "chinese": "我要上了！",
+      "definition_referenced": false
+    },
+    {
+      "token": "citadel_chatwheel_message_StayTogether",
+      "chinese": "一起行动",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_Yes",
+      "chinese": "好的！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_No",
+      "chinese": "不！",
+      "definition_referenced": false
+    },
+    {
+      "token": "citadel_chatwheel_message_HoldUp",
+      "chinese": "等等",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_GoodGame",
+      "chinese": "比赛很精彩！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_thanksGameOver",
+      "chinese": "谢了！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_WellPlayed",
+      "chinese": "打得很漂亮！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_GoodJobGameOver",
+      "chinese": "干得漂亮！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_Defend",
+      "chinese": "防守分路！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_Defend_Yellow",
+      "chinese": "防守约克",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_Defend_Blue",
+      "chinese": "防守百老汇",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_Defend_Green",
+      "chinese": "防守格林威治",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_Defend_Purple",
+      "chinese": "防守紫路",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_HeadedToYellow",
+      "chinese": "前往约克",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_HeadedToBlue",
+      "chinese": "前往百老汇",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_HeadedToGreen",
+      "chinese": "前往格林威治",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_HeadedToPurple",
+      "chinese": "往紫路走了",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_HeadedToBase",
+      "chinese": "往基地走了！",
+      "definition_referenced": false
+    },
+    {
+      "token": "citadel_chatwheel_message_headed_to_lane",
+      "chinese": "往分路走了…",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_idol_here_message",
+      "chinese": "灵瓮就在这里！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_help_with_idol_message",
+      "chinese": "帮我护送灵瓮",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_youre_welcome",
+      "chinese": "不客气",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_no_problem",
+      "chinese": "没问题",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_sorry",
+      "chinese": "抱歉",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_need_plan",
+      "chinese": "有什么计划？",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_can_heal",
+      "chinese": "我可以治疗你",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_have_heal",
+      "chinese": "有治疗",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_heal_please",
+      "chinese": "请治疗",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_need_heal",
+      "chinese": "需要治疗",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_GoingToRat",
+      "chinese": "前去带线！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_OK",
+      "chinese": "好的",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_LookHere",
+      "chinese": "看这里！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_going_shop",
+      "chinese": "去商店",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_going_corrupted_shop",
+      "chinese": "前往经纪商",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_visit_corrupted_shop",
+      "chinese": "访问经纪商",
+      "definition_referenced": false
+    },
+    {
+      "token": "citadel_chatwheel_message_ignore_corrupted_shop",
+      "chinese": "别管经纪商",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_going_farm",
+      "chinese": "去打钱了",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_steal_farm",
+      "chinese": "我们去抢他们的钱",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_going_rat",
+      "chinese": "前去带线",
+      "definition_referenced": false
+    },
+    {
+      "token": "citadel_chatwheel_message_split_push",
+      "chinese": "我们分头推线",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_im_leaving",
+      "chinese": "我要走了",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_overextend",
+      "chinese": "不要太过深入！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_bridge_buff_here",
+      "chinese": "{s:param_1}增益在这里",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_koth_rift_emerging",
+      "chinese": "裂隙正在显现",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_koth_rift_emerging_yellow",
+      "chinese": "约克出现裂隙",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_koth_rift_emerging_blue",
+      "chinese": "百老汇出现裂隙",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_koth_rift_emerging_green",
+      "chinese": "格林威治出现裂隙",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_koth_rift_emerging_purple",
+      "chinese": "紫路出现裂隙",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_koth_rift_here",
+      "chinese": "裂隙在这里！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_koth_rift_here_yellow",
+      "chinese": "裂隙在约克！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_koth_rift_here_blue",
+      "chinese": "裂隙在百老汇！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_koth_rift_here_green",
+      "chinese": "裂隙在格林威治！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_koth_rift_here_purple",
+      "chinese": "裂隙已在紫路降临",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_mid_boss_here",
+      "chinese": "中区头目在这里",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_lets_take_midboss",
+      "chinese": "我们去拿下复生石",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_enemy_taking_midboss",
+      "chinese": "他们在打复生石",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_lets_go_this_way",
+      "chinese": "我们走这边",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_attack_here",
+      "chinese": "我们攻击这里",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_defend_here",
+      "chinese": "我们防守这里",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_heading_here",
+      "chinese": "前往这里",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_attack_this_hero",
+      "chinese": "攻击 {s:param_1}",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_ignore_hero",
+      "chinese": "别管 {s:param_1}",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_someone_buy_this",
+      "chinese": "谁来出 {s:param_1}",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_dont_buy_this",
+      "chinese": "别出 {s:param_1}",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_buying_this",
+      "chinese": "我在出 {s:param_1}",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_have_this_item",
+      "chinese": "我有 {s:param_1}",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_item_good_pick",
+      "chinese": "{s:param_1} 出的真好",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_stick_with_me",
+      "chinese": "跟紧我",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_im_with_you",
+      "chinese": "我跟你走",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_are_you_ready",
+      "chinese": "准备好了吗？",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_ultimate_ready",
+      "chinese": "{s:param_1}的大招好了",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_ultimate_ready_self",
+      "chinese": "我的大招好了",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_ultimate_down",
+      "chinese": "{s:param_1}的大招正在冷却",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_ultimate_down_self",
+      "chinese": "我的大招正在冷却",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_enemy_stealing_farm",
+      "chinese": "他们在抢我们的野怪",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_watch_out",
+      "chinese": "当心！",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_going_to_urn",
+      "chinese": "前往灵瓮",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_going_to_base",
+      "chinese": "前往基地",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_going_to_push",
+      "chinese": "前去推线",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_going_to_defend",
+      "chinese": "前去防守",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_going_to_bridge_buff",
+      "chinese": "前往{s:param_1}增益",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_urn_help",
+      "chinese": "帮忙护送灵瓮",
+      "definition_referenced": true
+    },
+    {
+      "token": "citadel_chatwheel_message_stop_urn",
+      "chinese": "他们拿到灵瓮了！",
+      "definition_referenced": true
+    },
+    {
+      "token": "ping_see",
+      "chinese": "被发现了",
+      "definition_referenced": true
+    },
+    {
+      "token": "ping_careful",
+      "chinese": "小心",
+      "definition_referenced": true
+    },
+    {
+      "token": "ping_use_ability",
+      "chinese": "{s:param_1}好了！",
+      "definition_referenced": false
+    },
+    {
+      "token": "ping_ability_ready",
+      "chinese": "{s:param_1}好了！",
+      "definition_referenced": false
+    },
+    {
+      "token": "ping_ability_on_cooldown",
+      "chinese": "{s:param_1}正在冷却",
+      "definition_referenced": false
+    },
+    {
+      "token": "citadel_chatwheel_label_GoingIn",
+      "chinese": "上了",
+      "definition_referenced": true,
+      "role": "observed_rendered_alias"
+    }
+  ],
+  "names": [
+    "一网打尽",
+    "上界福佑",
+    "不屈之志",
+    "不治魔咒",
+    "不稳定化合物",
+    "不论敌友，统统石化",
+    "与一名敌方英雄互换当前生命值",
+    "与英雄相撞时：",
+    "丝液",
+    "丝液（击中）",
+    "主的愤怒",
+    "主角护体",
+    "乘胜追击",
+    "书龙",
+    "乱影迷踪",
+    "乱心雷矢",
+    "亚伯兰",
+    "亥芮护士",
+    "人形态：",
+    "人造巨灵！",
+    "代行敕令",
+    "任意门",
+    "伏击后：",
+    "伏灵陷阱",
+    "传送石",
+    "伤上加伤",
+    "余威久久",
+    "余威回荡",
+    "作祟尖叫",
+    "作祟幽影",
+    "佩吉",
+    "倒下时：",
+    "借命",
+    "假人靶子",
+    "健步疾射",
+    "催泪手雷",
+    "元灵压制",
+    "元灵吸收",
+    "元灵套索",
+    "元灵常驻",
+    "元灵护体",
+    "元灵护甲",
+    "元灵撕裂",
+    "元灵收割",
+    "元灵漫溢",
+    "元灵燃烧",
+    "元灵衰竭",
+    "元灵防护",
+    "充能完毕！",
+    "先发强袭",
+    "全自动",
+    "六叶结界",
+    "六角陷阱",
+    "关门",
+    "冰冻庇护",
+    "冰天雪地",
+    "冰封路径",
+    "冰霜手雷",
+    "冲锋陷阵",
+    "冷却压缩",
+    "凌空越步",
+    "减益缩短",
+    "减速弹",
+    "减速魔咒",
+    "凝固汽油弹",
+    "凝固汽油弹伤害增强",
+    "凝固汽油弹效果：",
+    "出后",
+    "击中友军时：",
+    "击中敌人时：",
+    "击中时",
+    "击中玩家时",
+    "击中英雄时：治疗且不受自身伤害",
+    "击倒英雄时：刷新技能和持续时间",
+    "击败时：",
+    "击败英雄时：",
+    "刚毅",
+    "刷新环",
+    "剑客无情",
+    "剑柄击中时：",
+    "加强施法时：",
+    "加速回复",
+    "动力卡宾枪",
+    "动能冲刺",
+    "动能脉冲",
+    "劳什",
+    "势不可挡",
+    "升空飞跃",
+    "升空飞跃 - 已禁用",
+    "卡厉可",
+    "卡牌戏法",
+    "危险蛇毒",
+    "即将失效",
+    "原地复活",
+    "双刃飞袭",
+    "双重命中时：",
+    "发出脉冲，从敌人身上吸取生命",
+    "发射一股生物质爆炸波",
+    "发射出一道锁定目标的魔法闪电。",
+    "发射十字弓",
+    "发射自己飞行的幻象，将真身传送到幻象着陆的地方",
+    "取消",
+    "受到福佑时：",
+    "变身时：",
+    "叠加时：",
+    "口袋",
+    "召唤你忠实的助手",
+    "召唤导弹",
+    "召回艾娃",
+    "向下猛击",
+    "向前冲刺，爪击敌人",
+    "向四周爆发一阵弹雨",
+    "向敌人投掷粘性炸弹",
+    "吞噬光芒",
+    "否决爆发",
+    "启用时：",
+    "呼叫铃",
+    "命中头部将造成额外伤害",
+    "命中时：",
+    "命中英雄时：",
+    "咒印铁拳",
+    "哈雷黛",
+    "喂鸟",
+    "喷射凝固汽油弹，增强伤害输出",
+    "嗜血：",
+    "回应射击",
+    "回春极光",
+    "回音碎片",
+    "在方块上：",
+    "在漂浮的冰封路径上快速移动",
+    "坚毅之心",
+    "坚韧",
+    "基地卫士",
+    "塞赫麦特之灵",
+    "增加滑行时的灵活度",
+    "复制敌人的终极技能，持续一定时间",
+    "复活时：",
+    "复燃",
+    "复燃伤害提升",
+    "夜晚霸主",
+    "大伤元气",
+    "大和",
+    "天谴圣物",
+    "天赐之礼",
+    "天锤压顶",
+    "天鹅舞伶",
+    "头弹奖励",
+    "头弹弱防",
+    "头弹时：",
+    "头弹破防",
+    "奇点",
+    "奇美拉1型",
+    "奇能",
+    "妙手奇技",
+    "婆婆",
+    "婆婆泡茶",
+    "子弹之舞",
+    "子弹击中时",
+    "子弹回复",
+    "子弹坚甲",
+    "子弹护甲",
+    "孤猎",
+    "守护神的治疗",
+    "完全冲泡",
+    "完美施放时：",
+    "容光焕发",
+    "寒霜护符",
+    "对敌人叠加伤害增强",
+    "对敌人造成伤害并减速",
+    "对目标造成的子弹伤害持续增加",
+    "对等还击",
+    "对附近的敌人造成伤害和负面效果",
+    "对附近的敌人造成伤害，每次击中敌人都可以治疗自己",
+    "寻猎季节",
+    "射击会创造出电弧",
+    "射击敌人，让他们燃烧起来",
+    "将敌人变为兔子",
+    "小小帮手",
+    "小睡片刻",
+    "尖锋短刀",
+    "尖锋短刀流失生命伤害",
+    "尘土护盾",
+    "层层防御",
+    "屏障",
+    "屏障结束时：",
+    "屹立不倒",
+    "岚梦",
+    "巅峰之战",
+    "巨人",
+    "巨型弹匣",
+    "巫师护甲",
+    "已复制终极技能…！",
+    "希弗",
+    "帽子戏法",
+    "干扰目标，若其未逃脱，则会被定身",
+    "幸免于难",
+    "幸运一击",
+    "幻影屏障",
+    "幻影突袭",
+    "幽冥女王",
+    "幽影瞬步",
+    "幽灵助手",
+    "应急屏障",
+    "废料手雷",
+    "开尔文",
+    "弹无虚发",
+    "弹跳垫",
+    "弹跳飞弹",
+    "弹道附魔",
+    "强效扩张",
+    "形成一个无法穿透的治疗罩",
+    "御空行者",
+    "心灵投射",
+    "快手连发",
+    "快速向前冲刺，用剑柄击晕敌人。",
+    "快速启动",
+    "念力",
+    "怒意之潮",
+    "怒气值",
+    "怒气值满时",
+    "怒气冲天",
+    "怨念",
+    "怨念提升",
+    "恢复",
+    "恢复人形。",
+    "恢复冲泡",
+    "悖论",
+    "悖论置换",
+    "惊天爆破",
+    "意志力",
+    "战斗背心",
+    "所有木桩都受过福佑",
+    "所罗门",
+    "扔出一个毒罐子",
+    "扔出具有石化作用的飞索",
+    "扩容弹匣",
+    "抑制术",
+    "抓住一个敌人并将其拖到身后",
+    "抓钩臂",
+    "投掷一个被击中即会爆炸的火药桶",
+    "投掷一团废料，眩晕敌人",
+    "投掷出具有减速效果的匕首",
+    "投掷集束弹",
+    "抛出她的帽子，攻击敌人并暴露其位置",
+    "抛洒燃料",
+    "护卫结界",
+    "拾弹能手",
+    "持续吸取敌人的生命值",
+    "按住敌方英雄迅猛出击",
+    "挤进去……",
+    "挥伞",
+    "掘墓",
+    "控制艾娃",
+    "掷出一把会飞回来的利刃",
+    "提前释放",
+    "摆放兵",
+    "摆放象",
+    "摆放象 - 方格",
+    "撕咬跃击",
+    "撞击时",
+    "撞击时：",
+    "撞到墙壁时：",
+    "撞墙时：",
+    "撼天动地",
+    "操纵猫头鹰，从远处对敌人造成伤害",
+    "攻击前方目标获得治疗",
+    "放置一个限制敌人移动的陷阱",
+    "故人之罐",
+    "敌之灾患",
+    "方块",
+    "施加一道会造成伤害的屏障",
+    "施加不断提高的减速效果",
+    "施放一波幽灵蜘蛛",
+    "施放时：",
+    "施术之手",
+    "旗帜光环",
+    "旗帜猛击",
+    "无双魔术师",
+    "无名氏",
+    "无尽弹匣",
+    "无瑕突进",
+    "无限弹匣",
+    "时间之墙",
+    "明辉匕首",
+    "暂停冲泡",
+    "暗影变身术",
+    "暗影突袭",
+    "暗魂形态",
+    "暴动之羊",
+    "最高叠加层数触发时",
+    "未启用时：",
+    "机遇斗篷",
+    "束缚之爪",
+    "束缚之言",
+    "束缚于地面",
+    "来去无踪",
+    "极地冰暴",
+    "极寒光束",
+    "枕头大战",
+    "林鸮齐射",
+    "枯萎凋零",
+    "柒",
+    "格瑞墓",
+    "梅花",
+    "棱镜冲击",
+    "模仿大师",
+    "正在挖掘...",
+    "正在施药",
+    "正在流失生命",
+    "武器伤害",
+    "武器伤害 - 强击",
+    "武器防护",
+    "死亡猛击",
+    "殷红贡礼",
+    "毒弹",
+    "毒性区域",
+    "比利",
+    "比波普",
+    "水银重弹",
+    "永恒纹章",
+    "沃督",
+    "沉睡匕首",
+    "沉默之潮",
+    "沉默之茶：",
+    "沉默子弹",
+    "沙暴",
+    "沸腾之茶：",
+    "治疗之环",
+    "治疗仪式",
+    "治疗强化",
+    "治疗律动",
+    "法术反制",
+    "波米",
+    "派出一只灵猫，抓住敌人",
+    "测试英雄",
+    "浑身燃烧并向前冲刺，留下一条火焰轨迹",
+    "海魇",
+    "消耗部分生命来发射可以造成伤害的炸弹",
+    "淡出视线",
+    "清除放置",
+    "渡鸦",
+    "渡鸦仆使",
+    "渴望之刃",
+    "滑行时：",
+    "满足：",
+    "澎湃电力",
+    "火力凶猛",
+    "火力渐升",
+    "火药桶",
+    "火速充能",
+    "灰爪",
+    "灰飞烟灭",
+    "灵体漫步",
+    "灵力扩增",
+    "灵力无边",
+    "灵力灌注",
+    "灵力高涨",
+    "灵异子弹",
+    "灵异爬虫",
+    "灵能涌动",
+    "灵雾舒愈",
+    "灵魂互换",
+    "灵魂爆炸",
+    "灵魅",
+    "炫目戏法",
+    "炼金之火",
+    "炼金瓶",
+    "炽天使之翼",
+    "炽焱",
+    "烂醉",
+    "烂醉时：",
+    "烂醉的近战攻击时：",
+    "烈焰冲刺",
+    "烈焰小魔",
+    "烟雾弹",
+    "热量",
+    "燃烧效果：",
+    "爆炸",
+    "爆炸勾拳",
+    "爆炸时",
+    "爱的轻啮",
+    "爱的轻啮（击中时）",
+    "特异供奉",
+    "特斯拉弹",
+    "狂乱",
+    "狂战士",
+    "狙击",
+    "狩猎中途",
+    "狱火飞降",
+    "狼人咒缚",
+    "狼人形态：",
+    "狼爪飞踢",
+    "猎人光环",
+    "猎头",
+    "猎巫时刻",
+    "猎怪弹",
+    "猫又守卫",
+    "王翼马",
+    "现身",
+    "玻璃大炮",
+    "玻璃大炮 v2",
+    "球状闪电",
+    "球状闪电减速",
+    "生命吸取",
+    "生命打击",
+    "生命汲取",
+    "生死舞台",
+    "生物爆破",
+    "疗伤幽灵",
+    "疗愈子弹",
+    "疗愈护符",
+    "疗愈爆发",
+    "疼痛蓄积",
+    "疾跑靴",
+    "疾速不怠",
+    "疾速射击",
+    "痛苦脉冲",
+    "皇家鼠甲",
+    "盖斯特夫人",
+    "盘丝设困",
+    "直击要害",
+    "盾男",
+    "着陆时：",
+    "短暂延迟后眩晕附近的敌人",
+    "石像形态",
+    "石化",
+    "石化飞索",
+    "破咒护符",
+    "破坏王",
+    "破坏球",
+    "破阵之势",
+    "碎灵子弹",
+    "磁力流",
+    "祝圣榴弹",
+    "祝圣榴弹 - 纯粹",
+    "神佑背心",
+    "神圣屏障",
+    "神枪手",
+    "神秘钢琴",
+    "离开艾娃",
+    "秘术余波",
+    "秘术射击",
+    "秘术愈疗",
+    "秘术扩张",
+    "秘术爆发",
+    "秘术管道",
+    "秘术缓速",
+    "秘术脆弱",
+    "秘法涌动",
+    "积雷电容",
+    "移动",
+    "移动减速",
+    "移动时：",
+    "移动棋子",
+    "空中霸权",
+    "空尖弹",
+    "空投",
+    "空骨丹尼",
+    "穿幕行者",
+    "穿甲弹",
+    "穿门时",
+    "突刺匕首",
+    "窒息熏香",
+    "符文手套",
+    "箭雨",
+    "米娜",
+    "粉碎护甲",
+    "粉碎跃击",
+    "粉碎重拳",
+    "粘性炸弹",
+    "精华炸弹",
+    "精华转移",
+    "紧跟同伴",
+    "紫路",
+    "纠缠荆棘",
+    "红桃",
+    "终极大秀！",
+    "终止咒缚",
+    "结束灵氲",
+    "给敌人注射危险蛇毒",
+    "统治，拉塔尼亚！",
+    "绯红蝠影",
+    "绯色狂刃",
+    "维克多",
+    "绿路",
+    "缓速毒瓶",
+    "编织一张危险的丝网",
+    "缠结兽索",
+    "缩小射线",
+    "缴械前方的敌人",
+    "缴械魔咒",
+    "耀光奇迹",
+    "耐力补给",
+    "聚焦透镜",
+    "能量迸发",
+    "脉冲手雷",
+    "脉冲手雷伤害提升",
+    "脱战符文",
+    "腥气",
+    "致命成交",
+    "舒缓之茶：",
+    "艾娃",
+    "苦楚灵氲",
+    "英雄光环",
+    "荡索",
+    "莫克双雄",
+    "获得减益时：",
+    "获得增益时：",
+    "获得屏障和移动速度",
+    "获得屏障时：",
+    "营救光束",
+    "落单敌人倒下时：",
+    "落地时热量排放更快",
+    "葛根连结",
+    "蓄力射出远击一箭",
+    "蓄力射击",
+    "蓝路",
+    "蔑视",
+    "薇妲",
+    "虫障",
+    "虹吸弹",
+    "蛇影疾行",
+    "蜃景",
+    "蝰邪",
+    "融入阴影，获得移动速度并造成延迟伤害",
+    "行李车",
+    "衰变",
+    "被动：",
+    "被定身",
+    "被缴械",
+    "裂光射击",
+    "西尔芙",
+    "见证精彩",
+    "触发时：",
+    "让一名敌人入睡",
+    "让一名敌方步兵或中立单位灰飞烟灭",
+    "让自己和其他人高飞",
+    "诛邪者",
+    "诡兔咒术",
+    "诡异丝线",
+    "调制中",
+    "赛凌",
+    "赤蟥",
+    "超凡冷却",
+    "超级光束",
+    "超速冷却",
+    "跃升",
+    "跃升之印",
+    "跃至高空并射出多重箭矢",
+    "跃进爪击",
+    "跑酷大师",
+    "跟随步兵：",
+    "跟随英雄：",
+    "跳到友军",
+    "跳向指定方向。如果没有指定方向则会垂直向上跳。",
+    "跳向敌人",
+    "跳弹射击",
+    "跳跃",
+    "身躯虚化",
+    "车阵",
+    "轻盈飞步",
+    "达到最大叠加层数时：",
+    "迅捷律动",
+    "迅捷突击",
+    "迅猛突袭",
+    "过载冲击",
+    "近战",
+    "近战攻击时：",
+    "近战疗法",
+    "近战蓄力",
+    "近身决斗",
+    "近身猛击",
+    "还击",
+    "进入阴影中，获得对敌人的优势",
+    "远击威力",
+    "远古战盾",
+    "连招",
+    "连攻飞刃",
+    "迷人读物",
+    "迷你炮塔",
+    "迷魂一瞥",
+    "追猎",
+    "退后！",
+    "遥控夜枭",
+    "部署会勘察一个区域的雕像",
+    "酒店宾客",
+    "醉酒：",
+    "释放！",
+    "重创一击",
+    "重压射击",
+    "重新施放",
+    "重炮轰击",
+    "重炮轰击减速",
+    "重生",
+    "重装克星",
+    "重返阴影",
+    "量子闪现",
+    "金刚宝衫",
+    "金蝉脱壳",
+    "金鹅蛋",
+    "钉桩",
+    "钻入地下行动，现身时造成旋转伤害",
+    "钻地",
+    "铁板重甲",
+    "锁定",
+    "锁定目标",
+    "锁链囚徒",
+    "锈蚀枪管",
+    "长尾猛击",
+    "长腿老妪",
+    "门侍",
+    "闪电袭击",
+    "闪转腾挪",
+    "阴郁炸弹",
+    "阿波罗",
+    "阿紫",
+    "阿金驳",
+    "附魔师纹章",
+    "陷阱师",
+    "隐忍",
+    "集结冲锋",
+    "雷姆",
+    "雷织漩涡",
+    "雷霆风暴",
+    "雷霆风暴闪电袭击",
+    "雷鸣卷轴",
+    "震撼大地",
+    "震荡燃烧",
+    "霹雳便鞋",
+    "青藤",
+    "静态电荷",
+    "鞭笞",
+    "鞭长可及",
+    "额外充能",
+    "额外增加一次更强的最终爆炸",
+    "额外生命",
+    "飞行",
+    "飞跃斩击",
+    "飞跃斩击减速效果",
+    "首次穿过门时会获得屏障",
+    "驱散魔法",
+    "骇然复苏",
+    "高速弹",
+    "高速装填",
+    "魔力装填",
+    "魔弹疾袭",
+    "魔毯",
+    "魔液",
+    "麦金妮",
+    "黄路",
+    "黑桃",
+    "鼠王",
+    "鼠群"
+  ]
+}

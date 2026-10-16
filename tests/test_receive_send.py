@@ -122,17 +122,17 @@ class StorageAndManualTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
 
-    def test_only_drawn_qualified_current_session_candidate_is_reviewable(self):
+    def test_only_drawn_qualified_candidate_persists_across_sessions(self):
         queue = ReviewQueue(self.root/'pending.json',self.root/'glossary.json')
         good = dt._translation_quality_report('help me','帮帮我',{})
         bad = dt._translation_quality_report('help me','help me',{})
         queue.record('help me','帮帮我',request_id='good',quality_checks=good)
         queue.record('help me','help me',request_id='bad',quality_checks=bad)
         self.assertFalse(any(queue.reviewable(row,'session') for row in queue.items()))
-        self.assertFalse(queue.mark_displayed('help me',request_id='bad',session_id='session',identity=['s',1,1],at=2))
-        self.assertTrue(queue.mark_displayed('help me',request_id='good',session_id='session',identity=['s',1,1],at=2))
+        self.assertFalse(queue.mark_displayed('help me',request_id='bad',session_id='a'*32,identity=['b'*32,1,1],at=2))
+        self.assertTrue(queue.mark_displayed('help me',request_id='good',session_id='a'*32,identity=['b'*32,1,1],at=2))
         self.assertEqual(sum(queue.reviewable(row,'session') for row in queue.items()),1)
-        self.assertFalse(any(queue.reviewable(row,'other') for row in queue.items()))
+        self.assertTrue(any(queue.reviewable(row,'other') for row in queue.items()))
         self.assertEqual(len(queue.items()),2)
 
     def service(self, online=True):

@@ -18,11 +18,12 @@ from gui.app import register
 from gui.theme import COLORS, GAP, PAD
 
 # 键 → 归到哪一页。**每个 spec 键都必须出现在这里**（有用例守着）。
-INGAME_KEYS = ("translate_api", "max_messages", "fade_seconds", "fade_extension",
-               "font_size", "width")
-SETTINGS_KEYS = ("api_key", "model", "close_action")
-HIDDEN_KEYS = ("endpoint", "price_in", "price_out", "only_in_game", "budget_session", "budget_daily",
-               "ocr_interval", "ocr_votes", "tesseract", "chatlog_path", "dump_dir", "schema_version")
+INGAME_KEYS = ("translate_api", "font_size")
+SETTINGS_KEYS = ("api_key", "model", "close_action", "endpoint", "provider", "send_target", "receive_target",
+                 "send_hotkey", "recognize_hotkey", "auto_send", "recognition_mode", "capture_preset")
+HIDDEN_KEYS = ("price_in", "price_out", "only_in_game", "budget_session", "budget_daily",
+               "ocr_interval", "ocr_votes", "tesseract", "chatlog_path", "dump_dir", "schema_version", "region_reselect",
+               "capture_region", "width", "max_messages", "fade_seconds", "fade_extension")
 DICTIONARY_KEYS = ("builtins_enabled",)
 _CORE = set(INGAME_KEYS) | set(SETTINGS_KEYS) | set(DICTIONARY_KEYS) | set(HIDDEN_KEYS)
 
@@ -62,7 +63,7 @@ def status_of(root_dir):
     if time.time() - float(data.get("at") or 0) > 30:
         return "没有响应", "翻译器还在，但已经 30 秒没有心跳了", COLORS["err"]
     if data.get("paused"):
-        return "已暂停", "托盘图标右键可以恢复翻译", COLORS["warn"]
+        return "已暂停", "点击恢复翻译继续识别", COLORS["warn"]
     if not data.get("game"):
         return "等待游戏", "启动《异锁》后会自动开始翻译", COLORS["muted"]
     if data.get("game_foreground"):
@@ -83,6 +84,14 @@ def _ocr_runtime_label(data, scanning):
     if not boxes:
         return "SCANNING · NO CANDIDATES", COLORS["warn"]
     return f"SCANNING · {confirmed} CONFIRMED · {translated} SHOWN", COLORS["accent"]
+
+
+def _ocr_backend_notice(data):
+    diagnostics = data.get('recognition_ocr', {}) if isinstance(data, dict) else {}
+    if (isinstance(diagnostics, dict) and diagnostics.get('backend') == 'cli'
+            and diagnostics.get('last_failure')):
+        return '识别加速暂不可用，正在使用兼容模式。'
+    return ''
 
 
 def _save(key, value, app):
@@ -373,19 +382,9 @@ def _money(cost, cfg, dash="费用未知"):
 # ================================================================ ② 游戏内设置
 
 def build_ingame(parent, app):
-    th, c = app.th, COLORS
-    _page_title(parent, th, "GAME SETTINGS", "游戏内显示")
-    config = _load_config(app.root_dir)
-    timing = th.label(parent, "保存后约 2 秒应用，状态见底栏。",
-             bg=c["bg"], fg=c["muted"], font=th.font_small,
-             wraplength=500, justify="left")
-    timing.pack(anchor="w", pady=(0, 14))
-    timing.bind('<Enter>',lambda _e:app.show_hint('字号、宽度和条数刷新当前有效译文；'
-                '停留与续命用于后续消息，开关控制后续请求。'))
-    timing.bind('<Leave>',lambda _e:app.show_hint(''))
-    _render_spec(app, parent, INGAME_KEYS, config)
-    th.label(parent, "译文随原气泡定位；浮窗始终点击穿透。",
-             bg=c["bg"], fg=c["muted"], font=th.font_small).pack(anchor="w")
+    from gui.workspace import build_settings
+    build_settings(parent,app)
+    app.settings_controls['show']('识别与显示')
 
 
 # ================================================================ ③ 消耗

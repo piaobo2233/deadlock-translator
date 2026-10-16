@@ -186,18 +186,17 @@ class RequestAccountingTests(unittest.TestCase):
         self.assertAlmostEqual(self.cost(loaded)["amount"], .00014)
 
     def test_snapshot_fee_and_note_remain_visible_after_current_prices_removed(self):
-        from gui.cost_view import quality_note, trend_items
+        from gui.cost_view import quality_note, detail_rows
         from gui.pages import _money
         engine = self.engine()
         engine.translate_result("together")
         info = cost_info(self.usage.day(), 0, 0)
         self.assertIn("请求时单价快照", quality_note(info, self.usage.health()))
         self.assertTrue(_money(info["amount"], {}).startswith("¥"))
-        items, title = trend_items({"ledger": self.usage, "day": self.usage.day(),
-                                   "health": self.usage.health()}, {}, _money, lambda _: False)
-        self.assertIn("费用", title)
-        self.assertEqual(items[-1][1], .00014)
-        self.assertTrue(items[-1][2].startswith("¥"))
+        snapshot=self.usage.presentation_snapshot()
+        rows=detail_rows(snapshot)
+        self.assertEqual(rows[-1][1],'¥0.0001')
+        self.assertEqual(rows[-1][2],'已知完整')
 
     def test_old_runtime_cannot_hide_prepared_unknown_cost(self):
         import time
