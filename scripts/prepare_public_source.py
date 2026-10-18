@@ -49,7 +49,7 @@ def public_files(base):
     for folder in ('app', 'gui', 'tests', 'scripts'):
         for source in (ROOT / folder).rglob('*.py'):
             selected[source.relative_to(ROOT).as_posix()] = source
-    for folder in ('app/assets/brand', 'app/recognition/models', 'docs/assets/locklingo',
+    for folder in ('app/assets/brand', 'app/assets/ui', 'app/recognition/models', 'docs/assets/locklingo', 'docs/assets/deadlock-ui',
                    'docs/licenses', 'scripts/installer', '.github'):
         for source in (ROOT / folder).rglob('*'):
             if source.is_file():
@@ -61,6 +61,7 @@ def public_files(base):
         'docs/THIRD-PARTY-NOTICES.md', 'docs/guides/安装与首次使用.md',
         'docs/guides/首版测试与分享.md', 'docs/guides/接收与中文转英文.md',
         'docs/releases/v1.0.0-test.4-rc.1.md', 'docs/releases/v1.0.0-test.4-rc.2.md',
+        'docs/releases/v1.0.0-test.4-rc.3.md',
         'verify/portable_smoke.py',
         'verify/installer_smoke.py', 'verify/latency_acceptance.py',
         'verify/source_launcher_smoke.py',

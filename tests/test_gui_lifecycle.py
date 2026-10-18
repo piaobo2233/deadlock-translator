@@ -100,7 +100,7 @@ class GuiLifecycleTests(unittest.TestCase):
 
     def test_leaving_home_cancels_heartbeat(self):
         self.app.open_page("home")
-        self.assertGreaterEqual(len(self.app.page_callbacks._pending),2)
+        self.assertEqual(len(self.app.page_callbacks._pending),1)  # Home no longer polls costs.
         self.app.open_page("settings")
         self.assertFalse(self.app.page_callbacks._pending)
 
@@ -132,7 +132,8 @@ class GuiLifecycleTests(unittest.TestCase):
                                 {"days": {time.strftime("%Y-%m-%d"): bucket}, "sessions": [bucket]})
         self.assertTrue(self.app.open_page("cost"))
         self.app.root.update()
-        self.assertFalse([w for w in self.widgets() if w.winfo_class()=='Canvas'])
+        self.assertTrue(self.app.cost_controls['trend'].find_all())
+        self.app.cost_controls['details']();self.app.root.update()
         self.assertTrue(self.app.cost_controls['table'].winfo_ismapped())
         self.assertIn('缺当时单价',self.app.cost_controls['table'].get('1.0','end'))
         self.assertIn('3 成功 / 1 失败',self.app.cost_controls['metrics'].cget('text'))
@@ -223,8 +224,8 @@ class GuiLifecycleTests(unittest.TestCase):
         self.app.root.update()
         bottom = self.app.canvas.winfo_rooty() + self.app.canvas.winfo_height()
         buttons = [w for w in self.widgets() if w.winfo_class() == "Button"
-                   and w.cget('text')=='刷新用量']
-        self.assertEqual([w.cget('text') for w in buttons], ['刷新用量'])
+                   and w.cget('text')=='刷新']
+        self.assertEqual([w.cget('text') for w in buttons], ['刷新'])
         self.assertTrue(all(w.winfo_rooty() + w.winfo_height() <= bottom for w in buttons))
 
     def test_cost_corrupt_ledger_is_not_presented_as_zero_or_normal(self):
@@ -251,29 +252,33 @@ class GuiLifecycleTests(unittest.TestCase):
         from app.storage.accounting import empty_costs
         import os
         owner=begin_translator(self.temp.name)
-        snapshot=UsageStats(store.data_path(self.temp.name,'stats.json')).presentation_snapshot()
-        bucket=dict(empty_bucket(),api_calls=1,api_tracked_tasks=1,api_attempts=2,api_usage_missing=1,
-                    request_cost=dict(empty_costs(),known_amount=.012,known_attempts=1,unknown_attempts=1))
-        snapshot.update(day=bucket,session=bucket)
-        store.atomic_write_json(store.data_path(self.temp.name,'runtime.json'),dict(at=time.time(),pid=os.getpid(),config_session=owner['token'],consumption=snapshot))
+        from pathlib import Path
+        from app.storage.requests import RequestJournal
+        from app.translation.client import ApiResponse
+        journal=RequestJournal(str(Path(store.data_path(self.temp.name,'stats.json')).parent/'requests'))
+        request=journal.prepare('known fixture',{},dict(input=1,output=2))
+        journal.response('known fixture',request,ApiResponse(text='演示',usage=dict(prompt_tokens=6000,completion_tokens=3000,total_tokens=9000)))
+        request=journal.prepare('unknown fixture',{},dict(input=1,output=2))
+        journal.response('unknown fixture',request,ApiResponse(reason='fixture failure'))
         self.app.open_page('cost');self.app.root.update()
-        self.assertIn('今日已知估算费用：¥0.0120',self.app.cost_controls['metrics'].cget('text'))
-        self.assertIn('已记录请求：2 次',self.app.cost_controls['metrics'].cget('text'))
+        self.assertEqual(self.app.cost_controls['values']['day'].cget('text'),'¥0.0120')
+        self.assertIn('HTTP 请求 2 次',self.app.cost_controls['metrics'].cget('text'))
         self.assertIn('1 次请求缺完整用量',self.app.cost_controls['quality'].cget('text'))
 
     def test_cost_controls_remain_visible_at_minimum_window_size(self):
         self.app.root.geometry("680x480")
         self.app.open_page("cost")
         self.app.root.update()
+        self.app.canvas.yview_moveto(1);self.app.root.update()
         bottom = self.app.canvas.winfo_rooty() + self.app.canvas.winfo_height()
         buttons = [w for w in self.widgets() if w.winfo_class() == "Button"
-                   and w.cget('text')=='刷新用量']
-        self.assertEqual([w.cget('text') for w in buttons], ['刷新用量'])
+                   and w.cget('text')=='刷新']
+        self.assertEqual([w.cget('text') for w in buttons], ['刷新'])
         self.assertTrue(all(w.winfo_rooty() + w.winfo_height() <= bottom for w in buttons))
 
     def test_cost_refresh_failure_clears_previous_normal_metrics(self):
         self.test_cost_runtime_attempts_and_incomplete_amount_are_explicit()
-        refresh = next(w for w in self.widgets() if w.winfo_class() == "Button" and w.cget("text") == "刷新用量")
+        refresh = next(w for w in self.widgets() if w.winfo_class() == "Button" and w.cget("text") == "刷新")
         with patch("gui.cost_view.consumption_snapshot", side_effect=ValueError("fake-secret")):
             refresh.invoke()
         self.app.root.update()

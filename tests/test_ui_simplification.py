@@ -184,7 +184,8 @@ class SimplifiedTkTests(unittest.TestCase):
         for page in ('send','api','settings'):
             self.app.open_page(page);self.app.root.update();self.assertFalse(self.app._page_failed)
         self.assertTrue(self.app.open_page('cost'));self.app.root.update()
-        self.assertTrue(self.app.cost_section.winfo_manager())
+        self.assertEqual(self.app.current,'cost')
+        self.app.cost_controls['details']()
         self.assertTrue(self.app.cost_controls['table'].winfo_manager())
         self.assertIn('日期 / 已知估算费用 / 完整性',self.app.cost_controls['table'].get('1.0','end'))
 

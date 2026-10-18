@@ -184,12 +184,13 @@ def build_region_tools(parent,app):
         state['busy']=False
         button.configure(state='normal');chooser.configure(state='readonly')
     def cleanup(event):
-        if event.widget is not parent:return
+        if event.widget is not status:return
         state['alive']=False;state['generation']+=1
         if state['hidden']:state['hidden']=False;app.root.deiconify()
         win=preview.get('window')
         if win and win.winfo_exists():win.destroy()
-    parent.bind('<Destroy>',cleanup,add='+')
+    # App reuses its page container; its children own navigation cleanup.
+    status.bind('<Destroy>',cleanup,add='+')
     def show(crop,note):
         from PIL import ImageTk
         win=th.tk.Toplevel(parent);win.title('识别测试 · 只读');win.geometry('880x560')

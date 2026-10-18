@@ -136,11 +136,10 @@ def build_translation(parent, app):
     online_var=p._switch(app,controls,'translate_api',config)
     th.label(online,'联网翻译',font=th.font_heading).pack(anchor='w')
     from gui.game_settings import language_control
-    language_control(parent,app,'receive_target','接收目标语言（重开生效）',config)
+    language_control(parent,app,'receive_target','收到的消息译成',config)
+    text(parent,th,'修改后重启助手生效',small=True,muted=True).pack(anchor='w')
     button,body,toggle=fold(parent, app, '诊断详情', build_diagnostics)
     app.diagnostic_controls=dict(button=button,body=body,toggle=toggle)
-    summary=section(parent,th,'API 用量')
-    p.build_cost(summary,app)
     def tick():
         word,why,color=p.status_of(app.root_dir)
         status.configure(text='运行中' if word=='正在运行' else word,

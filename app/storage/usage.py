@@ -651,8 +651,12 @@ class UsageStats:
         """最近 N 天（含今天）。"""
         views, projection = self._days_view()
         out = self._combined(empty_bucket(), {}, projection)
-        for key in sorted(views)[-max(1, int(days)):]:
-            _merge(out, views[key])
+        from datetime import date, timedelta
+        end = date.fromisoformat(self._today())
+        start = (end - timedelta(days=max(1, int(days)) - 1)).isoformat()
+        for key, bucket in views.items():
+            if start <= key <= end.isoformat():
+                _merge(out, bucket)
         return out
 
     def total(self) -> dict:
@@ -686,7 +690,7 @@ class UsageStats:
             out.append((stamp, views.get(stamp, self._combined(empty_bucket(), {}, projection))))
         return out
 
-    def presentation_snapshot(self, *, now=None):
+    def presentation_snapshot(self, *, now=None, days=7):
         """One request projection and one locked local view for all UI ranges."""
         from datetime import date, timedelta
         now=self._now() if now is None else now
@@ -700,8 +704,19 @@ class UsageStats:
             session=self.session(projection=projection)
             error=self._error or projection.error
             health=dict(ok=not bool(error),error=error,dirty=self.dirty,saved_at=self._saved_at)
-        dates=[(date.fromisoformat(today)-timedelta(days=offset)).isoformat() for offset in range(6,-1,-1)]
+        dates=[(date.fromisoformat(today)-timedelta(days=offset)).isoformat()
+               for offset in range(max(1, int(days))-1,-1,-1)]
+        total, window = blank(), blank()
+        for stamp, bucket in views.items():
+            _merge(total, bucket)
+            if dates[0] <= stamp <= today:
+                _merge(window, bucket)
+        models = {}
+        for stamp in dates:
+            for model, bucket in projection.models_by_day.get(stamp, {}).items():
+                _merge(models.setdefault(model, blank()), bucket)
         return dict(date=today,day=views.get(today,blank()),session=session,health=health,
+                    total=total,window=window,models=models,range_days=len(dates),
                     trend=[(stamp,views.get(stamp,blank())) for stamp in dates])
 
     # ---- 给界面用 ----

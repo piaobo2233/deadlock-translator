@@ -42,37 +42,53 @@ def main():
             'push together':dict(original='push together', translation='一起推进', source='api', status='accepted'),
         })
         today = time.strftime("%Y-%m-%d")
-        bucket = {"api_ok": 34, "api_fail": 2, "api_calls": 36,
-                  "glossary_hits": 120, "memory_hits": 15, "cache_hits": 8,
-                  "prompt_tokens": 14000, "completion_tokens": 2100}
+        bucket = {"glossary_hits": 120, "memory_hits": 15, "cache_hits": 8}
         days = {}
         for offset in range(7):
             stamp = time.strftime("%Y-%m-%d", time.localtime(time.time() - offset * 86400))
-            days[stamp] = dict(bucket, prompt_tokens=14000 + offset * 5000)
+            days[stamp] = dict(bucket)
         store.atomic_write_json(store.data_path(folder, "stats.json"),
                                 {"days": days, "sessions": [bucket]})
+        from app.storage.requests import RequestJournal
+        from app.translation.client import ApiResponse
+        from app.translation.parameters import request_parameters
+        journal = RequestJournal(str(Path(store.data_path(folder, 'stats.json')).parent/'requests'))
+        for offset in range(7):
+            journal._now = lambda offset=offset: time.time()-offset*86400
+            for model, multiplier in (('deepseek-flash',1),('deepseek-v4-pro',2)):
+                params = dict(request_parameters('https://invalid.example',model).snapshot(),
+                    model=model,endpoint_fingerprint='a'*64,prompt_fingerprint='b'*64)
+                original=f'demo-{offset}-{model}'
+                rid=journal.prepare(original,params,dict(input=.8,output=3.2),session_id='00000000-0000-4000-8000-000000000001')
+                tokens=dict(prompt_tokens=(1400+offset*350)*multiplier,
+                            completion_tokens=210*multiplier,total_tokens=(1610+offset*350)*multiplier)
+                journal.response(original,rid,ApiResponse(text='演示译文',usage=tokens))
         errors = []
         with patch.dict("os.environ", {"DEEPSEEK_API_KEY": ""}), \
                 patch.object(dt, "CONFIG_PATH", config), \
-                patch.object(pages, "status_of", return_value=("等待游戏", "截图使用演示数据，未连接游戏或 API", pages.COLORS["muted"])):
+                patch.object(pages, "status_of", return_value=("未运行", "截图使用演示数据，未连接游戏或 API", pages.COLORS["muted"])):
             app = app_mod.App(folder, size=options.size)
+            app.th.label(app.bar,'演示数据',fg=pages.COLORS['muted'],font=app.th.font_small).pack(side='right',padx=12)
             app.root.geometry(options.size + "+60+60")
             if options.scaling:
                 app.root.tk.call("tk", "scaling", options.scaling)
             app.root.report_callback_exception = lambda *args: errors.append(str(args))
             try:
-                cases = ("complete", "partial", "empty", "broken") if options.cost_cases else ('home','ingame','cost','dictionary','dictionary-review','dictionary-processed','settings')
+                cases = ("complete", "partial", "empty", "broken") if options.cost_cases else ('home','send','api','ingame','cost','dictionary','dictionary-review','dictionary-processed','settings','onboarding')
                 for case in cases:
                     key = "cost" if options.cost_cases else 'dictionary' if case.startswith('dictionary') else case
                     if options.cost_cases:
                         from app.storage.usage import empty_bucket
-                        item = dict(bucket, api_tracked_tasks=36, api_attempts=40, api_usage_missing=0)
+                        item = dict(bucket)
                         if case == "partial":
-                            item["api_usage_missing"] = 4
+                            item.update(api_calls=4,api_usage_missing=4)
                         if case == "empty":
                             item = empty_bucket()
+                        # Receipt-free root produces a real empty state without deleting fixtures.
+                        app.root_dir=folder if case not in {'empty','broken'} else str(root/case)
                         doc = {"days": {today: item}, "sessions": [item]}
-                        stats_path = store.data_path(folder, "stats.json")
+                        stats_path = store.data_path(app.root_dir, "stats.json")
+                        Path(stats_path).parent.mkdir(parents=True,exist_ok=True)
                         if case == "broken":
                             Path(stats_path).write_bytes(b"{broken demo ledger")
                         else:
@@ -80,6 +96,14 @@ def main():
                         app.open_page("home")
                     if not app.open_page(key):
                         raise RuntimeError(f"Page failed: {key}")
+                    if case == 'send':
+                        from gui.composer import fingerprint
+                        composer=app.composer
+                        composer['source'].insert('1.0','等我一下，我马上到。')
+                        composer['remember']()
+                        composer['state'].update(translation="Wait for me, I'll be right there.",
+                            original='等我一下，我马上到。',signature=fingerprint(app),message='演示译文，未调用 API')
+                        composer['view']['render']()
                     if case.startswith('dictionary'):
                         dictionary = app.dictionary
                         dictionary.pick({'dictionary-review':'review','dictionary-processed':'processed'}.get(case,'formal'))

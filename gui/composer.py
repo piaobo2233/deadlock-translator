@@ -19,14 +19,16 @@ def build_composer(parent, app):
     th = app.th
     body = panel(parent, th)
     body.pack(fill='x')
+    th.label(body, '输入原文', fg=C['muted'], font=th.font_small).pack(anchor='w', pady=(0, 6))
     source = th.tk.Text(body, height=3, wrap='word', font=th.font, relief='flat',
-                        bg=C['bg'], fg=C['fg'], padx=10, pady=8, undo=True,
+                        bg=C['bg'], fg=C['fg'], insertbackground=C['fg'], padx=12, pady=10, undo=True,
                         highlightthickness=1, highlightbackground=C['border'], highlightcolor=C['accent'])
     source.pack(fill='x')
     row = panel(body, th)
     row.pack(fill='x', pady=12)
+    th.label(body, '译文预览', fg=C['muted'], font=th.font_small).pack(anchor='w', pady=(0, 6))
     output = th.tk.Text(body, height=3, wrap='word', font=th.font, relief='flat',
-                        bg=C['soft'], fg=C['fg'], padx=10, pady=8, state='disabled',
+                        bg=C['paper'], fg=C['ink'], padx=12, pady=10, state='disabled',
                         highlightthickness=1, highlightbackground=C['border'])
     output.pack(fill='x')
     status = text(body, th, '', small=True, muted=True, wraplength=700)

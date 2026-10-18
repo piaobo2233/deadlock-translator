@@ -5,24 +5,27 @@ from app.storage import store, usage
 from gui.theme import COLORS
 
 
-def consumption_snapshot(root_dir, *, now=None):
+def consumption_snapshot(root_dir, *, now=None, days=7, ledger=None):
     now=time.time() if now is None else now
-    ledger=usage.UsageStats(store.data_path(root_dir,'stats.json'))
-    snapshot=ledger.presentation_snapshot(now=now)
+    if ledger is None:
+        ledger=usage.UsageStats(store.data_path(root_dir,'stats.json'))
+    else:
+        ledger._load()  # Refresh local persisted counts, retaining the receipt scan cache.
+    snapshot=ledger.presentation_snapshot(now=now,days=days)
     snapshot.update(session_title='最近运行',fresh=False,ledger=ledger,updated_at=now,
-                    source_note='已落盘记录（可能不含尚未保存的本地命中）')
+                    source_note='已保存记录（本地命中可能尚未保存）')
     runtime=store.read_json(store.data_path(root_dir,'runtime.json'),{})
     if not isinstance(runtime,dict):return snapshot
     current=runtime.get('consumption')
     at=runtime.get('at')
     if type(at) not in (int,float) or not math.isfinite(at) or not 0<=now-at<=12:
-        snapshot['source_note']='运行快照过期或不可用，已回退落盘记录'
+        snapshot['source_note']='最近保存的记录（当前运行未更新）'
         return snapshot
     from app.runtime.panel_instance import owner, alive
     active=owner(root_dir)
     if (not active.get('token') or active.get('stopped') or not alive(active.get('process'))
             or runtime.get('pid')!=active['process']['pid'] or runtime.get('config_session')!=active['token']):
-        snapshot['source_note']='未确认当前运行来源，使用落盘记录'
+        snapshot['source_note']='当前运行未确认，显示已保存记录'
         return snapshot
     if (not isinstance(current,dict) or current.get('date')!=snapshot['date']
             or not all(isinstance(current.get(k),dict) for k in ('day','session','health'))
@@ -33,9 +36,34 @@ def consumption_snapshot(root_dir, *, now=None):
     if 'request_cost' in snapshot['day'] and 'request_cost' not in current['day']:
         snapshot['source_note']='旧版运行快照缺请求价格依据，使用落盘记录'
         return snapshot
-    if snapshot['health']['ok']:
-        snapshot.update(day=current['day'],session=current['session'],trend=current['trend'],health=current['health'],
-                        session_title='本次运行',fresh=True,updated_at=at,source_note='已核对当前运行快照')
+    if snapshot['health']['ok'] and current['health'].get('ok'):
+        # Durable requests own money/tokens. Only unsaved local counts come from
+        # the live process, so 7/30-day plots and model totals share one projection.
+        local_fields=('glossary_hits','memory_hits','cache_hits','pending')
+        if 'request_cost' not in current['day'] and 'request_cost' not in snapshot['day']:
+            local_fields=usage._COUNTERS  # Older live builds keep unsaved aggregate counters.
+        for stamp, live in current['trend']:
+            if stamp == snapshot['date']:
+                live=current['day']
+            for date, bucket in snapshot['trend']:
+                if stamp != date:
+                    continue
+                for field in local_fields:
+                    delta=live.get(field,0)-bucket.get(field,0)
+                    snapshot['window'][field]+=delta
+                    snapshot['total'][field]+=delta
+                    bucket[field]=live.get(field,0)
+        for field in local_fields:
+            snapshot['day'][field]=current['day'].get(field,0)
+        session_id=current['session'].get('session_id','')
+        if session_id != snapshot['session'].get('session_id',''):
+            # A new run with no HTTP yet must not inherit the previous run's fee.
+            snapshot['session']=usage.empty_bucket()
+        for field in local_fields:
+            snapshot['session'][field]=current['session'].get(field,0)
+        snapshot.update(session_title='本次运行',fresh=True,updated_at=at,source_note='已核对当前运行；费用来自请求台账')
+    elif not current['health'].get('ok'):
+        snapshot['health']=dict(ok=False,error='当前运行消费记录不可用')
     if current.get('accounting_error'):
         snapshot['health']=dict(ok=False,error=current['accounting_error'])
     return snapshot
@@ -98,54 +126,144 @@ def detail_rows(consumption):
     return rows
 
 
-def build_cost(parent, app, load_config, money, priced):
-    from gui.appearance import text
-    from gui.workspace import fold
-    th=app.th;c=COLORS
-    app.cost_summary=parent
-    metrics=text(parent,th,'',wraplength=820,justify='left');metrics.pack(anchor='w',fill='x')
-    quality=text(parent,th,'',small=True,muted=True,wraplength=820,justify='left');quality.pack(anchor='w',fill='x',pady=(8,0))
-    stamp=text(parent,th,'',small=True,muted=True,wraplength=820,justify='left');stamp.pack(anchor='w',fill='x',pady=6)
-    th.button(parent,'刷新用量',lambda:refresh(schedule=False)).pack(anchor='w')
-    app.cost_toggle,app.cost_section,toggle=fold(parent,app,'最近七天与统计口径',lambda target:None)
-    body=app.cost_section
-    table=th.tk.Text(body,height=9,wrap='word',font=th.font_small,bg=c['soft'],fg=c['fg'],relief='flat')
-    table.pack(fill='x')
-    details=text(body,th,'',small=True,muted=True,wraplength=820,justify='left');details.pack(anchor='w',fill='x',pady=8)
-    for label in (metrics,quality,stamp,details):
-        label.bind('<Configure>',lambda event,w=label:w.configure(wraplength=max(180,event.width-8)))
-    app.expand_cost=lambda:toggle() if not app.cost_section.winfo_manager() else None
-    def refresh(schedule=True):
+def build_cost(parent, app, load_config=None, money=None, priced=None):
+    from gui.appearance import heading, panel, text
+    from gui.usage_charts import UsageChart, visible_models
+    from app.brand import apply_window_icon
+    th=app.th; c=COLORS
+    heading(parent,th,'API 用量',compact=True)
+    selected=th.tk.IntVar(parent, value=7)
+    ledger=usage.UsageStats(store.data_path(app.root_dir,'stats.json'))
+    values={}; titles={}; buttons={}; detail_window=[None]
+    summary=panel(parent,th);summary.pack(fill='x',pady=(0,10))
+    for index,(key,title) in enumerate((('day','今日费用'),('session','最近运行'),('total','累计费用'))):
+        summary.columnconfigure(index,weight=1,uniform='fee')
+        cell=panel(summary,th);cell.grid(row=0,column=index,sticky='ew',padx=(0,12))
+        titles[key]=text(cell,th,title,small=True,muted=True);titles[key].pack(anchor='w')
+        values[key]=th.label(cell,'—',font=('Cambria',21,'bold'))
+        values[key].pack(anchor='w',pady=(2,0))
+    th.hairline(parent,pady=(0,9))
+    toolbar=panel(parent,th);toolbar.pack(fill='x',pady=(0,6))
+    th.label(toolbar,'费用走势',font=th.font_heading).pack(side='left')
+    total_label=text(toolbar,th,'',small=True,muted=True);total_label.pack(side='right',padx=(10,0))
+    def change(days):
+        selected.set(days)
+        refresh()
+    for days in (30,7):
+        button=th.button(toolbar,f'近 {days} 天',lambda days=days:change(days))
+        button.configure(padx=8,pady=3)
+        button.pack(side='right',padx=(6,0));buttons[days]=button
+    inspect=text(parent,th,'指向图表或聚焦后按左右键，查看具体数值',small=True,muted=True)
+    trend=UsageChart(parent,th,mode='trend',inspect=lambda value:inspect.configure(text=value),height=145)
+    trend.pack(fill='x')
+    inspect.pack(fill='x',pady=(4,4))
+    metrics=text(parent,th,'',small=True,wraplength=800,justify='left')
+    metrics.pack(fill='x',pady=(0,6))
+    th.label(parent,'模型费用',font=th.font_heading).pack(anchor='w',pady=(0,5))
+    models=UsageChart(parent,th,mode='models',inspect=lambda value:inspect.configure(text=value),height=82)
+    models.pack(fill='x')
+    bottom=panel(parent,th);bottom.pack(fill='x',pady=(8,0))
+    quality=text(bottom,th,'',small=True,muted=True,wraplength=700,justify='left')
+    quality.pack(side='left',fill='x',expand=True)
+    details_button=th.button(bottom,'查看明细',lambda:show_details())
+    details_button.pack(side='right',padx=(12,0))
+    stampbar=panel(parent,th);stampbar.pack(fill='x',pady=(6,0))
+    refresh_button=th.link(stampbar,'刷新',lambda:refresh());refresh_button.pack(side='right')
+    stamp=text(stampbar,th,'',small=True,muted=True);stamp.pack(side='left',fill='x',expand=True)
+
+    def write_details():
+        window=detail_window[0]
+        if window is None or not window.winfo_exists():return
+        table=app.cost_controls['table'];snapshot=app.cost_snapshot
+        table.configure(state='normal');table.delete('1.0','end')
+        table.insert('end','日期 / 已知估算费用 / 完整性\n')
+        for date,amount,state,note in detail_rows(snapshot):
+            table.insert('end',f'{date} / {amount} / {state}\n{note}\n\n')
+        table.insert('end','各模型 / 所选范围\n')
+        for model,bucket in snapshot.get('models',{}).items():
+            table.insert('end',f"{model} / {_amount_text(range_cost(bucket))} / "
+                         f"{bucket.get('api_attempts',0)} 次请求 / {bucket.get('total_tokens',0):,} Token\n")
+        table.insert('end','\n'+snapshot['source_note']+'\n'
+            '本地命中为词库、记忆、缓存的处理次数；HTTP 请求包含重试，统计单位不同。\n'
+            '任务结果包含接收翻译、发言翻译和连接测试，不是 HTTP 成功率、识别率或上屏率。\n'
+            '费用按请求时单价估算，以服务商账单为准；历史模型与未知费用不按当前配置补填。')
+        table.configure(state='disabled')
+
+    def show_details():
+        window=detail_window[0]
+        if window is not None and window.winfo_exists():
+            window.lift();return
+        window=th.tk.Toplevel(app.root);detail_window[0]=window
+        window.title('API 用量 · 每日明细');window.configure(bg=c['bg'])
+        window.geometry('780x580');window.minsize(520,360);window.transient(app.root)
+        apply_window_icon(window)
+        scroll=th.ttk.Scrollbar(window);scroll.pack(side='right',fill='y')
+        table=th.tk.Text(window,bg=c['bg'],fg=c['fg'],font=th.font_small,padx=18,pady=16,
+                         relief='flat',wrap='word',yscrollcommand=scroll.set)
+        table.pack(fill='both',expand=True);scroll.configure(command=table.yview)
+        app.cost_controls['table']=table
+        write_details()
+
+    def destroy_details(event):
+        if event.widget is summary and detail_window[0] is not None:
+            try:detail_window[0].destroy()
+            except th.tk.TclError:pass
+    summary.bind('<Destroy>',destroy_details)
+    for label in (quality,metrics,inspect,stamp):
+        label.bind('<Configure>',lambda event,w=label:w.configure(wraplength=max(180,event.width-4)))
+
+    def refresh(schedule=False):
         try:
-            snapshot=consumption_snapshot(app.root_dir)
-            info=range_cost(snapshot['day']);day=snapshot['day'];health=snapshot['health']
-            fee=day.get('request_cost',{})
+            days=selected.get()
+            snapshot=consumption_snapshot(app.root_dir,days=days,ledger=ledger)
+            health=snapshot['health'];available=health['ok'];bucket=snapshot['window']
+            info=range_cost(bucket)
+            names=dict(day='今日费用',session=snapshot['session_title'],total='累计费用')
+            for key,label in values.items():
+                fee=range_cost(snapshot[key])
+                titles[key].configure(text=names[key]+(' · 部分已知' if fee['status']=='partial' else ''))
+                label.configure(text=_amount_text(fee) if available else '不可用',
+                                fg=c['fg'] if available else c['err'])
+                titles[key].configure(fg=c['accent'] if fee['status'] in {'partial','unknown','unpriced'} else c['muted'])
+            total_label.configure(text=(f"{days} 天合计 {_amount_text(info)}"+
+                (' · 部分已知' if info['status']=='partial' else '')) if available else '记录不可用')
+            for value,button in buttons.items():
+                active=value==days
+                button.configure(bg=c['accent'] if active else c['bg'],fg=c['ink'] if active else c['fg'])
+            trend.set_rows(snapshot['trend'],available=available)
+            models.set_rows(visible_models(snapshot.get('models',{})),available=available)
+            fee=bucket.get('request_cost',{})
             unknown=fee.get('unknown_tasks',0)
-            results=(f"API任务：{day.get('api_ok',0)} 成功 / {max(0,day.get('api_fail',0)-unknown)} 失败"
-                     f" / {unknown} 结果未知 / {fee.get('pending_tasks',0)} 待定 / {fee.get('cancelled_tasks',0)} 已取消")
-            value=(f"今日已知估算费用：{_amount_text(info)}\n已记录请求：{info['attempts']} 次（含重试） · "
-                   f"本地命中：{usage.saved_calls(day)} 次\n{results}")
-            metrics.configure(text=value if health['ok'] else '消费记录不可用；金额和计数无法确认')
-            quality.configure(text=quality_note(info,health),fg=c['muted'] if health['ok'] else c['err'])
-            stamp.configure(text='自动刷新 · '+snapshot['source_note']+' · '+
-                ('快照更新 ' if snapshot['fresh'] else '读取时间 ')+time.strftime('%H:%M:%S',time.localtime(snapshot['updated_at'])))
-            rows=detail_rows(snapshot)
-            table.configure(state='normal');table.delete('1.0','end')
-            table.insert('1.0','日期 / 已知估算费用 / 完整性\n'+'\n'.join(f'{date} / {amount} / {state}' for date,amount,state,_ in rows))
-            table.configure(state='disabled')
-            session=range_cost(snapshot['session'])
-            details.configure(text=snapshot['session_title']+'：'+(_amount_text(session) if health['ok'] else '记录不可用')+
-                '\n任务结果包含接收、输入翻译与连接测试；不是HTTP成功率、识别率或上屏率。'
-                '\n本地命中是词库、记忆、缓存的处理次数；本次复用没有新增HTTP，历史内容可能曾付费。'
-                '\n来源：本机请求台账；用量 × 请求时单价（元/百万token），未以当前价格补历史。金额内部不按显示精度舍入；非供应商实扣账单。'
-                '\n'+ '\n'.join(f'{date}：{note}' for date,amount,state,note in rows if state not in {'无记录','已知完整'}))
+            result=(f"任务：{bucket.get('api_ok',0)} 成功 / {max(0,bucket.get('api_fail',0)-unknown)} 失败"
+                    f" / {unknown} 未知 / {fee.get('pending_tasks',0)} 待定 / {fee.get('cancelled_tasks',0)} 取消")
+            metrics.configure(text=(f"所选 {days} 天 · HTTP 请求 {info['attempts']} 次（含重试） · "
+                f"Token {bucket.get('total_tokens',0):,}（输入 {bucket.get('prompt_tokens',0):,} / 输出 {bucket.get('completion_tokens',0):,}）"
+                f"\n本地命中 {usage.saved_calls(bucket)} 次（处理次数，与 HTTP 单位不同） · {result}")
+                if available else '消费记录不可用；金额和计数无法确认')
+            quality.configure(text=quality_note(info,health),fg=c['muted'] if available else c['err'])
+            stamp.configure(text='每 5 秒自动刷新 · '+snapshot['source_note']+' · '+
+                time.strftime('%H:%M:%S',time.localtime(snapshot['updated_at'])))
             app.cost_snapshot=snapshot
-        except Exception as exc:
+            inspect.configure(text='指向图表或聚焦后按左右键查看 · 金额为本机估算，以服务商账单为准'
+                              if available else '记录不可用，无法核对具体数值')
+            if not available:
+                snapshot['models']={}
+            write_details()
+        except Exception:
+            # No provider content, secrets or stale healthy values survive errors.
+            for label in values.values():label.configure(text='不可用',fg=c['err'])
+            total_label.configure(text='记录不可用')
             metrics.configure(text='消费记录不可用；金额和计数无法确认')
-            quality.configure(text='消费记录读取失败（'+type(exc).__name__+'）',fg=c['err'])
-            stamp.configure(text='自动刷新失败')
-            table.configure(state='normal');table.delete('1.0','end');table.insert('1.0','记录不可用');table.configure(state='disabled')
-            details.configure(text='历史与本次运行费用暂不可核对')
-        if schedule:app.after_page(5000,refresh)
-    app.cost_controls=dict(refresh=refresh,metrics=metrics,quality=quality,stamp=stamp,table=table)
-    refresh()
+            quality.configure(text='消费记录读取失败，请检查记录或恢复备份',fg=c['err'])
+            stamp.configure(text='自动刷新失败');inspect.configure(text='记录不可用')
+            trend.set_rows([],available=False);models.set_rows([],available=False)
+            app.cost_snapshot=dict(date='',day=usage.empty_bucket(),session=usage.empty_bucket(),
+                trend=[],models={},health=dict(ok=False,error='记录不可用'),source_note='消费记录不可用')
+            if detail_window[0] is not None and detail_window[0].winfo_exists():
+                table=app.cost_controls['table'];table.configure(state='normal')
+                table.delete('1.0','end');table.insert('1.0','记录不可用');table.configure(state='disabled')
+        if schedule:app.after_page(5000,lambda:refresh(schedule=True))
+    app.cost_controls=dict(refresh=refresh,metrics=metrics,quality=quality,stamp=stamp,
+        values=values,titles=titles,trend=trend,models=models,range=selected,range_buttons=buttons,
+        details=show_details,details_button=details_button,refresh_button=refresh_button,table=None)
+    refresh(schedule=True)

@@ -4,26 +4,28 @@ LockLingo · 尝试帮你看懂英文聊天，也方便用中文准备回复。
 
 [![公开源码基础检查](https://github.com/piaobo2233/deadlock-translator/actions/workflows/public-checks.yml/badge.svg?branch=main)](https://github.com/piaobo2233/deadlock-translator/actions/workflows/public-checks.yml)
 
-**Windows 10/11 · 64 位**　|　**1.0.0-test.4-rc.2 源码候选**　|　[MIT 原创源码](LICENSE)
+**Windows 10/11 · 64 位**　|　**1.0.0-test.4-rc.3 源码候选**　|　[MIT 原创源码](LICENSE)
 
 **[已发布版本](https://github.com/piaobo2233/deadlock-translator/releases)** · [安装与首次使用](docs/guides/安装与首次使用.md) · [反馈问题](https://github.com/piaobo2233/deadlock-translator/issues/new/choose)
 
-> test.4-rc.2 增加直接启动的无控制台 GUI；安装包目前仅作本地验收，干净 Windows、安装生命周期及 OCR 传递组件许可材料尚待完成；公开下载仍为 test.3，需要手动安装 OCR。候选包尚未代码签名，不能承诺所有设备都没有 Windows 安全提示。
+> test.4-rc.3 更新 Deadlock 风格控制界面与独立 API 用量页；安装包目前仅作本地验收，干净 Windows、安装生命周期及 OCR 传递组件许可材料尚待完成；公开下载仍为 test.3，需要手动安装 OCR。候选包尚未代码签名，不能承诺所有设备都没有 Windows 安全提示。
 
 通过聊天区截图和本机 OCR 识别英文，结合本地词库、记忆、缓存与可选 API 翻译，在外部浮窗显示中文。发言页可以输入中文、检查英文预览，再复制到游戏。安装包已内置 Python 运行环境和 OCR，**不需要另外安装 Python 或 Tesseract**；安装按当前用户进行，默认装到 `%LOCALAPPDATA%\Programs\LockLingo`。
 
 ## 界面预览
 
-<img src="docs/assets/app-overview.png" width="900" alt="test.3 实际接收界面：六页导航、空配置，未启动实时识别">
+<img src="docs/assets/deadlock-ui/receive.png" width="900" alt="Deadlock 风格接收翻译界面，七项导航">
 
-*test.3 新包实际界面，使用临时空配置；没有启动实时识别。这是界面展示。*
+*rc.3 真实 Tk 界面，使用隔离演示数据，未连接游戏或调用翻译 API。游戏内字幕显示方式保持不变。*
 
 <details>
-<summary>查看中文发言界面</summary>
+<summary>发言翻译与 API 用量</summary>
 
-![test.3 实际发言页：仅填写示例原文，译文为空](docs/assets/app-compose.png)
+![发言翻译：演示原文与示例译文](docs/assets/deadlock-ui/compose.png)
 
-仅填写示例中文，未发起 API 请求，未模拟成功回填或发送。
+![API 用量：费用走势与模型费用，数字均为演示数据](docs/assets/deadlock-ui/usage.png)
+
+API 用量支持 7／30 天切换与具体数值查看；未知费用不会画成已知零消费。默认窗口单页展示，小窗口保留滚动。示例译文仅用于视觉预览，未实际发起翻译或发送。
 
 </details>
 

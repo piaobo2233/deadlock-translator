@@ -7,4 +7,4 @@
 - [第三方清单](THIRD-PARTY-NOTICES.md)、[技术致谢](ACKNOWLEDGEMENTS.md)、[项目与素材](PROJECT-NOTICE.md)。
 - [C 版品牌素材](assets/locklingo/README.md)。
 
-当前公开下载仍为 test.3，未包含新品牌/安装器/首次引导；main 为 test.4-rc.2 源码候选。源码和二进制验证范围分别记录。
+当前公开下载仍为 test.3，未包含新品牌/安装器/首次引导；main 为 test.4-rc.3 源码候选。源码和二进制验证范围分别记录。

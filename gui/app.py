@@ -165,44 +165,46 @@ class App:
 
     # ------------------------------------------------------------ 外框
     def _build_chrome(self):
-        """Preview shell: white paper, soft 167px navigation, 28px main inset."""
+        """Approved charcoal shell with print-orange tabs and restrained city art."""
         th,c=self.th,COLORS
         self.bar=th.tk.Frame(self.root,bg=c['panel'])
         self.bar.pack(fill='x')
-        logo=th.tk.Frame(self.bar,bg=c['card_hi'],width=32,height=32)
-        logo.pack(side='left',padx=(22,12),pady=17);logo.pack_propagate(False)
+        logo=th.tk.Frame(self.bar,bg=c['panel'],width=42,height=42)
+        logo.pack(side='left',padx=(20,12),pady=11);logo.pack_propagate(False)
         self.brand_mark=None
         try:
             from app.brand import mark_path
             path=mark_path()
             if path:
                 self.brand_mark=th.tk.PhotoImage(master=self.root,file=path)
-                th.tk.Label(logo,image=self.brand_mark,bg=c['card_hi'],bd=0).pack(expand=True)
+                th.tk.Label(logo,image=self.brand_mark,bg=c['panel'],bd=0).pack(expand=True)
         except Exception:
             self.brand_mark=None
         if self.brand_mark is None:
             th.label(logo,'D',bg=c['card_hi'],fg=c['accent'],font=('Cambria',20)).pack(expand=True)
         from app import brand
-        th.label(self.bar,brand.PRODUCT,font=(th.font[0],11,'bold')).pack(side='left')
+        th.label(self.bar,brand.PRODUCT,font=th.display_font(17)).pack(side='left')
         th.label(self.bar,brand.SUBTITLE,bg=c['panel'],fg=c['muted'],
                  font=th.font_small).pack(side='left',padx=(10,0))
         self._install_close_handler()
         self.global_status=th.label(self.bar,'',font=th.font_small,fg=c['ok'])
-        self.global_status.pack(side='right')
+        self.global_status.pack(side='right',padx=18)
         self.back_btn=th.link(self.bar,'← 返回',self.go_back)
         self.title_label=th.label(self.bar,'')  # Internal compatibility diagnostics.
         th.hairline(self.root)
         self.body=th.tk.Frame(self.root,bg=c['panel'])
         self.body.pack(fill='both',expand=True)
-        self.nav=th.tk.Frame(self.body,bg=c['soft'],width=167)
+        self.nav=th.tk.Frame(self.body,bg=c['soft'],width=185)
         self.nav.pack(side='left',fill='y');self.nav.pack_propagate(False)
         th.tk.Frame(self.nav,bg=c['soft'],height=20).pack(fill='x')
         self.nav_buttons={}
         for key,label in (('home','接收翻译'),('send','发言翻译'),('dictionary','词库'),
-                          ('recognition','识别与显示'),('api','翻译接口'),('settings','设置')):
+                          ('recognition','识别与显示'),('api','翻译接口'),('cost','API 用量'),('settings','设置')):
             self.nav_buttons[key]=self._make_nav_button(self.nav,key,label)
         bottom=th.tk.Frame(self.nav,bg=c['soft']);bottom.pack(side='bottom',fill='x',padx=24,pady=20)
         th.label(bottom,'本地优先',bg=c['soft'],fg=c['ok'],font=th.font_small).pack(anchor='w')
+        from gui.decoration import CityArt
+        CityArt(self.nav,th,height=1).pack(fill='both',expand=True)
         th.tk.Frame(self.body,bg=c['border'],width=1).pack(side='left',fill='y')
         content=th.tk.Frame(self.body,bg=c['panel']);content.pack(side='left',fill='both',expand=True)
         self.canvas=th.tk.Canvas(content,bg=c['panel'],highlightthickness=0)
@@ -249,9 +251,11 @@ class App:
 
     def _refresh_nav(self):
         for key,parts in self.nav_buttons.items():
-            active=key==self.current;bg=COLORS['card_hi'] if active else COLORS['soft']
+            active=key==self.current;bg=COLORS['accent'] if active else COLORS['soft']
             parts['row'].configure(bg=bg);parts['rail'].configure(bg=COLORS['accent'] if active else bg)
-            parts['button'].configure(bg=bg,fg=COLORS['accent'] if active else COLORS['fg'])
+            parts['button'].configure(bg=bg,fg=COLORS['ink'] if active else COLORS['fg'],
+                activebackground=COLORS['accent_dim'] if active else COLORS['card_hi'],
+                activeforeground=COLORS['ink'] if active else COLORS['fg'])
 
     def show_hint(self, text=""):
         """把一行设置的说明显示在**底栏右侧**（鼠标悬停时），不悬停就显示丝印。
@@ -283,10 +287,8 @@ class App:
         if key not in _PAGES:
             self._fail(key, UnknownPage(key))
             return False
-        requested = key
-        key = {'ingame':'recognition', 'cost':'home'}.get(key, key)
+        key = {'ingame':'recognition'}.get(key, key)
         if key == self.current and not self._page_failed:
-            self._locate(requested)
             return True
 
         dictionary = getattr(self, 'dictionary', None)
@@ -325,15 +327,7 @@ class App:
             self.back_btn.pack_forget()
 
         self._resize(spec)
-        self._locate(requested)
         return True
-
-    def _locate(self, requested):
-        if requested == 'cost':
-            self.expand_cost()
-            self.root.update_idletasks()
-            y = self.cost_summary.winfo_rooty() - self.page.winfo_rooty()
-            self.canvas.yview_moveto(y / max(self.page.winfo_height(), 1))
 
     def watch_application_fields(self, values, prefix=''):
         import time

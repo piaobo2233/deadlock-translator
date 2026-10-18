@@ -38,6 +38,7 @@ def _add(bucket, field, amount=1):
 class AccountingSnapshot:
     days: dict = field(default_factory=dict)
     sessions: dict = field(default_factory=dict)
+    models_by_day: dict = field(default_factory=dict)
     latest_session: str = ""
     latest_session_at: float = 0
     active: bool = False
@@ -111,7 +112,7 @@ class RequestAccounting:
         return buckets.setdefault(key, {"request_cost": empty_costs(), "token_src": {}})
 
     def _project(self, records):
-        days, sessions, latest, unknown = {}, {}, (0, ""), 0
+        days, sessions, models, latest, unknown = {}, {}, {}, (0, ""), 0
         for record in records:
             first = record["attempts"][0]["prepared_at"]
             day = time.strftime("%Y-%m-%d", time.localtime(first))
@@ -132,11 +133,14 @@ class RequestAccounting:
                 bucket = self._bucket(days, day)
                 self._attempt(attempt, bucket)
                 self._attempt(attempt, session)
+                if attempt_cost(attempt)[0] != 'cancelled':
+                    model = attempt.get('params', {}).get('model') or '历史模型未知'
+                    self._attempt(attempt, self._bucket(models.setdefault(day, {}), model))
                 if attempt_cost(attempt)[0] in {"unknown", "unpriced"}:
                     unknown += 1
         if not math.isfinite(math.fsum(bucket["request_cost"]["known_amount"] for bucket in days.values())):
             raise ValueError("Invalid aggregate cost")
-        return AccountingSnapshot(days=days, sessions=sessions, latest_session=latest[1],
+        return AccountingSnapshot(days=days, sessions=sessions, models_by_day=models, latest_session=latest[1],
                                   latest_session_at=latest[0], active=bool(records), unknown_costs=unknown)
 
     @staticmethod

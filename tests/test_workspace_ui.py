@@ -59,11 +59,11 @@ class WorkspaceTests(unittest.TestCase):
     def draft(self,d,value):
         d.draft.delete('1.0','end');d.draft.insert('1.0',value)
 
-    def test_six_nav_and_legacy_locations_and_unknown_error(self):
-        self.assertEqual(list(self.app.nav_buttons),['home','send','dictionary','recognition','api','settings'])
-        for name,current in (('home','home'),('ingame','recognition'),('cost','home')):
+    def test_seven_nav_and_independent_usage_and_unknown_error(self):
+        self.assertEqual(list(self.app.nav_buttons),['home','send','dictionary','recognition','api','cost','settings'])
+        for name,current in (('home','home'),('ingame','recognition'),('cost','cost')):
             self.assertTrue(self.app.open_page(name));self.assertEqual(self.app.current,current)
-        self.assertTrue(self.app.cost_section.winfo_manager())
+        self.assertTrue(self.app.cost_controls['trend'].winfo_manager())
         self.assertFalse(self.app.open_page('typo'))
         self.assertTrue(self.app.open_page('home'));self.assertEqual(self.app.title_label.cget('text'),'接收翻译')
 
@@ -454,8 +454,8 @@ class WorkspaceTests(unittest.TestCase):
 
     def test_preview_shell_and_api_fields_have_the_approved_geometry(self):
         self.app.open_page('api');self.app.root.geometry('1210x850+20+20');self.app.root.update()
-        self.assertEqual(self.app.nav.winfo_width(),167)
-        self.assertEqual(self.app.page.cget('bg'),'#FFFFFF')
+        self.assertEqual(self.app.nav.winfo_width(),185)
+        self.assertEqual(self.app.page.cget('bg'),'#181A18')
         controls=self.app.api_controls
         self.assertLess(controls['box'].winfo_rootx(),controls['entry'].winfo_rootx())
         self.assertLessEqual(abs(controls['box'].winfo_rooty()-controls['entry'].winfo_rooty()),5)

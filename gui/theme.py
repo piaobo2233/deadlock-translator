@@ -1,29 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Deadlock UI Design System —— **全软件唯一的样式来源**（§35 / §36）。
+"""Shared Deadlock print palette and native Tk widget styling.
 
-# 视觉定位
-
-    Deadlock 世界观 × 复古工业终端 × 都市黑帮通讯设备 × Windows 桌面工具
-
-要的是「Deadlock 世界里的一台通讯/翻译终端」，但**不是道具 UI** ——
-仍然要清晰、舒服、易用。
-
-# 明确不要的东西（§九 / §十 / §三十三）
-
-    ❌ SaaS 后台感（巨大 Card、数据 Dashboard、彩色统计）
-    ❌ Cyberpunk（霓虹、蓝紫、青色、发光）
-    ❌ Apple 风（毛玻璃、巨大圆角、悬浮卡片）
-    ❌ AI 产品风（紫色渐变、Glow、大量卡片）
-    ❌ 游戏网页风（立绘、地图、宣传图）
-
-# 怎么落地
-
-所有页面**只从这里取样式**，不许自己写颜色和按钮（§35）。
-要改视觉，改这一个文件。
-
-[!] 键名保持不变（bg / panel / card / fg / muted / accent …）——
-    现有页面用的是这套键，换值不换名，改动的爆炸半径最小。
-    新代码建议用 `TONE` 那套语义化的名字。
+Charcoal, cream, print orange and mint follow the approved concept. Existing
+semantic keys stay stable; ttkbootstrap remains optional. Decorative city art
+is separate from editable text, controls and data charts.
 """
 
 import tkinter as tk
@@ -37,19 +17,21 @@ __all__ = ["Theme", "COLORS", "TONE", "TOKENS", "TRY_FONTS", "FONT_LABEL",
 
 TOKENS = {
     # ---- 颜色（§六）----
-    "bg":            "#FFFFFF",
-    "surface":       "#FFFFFF",
-    "surface_hover": "#F7F8F4",
-    "soft":          "#F7F8F4",
-    "selected":      "#F4EEDF",
-    "border":        "#D9DFD4",
-    "text":          "#252B26",
-    "text_dim":      "#576157",
-    "text_ghost":    "#667064",
-    "accent":        "#85601E",
-    "accent_dim":    "#725119",
-    "danger":        "#AF392E",
-    "ok":            "#426D39",
+    "bg":            "#181A18",
+    "surface":       "#181A18",
+    "surface_hover": "#302D25",
+    "soft":          "#111410",
+    "selected":      "#332D23",
+    "border":        "#5B5545",
+    "text":          "#F2E6CA",
+    "text_dim":      "#B8AE97",
+    "text_ghost":    "#958E7C",
+    "accent":        "#E77B47",
+    "accent_dim":    "#F09561",
+    "danger":        "#ED9080",
+    "ok":            "#93C9AD",
+    "paper":         "#F2E6CA",
+    "ink":           "#20231E",
     # ---- 形状（§八：2~5px 小圆角，硬朗工业化）----
     "radius":        3,
     # ---- 间距（§38 的等价物）----
@@ -93,6 +75,8 @@ COLORS = {
     "ghost": TOKENS["text_ghost"],   # 丝印 / 装饰文字（比边框亮、比次要暗）
     "warn": TOKENS["accent"],       # 旧键，收进强调色系（§七：不搞彩虹）
     "err": TOKENS["danger"],
+    "paper": TOKENS["paper"],
+    "ink": TOKENS["ink"],
     "purple": TOKENS["accent"],     # 旧键，别再用了
 }
 
@@ -167,7 +151,7 @@ class Theme:
         try:
             import ttkbootstrap as boot
             self._boot = boot
-            self.root = boot.Window(themename="litera")
+            self.root = boot.Window(themename="darkly")
             self.backend = "ttkbootstrap"
         except Exception:
             self._boot = None
@@ -177,6 +161,9 @@ class Theme:
         if minsize:
             self.root.minsize(*minsize)
         self.root.configure(bg=TOKENS["bg"])
+        self.root.option_add('*Text.insertBackground', TOKENS['text'])
+        self.root.option_add('*Text.selectBackground', TOKENS['selected'])
+        self.root.option_add('*Text.selectForeground', TOKENS['text'])
         # 品牌图标走公共入口：所有主窗口/子工具窗口都从 Theme 创建，只在这里设一次。
         try:
             from app.brand import apply_window_icon
@@ -193,8 +180,8 @@ class Theme:
         # 字体层级：正文 / 小字 / 区块标签 / 页面标题 / 大数字 / 工业标签
         self.font = pick_font(self.root, 10)
         self.font_small = pick_font(self.root, 8)
-        self.font_title = pick_font(self.root, 18, bold=True)
-        self.font_heading = pick_font(self.root, 12, bold=True)
+        self.font_title = self.display_font(25)
+        self.font_heading = self.display_font(13)
         self.font_big = ("Cambria", 22, "bold")
         self.font_mono = ("Consolas", 10)
         self.font_tag = pick_font(self.root, 9)
@@ -203,6 +190,12 @@ class Theme:
             self.root.resizable(False, False)
         self._install_ttk()
         self._install_switch()
+
+    def display_font(self, size):
+        from tkinter import font as tkfont
+        available = set(tkfont.families(self.root))
+        family = next((f for f in ('华文中宋', 'STZhongsong', 'SimSun', '宋体') if f in available), self.font[0])
+        return (family, size, 'bold')
 
     # ------------------------------------------------------------ ttk 底座
     def _install_ttk(self):
@@ -279,9 +272,9 @@ class Theme:
         for selected in (False, True):
             image = Image.new('RGBA', (36, 22), COLORS['bg'])
             draw = ImageDraw.Draw(image)
-            draw.rounded_rectangle((1,1,35,21), radius=10, fill=COLORS['accent'] if selected else '#acb4a7')
+            draw.rounded_rectangle((1,1,35,21), radius=10, fill=COLORS['ok'] if selected else COLORS['border'])
             x = 20 if selected else 4
-            draw.ellipse((x,4,x+14,18), fill='#ffffff')
+            draw.ellipse((x,4,x+14,18), fill=COLORS['paper'])
             self._switch_images.append(ImageTk.PhotoImage(image, master=self.root))
         name = 'GoldSwitch.indicator'
         if name not in style.element_names():
@@ -345,7 +338,7 @@ class Theme:
             kind = "primary"
         c = TOKENS
         if kind == "primary":
-            bg, fg, hover = c["accent"], "#FFFFFF", c["accent_dim"]
+            bg, fg, hover = c["accent"], c['ink'], c["accent_dim"]
         elif kind == "danger":
             bg, fg, hover = c["surface"], c["danger"], c["surface_hover"]
         else:

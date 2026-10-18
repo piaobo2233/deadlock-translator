@@ -2,7 +2,7 @@
 """Desktop page services and compatibility entry identifiers.
 
 Six visible task pages live in gui.workspace. home remains the receive page;
-ingame/cost retain compatibility routes to recognition/receive respectively.
+ingame retains its compatibility route to recognition; cost is independent.
 The UI calls existing configuration, glossary and accounting services.
 """
 
@@ -415,7 +415,7 @@ register("send", "发言翻译", build_sending, width=460)
 register("recognition", "识别与显示", build_recognition_settings, width=460)
 register("api", "翻译接口", build_api_settings, width=480)
 register("ingame", "游戏内设置", build_ingame, width=460)
-register("cost", "消耗", build_cost, width=460)
+register("cost", "API 用量", build_cost, width=880)
 register("dictionary", "词库", build_dictionary, width=580)
 register("settings", "设置", build_settings, width=480)
 # 首次引导不进左侧导航（导航项在 gui/app.py 里硬编码）；注册它只是为了

@@ -12,15 +12,18 @@ def text(parent, th, value, *, small=False, muted=False, **kw):
                     fg=C['muted'] if muted else C['fg'], font=th.font_small if small else th.font, **kw)
 
 
-def heading(parent, th, title, subtitle=''):
+def heading(parent, th, title, subtitle='', *, compact=False):
+    from gui.decoration import CityArt
     box=panel(parent,th)
-    box.pack(fill='x',pady=(0,20))
-    left=panel(box,th);left.pack(side='left',fill='x',expand=True)
-    th.label(left,title,font=th.font_title).pack(anchor='w')
+    box.pack(fill='x',pady=(0,10 if compact else 16))
+    tags={'接收翻译':'INCOMING TRANSLATION','发言翻译':'OUTGOING TRANSLATION',
+          '词库':'GLOSSARY','识别与显示':'RECOGNITION & DISPLAY','翻译接口':'TRANSLATION API',
+          'API 用量':'API USAGE','设置':'SETTINGS','首次设置':'WELCOME'}
+    CityArt(box,th,title=title,eyebrow=tags.get(title,'LOCKLINGO'),height=72 if compact else 86).pack(fill='x')
     if subtitle:
-        box.subtitle=text(left,th,subtitle,small=True,muted=True,wraplength=650,justify='left')
+        box.subtitle=text(box,th,subtitle,small=True,muted=True,wraplength=650,justify='left')
         box.subtitle.pack(anchor='w',pady=(6,0))
-        left.bind('<Configure>',lambda event:box.subtitle.configure(wraplength=max(event.width,100)))
+        box.bind('<Configure>',lambda event:box.subtitle.configure(wraplength=max(event.width,100)))
     return box
 
 
