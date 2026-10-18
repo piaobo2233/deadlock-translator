@@ -9,7 +9,9 @@ pip install -r requirements.txt
 python -m app
 ```
 
-也可双击 `启动.vbs`；它优先使用项目 `.venv/Scripts/pythonw.exe`，再查 PATH。业务在 `app/`，界面在 `gui/`，冻结入口为 `scripts/run.py`。用户数据保持 `<程序目录>/data`，改品牌不迁移或清空数据。源码版需要自备 Python/OCR；内置 OCR 的候选安装包尚未公开下载。
+也可双击 `启动.vbs`；它优先使用本机可选的 `.venv-signed/Scripts/pythonw.exe`，然后是 `.venv/Scripts/pythonw.exe`，再查 PATH。目录名不代表签名有效：创建环境后须核验实际文件。业务在 `app/`，界面在 `gui/`，冻结入口为 `scripts/run.py`。用户数据保持 `<程序目录>/data`，改品牌不迁移或清空数据。源码版需要自备 Python/OCR；内置 OCR 的候选安装包尚未公开下载。
+
+发行版以 `LockLingo.exe` 直接启动 GUI，`DeadlockTranslate.exe` 保留诊断与 OCR 管道协议。两者共享同一冻结依赖目录，不再通过 VBS 隐藏控制台；无控制台打包不等于有效代码签名。
 
 ## 公开源码基础检查
 

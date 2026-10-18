@@ -95,6 +95,8 @@ def main():
     parser.add_argument('archive', type=Path)
     parser.add_argument('--report', type=Path, required=True)
     parser.add_argument('--setup', type=Path, help='Also check the actual installer refuses a running panel')
+    parser.add_argument('--panel-only', action='store_true',
+                        help='只验独立 GUI/内置 OCR；已有真实实例时不启动第二条翻译链')
     args = parser.parse_args()
     from app.config.repository import ConfigRepository
     real_config = ConfigRepository(store.data_path(ROOT, 'config.json'), log=lambda *a: None).load()
@@ -137,6 +139,16 @@ def main():
         report['bundled_ocr_files'] = 'pass'
         report['brand_assets'] = 'pass'
         executable = bundle / EXE_NAME
+        gui_executable = bundle / 'LockLingo.exe'
+        assert gui_executable.is_file()
+        assert not (bundle / '启动.vbs').exists(), '发行版应直接启动 GUI'
+        import pefile
+        with pefile.PE(str(gui_executable)) as pe:
+            assert pe.OPTIONAL_HEADER.Subsystem == 2, 'GUI must not create a console'
+        with pefile.PE(str(executable)) as pe:
+            assert pe.OPTIONAL_HEADER.Subsystem == 3, 'CLI/OCR must retain pipe support'
+        report['gui_and_cli_subsystems'] = 'pass'
+        verify_exe_icon(gui_executable)
         verify_exe_icon(executable)
         report['exe_icon_frames'] = 'pass'
         env = dict(os.environ, DEEPSEEK_API_KEY='', PYTHONPATH='', PYTHONHOME='',
@@ -185,7 +197,7 @@ def main():
         def launch(*arguments):
             log = (scratch / ('process-' + str(len(processes)) + '.log')).open('w', encoding='utf-8')
             logs.append(log)
-            process = subprocess.Popen([str(executable), *arguments], cwd=bundle, env=env,
+            process = subprocess.Popen([str(gui_executable), *arguments], cwd=bundle, env=env,
                                        stdout=log, stderr=subprocess.STDOUT,
                                        creationflags=subprocess.CREATE_NO_WINDOW)
             processes.append(process)
@@ -221,20 +233,30 @@ def main():
             close_window(state()['process']['pid'])
             assert panel.wait(timeout=8) == 0
             report['standalone_panel_close'] = 'pass'
-            assistant = launch()
-            wait_for(lambda: state().get('status') == 'ready' and state().get('translator_token'))
-            panel_info = state()['process']
-            wait_for(lambda: '已启用常驻 OCR' in (bundle / 'data/run.log').read_text(encoding='utf-8', errors='replace'))
-            started = time.monotonic()
-            close_window(panel_info['pid'])
-            assert assistant.wait(timeout=10) == 0
-            wait_for(lambda: not alive(panel_info), timeout=5)
-            report.update(assistant_and_panel_close='pass',
-                          exit_ms=round((time.monotonic() - started) * 1000, 1))
-            text = (bundle / 'data/run.log').read_text(encoding='utf-8', errors='replace')
-            assert 'Traceback' not in text and 'AttributeError' not in text
-            assert not list((bundle / 'data').glob('requests/*.json'))
-            report['real_api_calls'] = 0
+            if args.panel_only:
+                report.update(result='partial', real_api_calls=0,
+                              assistant_and_panel_close='not_verified_existing_instance',
+                              clean_windows='not_verified', browser_download='not_verified')
+            else:
+                assistant = launch()
+                wait_for(lambda: state().get('status') == 'ready' and state().get('translator_token'))
+                panel_info = state()['process']
+                wait_for(lambda: '已启用常驻 OCR' in (bundle / 'data/run.log').read_text(encoding='utf-8', errors='replace'))
+                started = time.monotonic()
+                close_window(panel_info['pid'])
+                assert assistant.wait(timeout=10) == 0
+                wait_for(lambda: not alive(panel_info), timeout=5)
+                report.update(assistant_and_panel_close='pass',
+                              exit_ms=round((time.monotonic() - started) * 1000, 1))
+                text = (bundle / 'data/run.log').read_text(encoding='utf-8', errors='replace')
+                assert 'Traceback' not in text and 'AttributeError' not in text
+                assert not list((bundle / 'data').glob('requests/*.json'))
+                report['real_api_calls'] = 0
+                report['result'] = 'pass'
+        except BaseException as exc:
+            report.update(result='failed', error=type(exc).__name__ + ': ' + str(exc))
+            store.atomic_write_json(args.report, report)
+            raise
         finally:
             for process in processes:
                 if process.poll() is None:
@@ -242,10 +264,14 @@ def main():
                 process.wait(timeout=5)
             for log in logs:
                 log.close()
+    import shutil
+    try:
+        shutil.rmtree(scratch)
+        report['scratch_cleanup'] = 'removed'
+    except OSError as exc:
+        report.update(scratch_cleanup='retained', scratch=str(scratch), cleanup_error=str(exc))
     store.atomic_write_json(args.report, report)
     print(json.dumps(report, ensure_ascii=False))
-    import shutil
-    shutil.rmtree(scratch, ignore_errors=True)
 
 
 if __name__ == '__main__':

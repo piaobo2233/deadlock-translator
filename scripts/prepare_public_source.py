@@ -60,8 +60,10 @@ def public_files(base):
         'app/translation/game_terms.json', 'app/recognition/quick_chat.json',
         'docs/THIRD-PARTY-NOTICES.md', 'docs/guides/安装与首次使用.md',
         'docs/guides/首版测试与分享.md', 'docs/guides/接收与中文转英文.md',
-        'docs/releases/v1.0.0-test.4-rc.1.md', 'verify/portable_smoke.py',
+        'docs/releases/v1.0.0-test.4-rc.1.md', 'docs/releases/v1.0.0-test.4-rc.2.md',
+        'verify/portable_smoke.py',
         'verify/installer_smoke.py', 'verify/latency_acceptance.py',
+        'verify/source_launcher_smoke.py',
     ):
         selected[name] = ROOT / name
     for target, name in TEMPLATES.items():

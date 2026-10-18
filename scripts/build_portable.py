@@ -22,6 +22,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import ocr_runtime  # noqa: E402  (sibling build helper)
 
 EXE_NAME = "DeadlockTranslate"
+GUI_NAME = "LockLingo"
 BRAND_ICON = ROOT / "app" / "assets" / "brand" / "locklingo.ico"
 
 
@@ -137,21 +138,10 @@ def main():
         (source / 'VERSION').write_text(args.version + '\n', encoding='utf-8')
         source_manifest = [dict(path=path.relative_to(source).as_posix(), sha256=digest(path))
                            for path in sorted(source.rglob('*')) if path.is_file()]
-        command = [sys.executable, '-m', 'PyInstaller', '--noconfirm', '--onedir', '--console',
-                   '--noupx', '--name', EXE_NAME, '--paths', str(source),
+        command = [sys.executable, '-m', 'PyInstaller', '--noconfirm',
                    '--distpath', str(work / 'dist'), '--workpath', str(work / 'build'),
-                   '--specpath', str(work),
-                   '--icon', str(BRAND_ICON),
-                   '--add-data', f'{source / "VERSION"};.',
-                   '--add-data', f'{source / "app/assets"};app/assets',
-                   '--add-data', f'{source / "app/translation/game_terms.json"};app/translation',
-                   '--add-data', f'{source / "app/recognition/quick_chat.json"};app/recognition',
-                   '--add-data', f'{source / "app/recognition/models"};app/recognition/models',
-                   '--collect-data', 'ttkbootstrap']
-        for name in ('pystray', 'pandas', 'scipy', 'matplotlib', 'IPython', 'pytest'):
-            command.extend(['--exclude-module', name])
-        command.append(str(source / 'scripts/run.py'))
-        env = dict(os.environ, DEEPSEEK_API_KEY='')
+                   str(ROOT / 'scripts/installer/locklingo.spec')]
+        env = dict(os.environ, DEEPSEEK_API_KEY='', LOCKLINGO_BUILD_SOURCE=str(source))
         # 构建日志是可再生产物，不写进用户私有证据目录（也可能没有写权限）。
         log = ROOT / '.temp/build-evidence' / args.version / 'portable-build.log'
         log.parent.mkdir(parents=True, exist_ok=True)
@@ -165,12 +155,6 @@ def main():
         (bundle / 'BUILD-SOURCE.json').write_text(json.dumps(
             dict(version=args.version, python=sys.version.split()[0], files=source_manifest),
             ensure_ascii=False, indent=2), encoding='utf-8')
-        (bundle / '启动.vbs').write_text(
-            'Option Explicit\nDim s,f,r\nSet s=CreateObject("WScript.Shell")\n'
-            'Set f=CreateObject("Scripting.FileSystemObject")\n'
-            'r=f.GetParentFolderName(WScript.ScriptFullName)\n'
-            's.CurrentDirectory=r\ns.Run Chr(34) & r & "\\' + EXE_NAME + '.exe" & Chr(34),0,False\n',
-            encoding='ascii')
         ocr_runtime.copy_into(bundle, args.ocr_runtime, manifest)
         copy_ocr_licenses(bundle)
         copy_licenses(bundle / 'licenses')

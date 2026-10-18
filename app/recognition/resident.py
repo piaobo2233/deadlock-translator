@@ -23,8 +23,15 @@ class ResidentReader:
         if sys.platform != 'win32' or not dll.is_file():
             raise OSError('Resident C API unavailable')
         env = dict(os.environ, OMP_THREAD_LIMIT='1', PYTHONUTF8='1')
-        command = ([sys.executable, '--ocr-worker'] if getattr(sys, 'frozen', False)
-                   else [sys.executable, '-u', '-m', __name__])
+        # The GUI bootloader/pythonw has no standard streams. The hidden helper
+        # needs a console-capable executable for its JSON pipe protocol.
+        executable_path = Path(sys.executable)
+        if getattr(sys, 'frozen', False):
+            command = [str(executable_path.with_name('DeadlockTranslate.exe')), '--ocr-worker']
+        else:
+            if executable_path.name.lower() == 'pythonw.exe':
+                executable_path = executable_path.with_name('python.exe')
+            command = [str(executable_path), '-u', '-m', __name__]
         try:
             self.process = subprocess.Popen(command + [str(dll), str(models), languages, words],
                 cwd=Path(__file__).resolve().parents[2], env=env,

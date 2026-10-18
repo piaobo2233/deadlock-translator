@@ -16,14 +16,17 @@ spec.loader.exec_module(build)
 class InstallerInputTests(unittest.TestCase):
     def test_verified_bundle_is_accepted_and_bad_inputs_are_rejected(self):
         original = {
-            'DeadlockTranslate.exe': b'executable fixture', 'VERSION': b'1.0.0-test.4\n',
+            'DeadlockTranslate.exe': b'executable fixture', 'LockLingo.exe': b'GUI fixture',
+            'VERSION': b'1.0.0-test.4\n',
             'ocr/tesseract.exe': b'ocr', 'ocr/libtesseract-5.dll': b'dll',
             '_internal/app/assets/brand/locklingo.ico': b'icon',
         }
-        for variant in ('valid', 'changed', 'extra', 'private', 'traversal'):
+        for variant in ('valid', 'missing-gui', 'changed', 'extra', 'private', 'traversal'):
             with self.subTest(variant=variant), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 files = dict(original)
+                if variant == 'missing-gui':
+                    del files['LockLingo.exe']
                 if variant == 'private':
                     files['_internal/config.json'] = b'{}'
                 rows = [dict(path=name, bytes=len(body), sha256=hashlib.sha256(body).hexdigest())

@@ -105,7 +105,7 @@ def main():
         execute(args.setup, 'fresh-install')
         assert Path(registration()).resolve() == install
         assert shortcut.is_file()
-        # Confirm the actual installed shortcut targets the quiet launcher and C icon.
+        # Confirm the installed shortcut directly targets the windowed GUI and C icon.
         ps = ("[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); "
               "$link=(New-Object -ComObject WScript.Shell).CreateShortcut($args[0]); "
               "@{target=$link.TargetPath;arguments=$link.Arguments;working=$link.WorkingDirectory;"
@@ -117,13 +117,13 @@ def main():
                                 env=env, capture_output=True, timeout=15)
         command_file.unlink()
         link = json.loads(result.stdout.decode('utf-8-sig'))
-        assert link['target'].lower().endswith('wscript.exe'), link
-        assert str(install / '启动.vbs') in link['arguments'], link
-        assert link['icon'].startswith(str(install / 'DeadlockTranslate.exe')), link
+        assert Path(link['target']).resolve() == install / 'LockLingo.exe', link
+        assert not link['arguments'], link
+        assert link['icon'].startswith(str(install / 'LockLingo.exe')), link
         report['quiet_shortcut_and_icon'] = 'pass'
         # Start the installed EXE from an unrelated working directory, with no system OCR/Python PATH.
         with (scratch / 'panel.log').open('w', encoding='utf-8') as log:
-            panel = subprocess.Popen([str(install / 'DeadlockTranslate.exe'), '--panel'],
+            panel = subprocess.Popen([str(install / 'LockLingo.exe'), '--panel'],
                                      cwd=scratch, env=env, stdout=log, stderr=subprocess.STDOUT,
                                      creationflags=subprocess.CREATE_NO_WINDOW)
             state_path = install / '.temp/panel-instance/state.json'

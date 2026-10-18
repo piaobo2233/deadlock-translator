@@ -11,13 +11,23 @@ ROOT = Path(__file__).resolve().parents[1]
 @unittest.skipUnless(os.name == 'nt', 'Windows Script Host')
 class SourceLauncherTests(unittest.TestCase):
     def test_project_pythonw_is_chosen_before_path(self):
+        self.check_selection('.venv')
+
+    def test_verified_environment_is_chosen_before_legacy_environment(self):
+        self.check_selection('.venv-signed')
+
+    def check_selection(self, environment):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / '中文 空格'
             (root / 'scripts').mkdir(parents=True)
             (root / 'scripts/run.py').write_text('# fixture\n', encoding='utf-8')
-            runtime = root / '.venv/Scripts/pythonw.exe'
+            runtime = root / environment / 'Scripts/pythonw.exe'
             runtime.parent.mkdir(parents=True)
             runtime.touch()  # Selection fixture only; the executable is never run.
+            if environment == '.venv-signed':
+                legacy = root / '.venv/Scripts/pythonw.exe'
+                legacy.parent.mkdir(parents=True)
+                legacy.touch()
             source = (ROOT / '启动.vbs').read_text(encoding='utf-16')
             lines = source.splitlines()
             calls = [index for index, line in enumerate(lines) if line.startswith('shell.Run ')]

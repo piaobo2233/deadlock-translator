@@ -28,6 +28,7 @@ ISS = ROOT / "scripts" / "installer" / "locklingo.iss"
 ICON = ROOT / "app" / "assets" / "brand" / "locklingo.ico"
 LANGUAGE = ROOT / "scripts" / "installer" / "ChineseSimplified.isl"
 EXE_NAME = "DeadlockTranslate.exe"
+GUI_NAME = "LockLingo.exe"
 
 APP_NAME = "锁语 · LockLingo"
 PUBLISHER = "piaobo2233"
@@ -89,6 +90,8 @@ def prepare_source(archive, work):
     source = Path(work) / prefix
     if not (source / EXE_NAME).is_file():
         raise ValueError("ZIP 缺少 " + EXE_NAME)
+    if not (source / GUI_NAME).is_file():
+        raise ValueError("ZIP 缺少无控制台启动入口 " + GUI_NAME)
     if (source / "data").exists():
         raise ValueError("ZIP 含用户数据目录，拒绝打包")
     from build_portable import check_contents
@@ -155,7 +158,7 @@ def main():
             "RunningMessage": RUNNING_MESSAGE,
             "UninstallRunningMessage": UNINSTALL_RUNNING_MESSAGE,
             "KeepDataMessage": KEEP_DATA_MESSAGE,
-            "LauncherFile": "启动.vbs",
+            "LauncherFile": GUI_NAME,
         }
         command = [iscc, "/Q"]
         # ISCC parses /DName=Value; keep Chinese text inside one argument.

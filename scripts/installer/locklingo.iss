@@ -68,7 +68,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutputDir}
 OutputBaseFilename={#OutputBase}
 SetupIconFile={#IconFile}
-UninstallDisplayIcon={app}\DeadlockTranslate.exe
+UninstallDisplayIcon={app}\{#LauncherFile}
 UninstallDisplayName={#AppName}
 Compression=lzma2/max
 SolidCompression=yes
@@ -95,12 +95,12 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{#AppName}"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\{#LauncherFile}"""; WorkingDir: "{app}"; IconFilename: "{app}\DeadlockTranslate.exe"
+Name: "{group}\{#AppName}"; Filename: "{app}\{#LauncherFile}"; WorkingDir: "{app}"; IconFilename: "{app}\{#LauncherFile}"
 Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\{#LauncherFile}"""; WorkingDir: "{app}"; IconFilename: "{app}\DeadlockTranslate.exe"; Tasks: desktopicon
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#LauncherFile}"; WorkingDir: "{app}"; IconFilename: "{app}\{#LauncherFile}"; Tasks: desktopicon
 
 [Run]
-Filename: "{sys}\wscript.exe"; Parameters: """{app}\{#LauncherFile}"""; Description: "{cm:LaunchProgram,{#AppName}}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#LauncherFile}"; Description: "{cm:LaunchProgram,{#AppName}}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
 
 [Code]
 function PrepareToInstall(var NeedsRestart: Boolean): String;
