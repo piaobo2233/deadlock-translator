@@ -1,0 +1,29 @@
+{
+  "selectedConcept": "C",
+  "nativeDimensions": 1254,
+  "icoFrames": [
+    16,
+    20,
+    24,
+    32,
+    40,
+    48,
+    64,
+    128,
+    256
+  ],
+  "avatarVisiblePixelsOutsideCircle": 0,
+  "fonts": [
+    "Microsoft YaHei",
+    "Bahnschrift"
+  ],
+  "appIntegration": false,
+  "windowsIconDecodedSize": "32x32",
+  "browserPreviewRendered": true,
+  "visualReview": [
+    "light and dark wordmarks",
+    "circle avatar",
+    "16 to 128 pixel samples"
+  ],
+  "masterMatchesSelectedC": true
+}

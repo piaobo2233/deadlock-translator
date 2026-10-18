@@ -29,6 +29,7 @@ pystray>=0.19             # 系统托盘（可选）
 # mss                     # 更快的截屏（当前用 PIL.ImageGrab，够用）
 
 # ---- 只有自己打包 Windows 包时才需要 ----
-# scripts/build_portable.py 使用 PyInstaller 目录模式，显式指定版本与 OCR 安装器摘要。
+# scripts/build_portable.py 使用 PyInstaller 目录模式，显式指定版本并校验内置 OCR 清单。
+# scripts/build_installer.py 另需 Inno Setup 6.7+（构建期工具，不是 Python 依赖）。
 # 参数与许可收集说明见 docs/DEVELOPMENT.md、docs/THIRD-PARTY-NOTICES.md。
 pyinstaller>=6.0          # Windows 目录模式打包工具

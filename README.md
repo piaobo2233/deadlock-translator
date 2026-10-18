@@ -1,14 +1,16 @@
-# 异锁聊天翻译助手
+# 锁语 · LockLingo
 
-Deadlock Translator · 尝试帮你看懂英文聊天，也方便用中文准备回复。
+LockLingo · 尝试帮你看懂英文聊天，也方便用中文准备回复。
 
 [![公开源码基础检查](https://github.com/piaobo2233/deadlock-translator/actions/workflows/public-checks.yml/badge.svg?branch=main)](https://github.com/piaobo2233/deadlock-translator/actions/workflows/public-checks.yml)
 
-**Windows 10/11 · 64 位**　|　**1.0.0-test.3 · 测试版**　|　[MIT 原创源码](LICENSE)
+**Windows 10/11 · 64 位**　|　**1.0.0-test.4-rc.1 源码候选**　|　[MIT 原创源码](LICENSE)
 
-**[下载 Windows 测试包](https://github.com/piaobo2233/deadlock-translator/releases/tag/v1.0.0-test.3)** · [直接下载 ZIP](https://github.com/piaobo2233/deadlock-translator/releases/download/v1.0.0-test.3/DeadlockTranslator-1.0.0-test.3-windows-x64.zip) · [使用说明](docs/guides/首版测试与分享.md) · [反馈问题](https://github.com/piaobo2233/deadlock-translator/issues/new/choose)
+**[已发布版本](https://github.com/piaobo2233/deadlock-translator/releases)** · [安装与首次使用](docs/guides/安装与首次使用.md) · [反馈问题](https://github.com/piaobo2233/deadlock-translator/issues/new/choose)
 
-通过聊天区截图和本机 OCR 识别英文，结合本地词库、记忆、缓存与可选 API 翻译，在外部浮窗显示中文。发言页可以输入中文、检查英文预览，再复制到游戏。
+> main 已同步新版源码与 C 版品牌。test.4-rc.1 安装包目前仅作本地验收，干净 Windows、安装生命周期及 OCR 传递组件许可材料尚待完成；公开下载仍为 test.3，需要手动安装 OCR。
+
+通过聊天区截图和本机 OCR 识别英文，结合本地词库、记忆、缓存与可选 API 翻译，在外部浮窗显示中文。发言页可以输入中文、检查英文预览，再复制到游戏。安装包已内置 Python 运行环境和 OCR，**不需要另外安装 Python 或 Tesseract**；安装按当前用户进行，默认装到 `%LOCALAPPDATA%\Programs\LockLingo`。
 
 ## 界面预览
 
@@ -27,11 +29,13 @@ Deadlock Translator · 尝试帮你看懂英文聊天，也方便用中文准备
 
 ## 三步开始
 
-1. **下载并解压**：使用上方测试包，保留 exe 与 `_internal`。无需另装 Python；未安装 Tesseract OCR 时先运行包内 `首次安装OCR` 安装器，保留 English 组件。
-2. **启动并配置**：双击 `启动.vbs`，在“翻译接口”填写自己的接口、模型和密钥并保存，在“接收翻译”按需开启联网翻译。服务商可能收费。
-3. **进入游戏后使用**：在接收页启动，默认只在游戏前台识别。中文回复先在发言页预览、检查，再复制发送。关闭主面板默认退出。
+1. **安装**：运行 `LockLingo-<版本>-setup.exe`，按当前用户安装到默认目录并创建桌面快捷方式。**没有第二个 OCR 安装步骤**；也提供免安装测试 ZIP（解压后双击 `启动.vbs`）。
+2. **首次设置**：第一次启动会打开「首次设置」，选择翻译服务商、填写自己的 API Key（DeepSeek 预设带出地址与模型，自定义兼容接口可改）。可先跳过，只用离线词库；保存本身不联网。
+3. **进入游戏后使用**：需要在线翻译时在接收页打开「联网翻译」。服务商可能收费。中文回复先在发言页预览、检查，再复制发送。关闭主面板默认退出。
 
-升级、配置与常见问题见[安装与使用](docs/guides/首版测试与分享.md)；ZIP 与 SHA-256 见[版本页](https://github.com/piaobo2233/deadlock-translator/releases/tag/v1.0.0-test.3)。
+升级直接运行新安装包，`data` 中的个人数据默认保留；从旧解压包迁移见[安装与首次使用](docs/guides/安装与首次使用.md)。ZIP / 安装包与 SHA-256 见[版本页](https://github.com/piaobo2233/deadlock-translator/releases)。
+
+> 界面预览图仍为 `test.3` 实际截图（品牌接入前），新一轮品牌界面与首次设置页的截图在补充前不代替实际包内界面。
 
 ## 功能与当前状态
 

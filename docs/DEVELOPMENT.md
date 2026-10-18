@@ -2,86 +2,55 @@
 
 ## 源码运行
 
-使用 Windows 64 位、Python 3.10 以上及 Tesseract OCR，在仓库根目录执行：
+使用 Windows 64 位、Python 3.10 以上及已安装的 Tesseract OCR，在仓库根目录执行：
 
 ```powershell
 pip install -r requirements.txt
 python -m app
 ```
 
-也可双击根目录 `启动.vbs`。业务实现位于 `app/`，界面位于 `gui/`，冻结程序入口为 `scripts/run.py`。OCR 模型保留在 `app/recognition/models/`。
+也可双击 `启动.vbs`；它优先使用项目 `.venv/Scripts/pythonw.exe`，再查 PATH。业务在 `app/`，界面在 `gui/`，冻结入口为 `scripts/run.py`。用户数据保持 `<程序目录>/data`，改品牌不迁移或清空数据。源码版需要自备 Python/OCR；内置 OCR 的候选安装包尚未公开下载。
 
 ## 公开源码基础检查
 
-在有 Python 3.13 的公开克隆中运行，无需安装 OCR 或应用依赖：
+在 Python 3.13 中执行，无需应用依赖和 OCR：
 
 ```powershell
 python scripts/check_public.py --syntax
 python -m unittest discover -s tests -p test_portable_build.py -v
+python -m unittest discover -s tests -p test_installer_build.py -v
+python -m unittest discover -s tests -p test_public_export.py -v
 python scripts/check_public.py --links
 ```
 
-公开 CI 只检查语法、两项打包隐私边界与本地文档文件目标。界面、OCR、热键、真实 API 与整局效果需要另外验证；不要直接把依赖私人材料的全量开发检查作为公开 CI。范围与各版本记录见[测试状态](TESTING.md)。
+现有 CI 只验证语法、便携包隐私边界和本地文档文件目标；安装器输入与公开导出的额外用例已在本地运行。Windows/Tk、热键、真实 API、OCR 与整局效果需另验，详见[测试状态](TESTING.md)。公开树不包含私人截图、完整人工真值、data 或开发历史，因此不能复现所有本机测试。
 
-可按改动运行 `test_manual_waiting.py`、`test_composer.py` 等定向测试；Windows/Tk 与运行依赖应另行准备。完整测试结果中的失败和跳过项应保留，不因基础 CI 成功而改写。
+## 内置 OCR 与当前用户安装器
 
-## Windows 测试包构建
-
-在 64 位 Windows 上安装运行依赖与 PyInstaller，下载 `scripts/build_portable.py` 中指定的 Tesseract OCR 安装器，并核对固定 SHA-256：
+在 64 位 Windows 准备运行依赖、PyInstaller、pefile、7-Zip 与 Inno Setup 6.7+。工具只用于构建，不把开发 Python 环境或用户配置直接复制进包。
 
 ```powershell
-pip install pyinstaller
-python scripts/build_portable.py --version 1.0.0-test.3 --ocr-installer "C:\Downloads\tesseract-ocr-w64-setup-5.5.3.20260724.exe" --installer-sha256 bee9e3434bd94fd65387d9be28cd467a41f61b1275383b55b0f59a1331270ae4
+# 从固定官方安装器解出运行时；来源和摘要见脚本及第三方清单
+python scripts/ocr_runtime.py prepare --installer "C:\Downloads\tesseract-ocr-w64-setup-5.5.3.20260724.exe" --sevenzip "C:\Program Files\7-Zip\7z.exe" --output .temp/ocr-runtime
+python scripts/ocr_runtime.py verify
+python scripts/build_portable.py --version 1.0.0-test.4-rc.2
+python scripts/build_installer.py --archive dist/LockLingo-1.0.0-test.4-rc.2-windows-x64.zip --version 1.0.0-test.4-rc.2
 ```
 
-将示例路径替换为实际下载位置。工具从允许的源码与资源构建，排除用户数据；结果写入 `dist/`，已有同名 ZIP 时拒绝覆盖。本版源码 VERSION 为 1.0.0-test.3，构建时显式传入 `--version 1.0.0-test.3`。实际发布 ZIP 的检查入口为 `verify/portable_smoke.py`，参数见 `--help`。
+`scripts/build.bat <版本>` 依次运行校验、ZIP 与安装器构建，失败立即停止并保留退出码。工具拒绝覆盖同名产物；OCR prepare 拒绝覆盖已有目录。VERSION 当前为源码候选号，正式构建请显式指定未占用版本。
 
-## 反馈与数据
+冻结目录包含 Python、品牌、模型和按 35 文件清单校验的 OCR；`BUILD-SOURCE.json` 记录实际输入摘要。安装器按当前用户安装，默认 `%LOCALAPPDATA%/Programs/LockLingo`，保留 `data`，运行中的独立面板/助手会阻止覆盖。具体操作见[安装与首次使用](guides/安装与首次使用.md)。
 
-请通过 Issues 报告可复现的问题。设置页可导出反馈 ZIP，提交前自行检查；不要提交 API Key、完整 `data/`、私人聊天或未经脱敏的截图。必要的模型与第三方许可随源码保留，见 [第三方声明](THIRD-PARTY-NOTICES.md)。
+这仍是候选流程：普通用户安装/升级/卸载、真实快捷方式与干净 Windows 验收尚未完成；OCR 传递 DLL 的许可材料仍待核对，当前不公开发布新二进制。来源、版本及许可边界见[第三方清单](THIRD-PARTY-NOTICES.md)。
 
+## 定向验证与公开导出
 
-## 识别、显示与计量
+`verify/portable_smoke.py` 检查冻结目录清单/凭据、C 图标、无系统 OCR 搜索路径时的 CLI/常驻合成识别、首次引导和退出；可用 `--setup` 验证运行中拒绝安装。`verify/installer_smoke.py` 准备安装生命周期的夹具数据对照，遇到现有产品安装或快捷方式会拒绝覆盖；本轮只实际执行到环境权限导致的安装失败，后续成功分支仍待验。
 
-- OCR 需三个不同采样帧确认，并执行正文几何、视觉连续性和独立源图复核；缓存不增加确认票。源图汉字检查不依赖用户词表。
-- 首选正文与独立源图读数一致时停止更多变体；短缩写保留英文后备策略。存在 `libtesseract-5.dll` 时使用可终止的常驻辅助进程，否则使用有超时保护的命令行路径，诊断中记录后备状态。
-- `ocr_interval` 是最小处理周期，整轮 OCR 耗时不再叠加额外等待；普通启动读取该配置，确认票数至少为 3。
-- 新字幕以首次候选帧为起点，API 等待及首次绘制均检查 4 秒截止时间；按时显示的字幕随原气泡寿命停留。候选帧可能晚于原文字出现，因此该截止时间不代表从原消息出现起的端到端上限。
-- 手动翻译接口等待为 4.5 秒，不自动重试；预览不受屏幕气泡寿命限制。网络和服务商响应无法由本机保证，该配置不表示所有翻译能在 5 秒内成功。
-- 手动翻译与屏幕翻译有独立请求身份，手动结果不写正式词库或屏幕待审核队列，费用记录沿用请求台账。后台旧结果或离开页面后的结果不进入新预览。
-- 待审核要求消息有 Tk 绘制回执且通过质量检查。该回执不能证明游戏合成器最终呈现了像素；待审核合格项跨局与重启持续保留，人工处理后进入已处理；无需点击“开始新对局”，也不会推测真实对局边界。
+`scripts/prepare_public_source.py --public-base <干净公开克隆> --destination <新目录> --report <私有证据路径>` 以公开文件白名单合入当前源码；拒绝覆盖目标、不复制 Git 历史，检查真实密钥与本机路径。报告必须位于导出目录外。不要将私人开发仓库整体推送。
 
-`data/runtime.json` 的 `latency_drawn_ms` 保存本地/API 最近 512 个绘制样本。这些是成功显示样本，不能单独证明覆盖率。候选图、生命周期与分段耗时保留在本机私有 `backups/development/recognition-recent/`。
+## 数据与反馈
 
-`tools/benchmark_receive.py --output 私有目录/ocr.json` 比较英文 CLI、五语言 CLI 与常驻路径，使用裁图和合成语言样本，不调用翻译 API；不替代真实对局测试。
+首次引导支持 DeepSeek 预设和自定义兼容接口，保存不联网，可跳过；只有主动测试连接或开启联网翻译才发送请求。测试连接可能计费。修改接口后区分保存与运行应用确认。
 
-整局验收使用 `verify/latency_acceptance.py labels.json --output report.json`。输入示例：
-
-```json
-{"messages":[{"id":"m1","eligible":true,"appeared_at":1.0,"drawn_at":2.0,"route":"api"}]}
-```
-
-时间统一使用原录像秒数，未显示记 `drawn_at:null`；`eligible` 依据原画面。原文无中文却被 OCR 误判跳过的消息仍计为符合条件且漏译。内部目标为 90% 在 2 秒内显示，目前未完成验收；计算时未译消息保留在分母中，同时报告超过 4 秒的显示。
-
-## 请求结果不明时的处理
-
-先向接口服务商核对请求状态，勿删除请求文件解除保护。以下命令仅处理记录，不自动发起翻译：
-
-```powershell
-python -m app --pending-requests
-python -m app --release 请求编号
-python -m app --abandon 请求编号
-```
-
-第一条查看记录；确认未计费后，第二条允许再次尝试；第三条放弃该请求。超时后的防重发记录不会因重启自动清除。
-
-待审核诊断可使用 `python -m app --review-pending`。未显示、质量检查失败和缺少显示证据的旧记录保留供检查，不会推定为已显示。
-
-
-## 版本与验证记录
-
-- [测试状态](TESTING.md)：当前公开基础检查与原生/游戏未测边界。
-- [test.3](releases/v1.0.0-test.3.md)、[test.2](releases/v1.0.0-test.2.md)、[test.1](releases/v1.0.0-test.1.md)：对应版本的构建、验证和已知问题，历史结果不能替代新版再次验收。
-- [发布规范](releases/README.md)：构建、依赖/版权清单、版本和下载核对要求。
-
-技术引用见[技术致谢](ACKNOWLEDGEMENTS.md)与[第三方清单](THIRD-PARTY-NOTICES.md)。
+请勿提交 API Key、完整 data 或私人聊天/截图。通过 Issues 提交版本、显示环境和复现步骤；设置页导出的反馈 ZIP 需先检查。真实游戏发送、整局覆盖率/延迟、多屏与完整 DPI 适配仍待验收。

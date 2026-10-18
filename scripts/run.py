@@ -6,6 +6,9 @@ if not getattr(sys, 'frozen', False):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 def run():
+    if getattr(sys, 'frozen', False):
+        from app.platform.single_instance import retain_install_guard
+        retain_install_guard()
     # The resident helper must keep stdout as its JSON protocol, without
     # starting a second translator, creating user data or installing a GUI.
     if sys.argv[1:2] == ['--ocr-worker']:
