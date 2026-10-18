@@ -121,7 +121,7 @@ def first_run_welcome(config: dict, root_dir: str = "") -> str:
     lines = [
         "",
         "=" * 68,
-        "  欢迎使用《异锁》聊天翻译助手",
+        "  欢迎使用锁语 · LockLingo（《异锁》聊天翻译）",
         "=" * 68,
         "",
         "  它会盯着屏幕上的聊天气泡，把外国队友说的话翻成中文，",

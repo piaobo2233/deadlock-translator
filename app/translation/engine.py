@@ -665,7 +665,8 @@ class TranslationEngine:
                     print(f'[warn] 预算保护已暂停 API（{why}）。词库 / 翻译记忆 / 本地缓存仍然正常工作。')
                     # The main panel receives the reason below. A modal
                     # desktop warning must not hold the bounded API worker.
-                    self.notify(f'预算保护已暂停 API。\n\n{why}\n\n本地词库 / 翻译记忆 / 本地缓存仍正常工作。\n\n请在消费页检查记录完整性，并确认设置中的单价与预算。\n上限为 0 表示不限制，但不能保证费用为零。', '《异锁》翻译助手 —— 预算保护', allow_popup=False)
+                    from app.brand import DIALOG_TITLE
+                    self.notify(f'预算保护已暂停 API。\n\n{why}\n\n本地词库 / 翻译记忆 / 本地缓存仍正常工作。\n\n请在消费页检查记录完整性，并确认设置中的单价与预算。\n上限为 0 表示不限制，但不能保证费用为零。', f'{DIALOG_TITLE} —— 预算保护', allow_popup=False)
                 self.budget_blocks += 1
                 result, source = (text, 'budget')
                 self._note('pending')

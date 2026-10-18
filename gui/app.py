@@ -91,7 +91,8 @@ class App:
         self._page_failed = False
         self._history = []
         self._page_status = {}
-        self.th = Theme("Deadlock Translator",
+        from app import brand
+        self.th = Theme(brand.WINDOW_TITLE,
                         # At Windows' current DPI, 650px clips existing actions/charts.
                         # This is only the initial size; navigation preserves resizing.
                         size=size or "1210x850",
@@ -170,8 +171,21 @@ class App:
         self.bar.pack(fill='x')
         logo=th.tk.Frame(self.bar,bg=c['card_hi'],width=32,height=32)
         logo.pack(side='left',padx=(22,12),pady=17);logo.pack_propagate(False)
-        th.label(logo,'D',bg=c['card_hi'],fg=c['accent'],font=('Cambria',20)).pack(expand=True)
-        th.label(self.bar,'异锁 · 翻译助手',font=(th.font[0],11,'bold')).pack(side='left')
+        self.brand_mark=None
+        try:
+            from app.brand import mark_path
+            path=mark_path()
+            if path:
+                self.brand_mark=th.tk.PhotoImage(master=self.root,file=path)
+                th.tk.Label(logo,image=self.brand_mark,bg=c['card_hi'],bd=0).pack(expand=True)
+        except Exception:
+            self.brand_mark=None
+        if self.brand_mark is None:
+            th.label(logo,'D',bg=c['card_hi'],fg=c['accent'],font=('Cambria',20)).pack(expand=True)
+        from app import brand
+        th.label(self.bar,brand.PRODUCT,font=(th.font[0],11,'bold')).pack(side='left')
+        th.label(self.bar,brand.SUBTITLE,bg=c['panel'],fg=c['muted'],
+                 font=th.font_small).pack(side='left',padx=(10,0))
         self._install_close_handler()
         self.global_status=th.label(self.bar,'',font=th.font_small,fg=c['ok'])
         self.global_status.pack(side='right')
@@ -505,8 +519,11 @@ def run(root_dir="", initial="home", *, parent_pid=0):
         # [!] 这里也**不回落** —— 传进来的页名不对就明说，别悄悄开首页。
         print(f"[error] 没有名为 {initial!r} 的页面，已注册：{known}")
         return 1
-    from app.runtime.panel_instance import PanelCoordinator
     selected = root_dir or dt.APP_DIR
+    # 首次启动引导只改默认首页；带 --page 的显式请求（托盘/命令行）照旧直达。
+    from gui.onboarding import gate_initial_page
+    initial = gate_initial_page(selected, initial)
+    from app.runtime.panel_instance import PanelCoordinator
     for _attempt in range(3):
         coordinator = PanelCoordinator(selected, parent_pid=parent_pid)
         if not coordinator.lease.first:

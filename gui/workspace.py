@@ -238,26 +238,14 @@ def build_api_settings(parent, app):
             model.set(DEEPSEEK['model'])
     provider_box.bind('<<ComboboxSelected>>',select_provider)
     def save():
-        from app.config.credentials import is_key_placeholder
+        from gui.api_save import persist_api_draft
         value = key.get().strip()
-        if value and is_key_placeholder(value):
-            app.set_status('保存失败：不能保存掩码；草稿保留', C['err']); return
-        repo = p._config_repository(app.root_dir)
-        try:
-            from app.config.validation import _value
-            patch = dict(model=model.get().strip(), endpoint=endpoint.get().strip(),
-                         provider=next(k for k,v in PROVIDERS.items() if v == provider.get()))
-            for name,setting in patch.items():
-                _value(name,setting,p.settings_spec.BY_KEY[name])
-            if value and not repo.save_key(value):
-                raise OSError('密钥写入失败')
-            if not repo.save(patch):
-                raise OSError('模型写入失败')
-            disk = store.read_json(repo.path, None)
-            if not isinstance(disk, dict) or any(disk.get(k)!=v for k,v in patch.items()) or (value and disk.get('api_key') != value):
-                raise OSError('写后核对不一致')
-        except (OSError, ValueError, TypeError) as exc:
-            app.set_status(f'保存失败：{exc}；草稿保留，可重试（部分字段可能已保存）', C['err']); return
+        provider_key = next(k for k,v in PROVIDERS.items() if v == provider.get())
+        ok, _why = persist_api_draft(app, provider_key=provider_key, model=model.get(),
+                                     endpoint=endpoint.get(), key=value)
+        if not ok:
+            return
+        patch = dict(model=model.get().strip(), endpoint=endpoint.get().strip(), provider=provider_key)
         key.set('')
         draft['dirty']=False
         dirty.configure(text='已保存',fg=C['ok'])
@@ -329,6 +317,10 @@ def build_preferences(parent, app):
         else:action.set(labels[p._load_config(app.root_dir).get('close_action','exit')])
     chooser.bind('<<ComboboxSelected>>',choose)
     app.close_controls=dict(variable=action,box=chooser,save=choose)
+    area=section(parent,th,'首次设置')
+    text(area,th,'重新打开安装后的接口填写引导；不会清空已有配置，也不会自动启用联网翻译。',
+         small=True,muted=True,wraplength=820,justify='left').pack(anchor='w')
+    th.button(area,'重新运行首次设置',lambda:app.open_page('onboarding')).pack(anchor='w',pady=8)
     from gui.feedback import build
     build(parent,app)
 

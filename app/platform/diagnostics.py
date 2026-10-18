@@ -26,6 +26,14 @@ from app.paths import application_root
 __all__ = ["CheckResult", "run_checks", "report_text", "all_ok", "blockers",
            "VERSION"]
 
+
+def _product() -> str:
+    try:
+        from app.brand import PRODUCT
+        return PRODUCT
+    except Exception:
+        return "锁语 · LockLingo"
+
 def _read_version() -> str:
     """版本号的**唯一来源**是仓库根目录的 VERSION 文件。
 
@@ -121,8 +129,9 @@ def run_checks(config: dict = None, root_dir: str = "") -> list:
     out.append(CheckResult(
         "Tesseract OCR", OK if path else FAIL, out_detail,
         "" if path else
-        "装一个 Tesseract（https://github.com/UB-Mannheim/tesseract/wiki，"
-        "记得勾 English 语言包），或者在设置里填它的完整路径"))
+        "重新安装本程序（安装包已内置 OCR 运行时），或安装 Tesseract "
+        "（https://github.com/UB-Mannheim/tesseract/wiki，记得勾 English 语言包），"
+        "也可以在设置里填它的完整路径"))
 
     # ---- 3. 游戏安装 ----
     game_dir = ""
@@ -248,7 +257,7 @@ def report_text(config: dict = None, root_dir: str = "", results: list = None) -
     """
     results = results if results is not None else run_checks(config, root_dir)
     lines = [
-        "《异锁》翻译助手 · 诊断报告",
+        f"{_product()} · 诊断报告",
         f"版本 {VERSION}｜生成于 {time.strftime('%Y-%m-%d %H:%M:%S')}",
         f"目录 {root_dir or _root_of(__file__)}",
         "-" * 62,

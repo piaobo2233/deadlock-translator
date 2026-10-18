@@ -418,3 +418,7 @@ register("ingame", "游戏内设置", build_ingame, width=460)
 register("cost", "消耗", build_cost, width=460)
 register("dictionary", "词库", build_dictionary, width=580)
 register("settings", "设置", build_settings, width=480)
+# 首次引导不进左侧导航（导航项在 gui/app.py 里硬编码）；注册它只是为了
+# 让 App/open_page 能打开，并让托盘转发页名时不会误判成未知页面。
+from gui.onboarding import build_onboarding
+register("onboarding", "首次设置", build_onboarding, width=520)

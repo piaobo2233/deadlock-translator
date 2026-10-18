@@ -35,6 +35,15 @@ STATE_TEXT = {
 }
 
 
+def _product() -> str:
+    """品牌名；导入失败也不让托盘菜单炸掉（托盘是可选入口）。"""
+    try:
+        from app.brand import PRODUCT
+        return PRODUCT
+    except Exception:
+        return "锁语 · LockLingo"
+
+
 def available() -> bool:
     """装了 pystray 吗。没装就安静地跳过托盘，不报错。"""
     try:
@@ -45,21 +54,29 @@ def available() -> bool:
 
 
 def make_icon_image(state: str = "ok", size: int = 64):
-    """画一个图标：深色圆底 + 中间一个状态色的圆点。
+    """品牌图标 + 右下角状态点。
 
-    不加载任何图片文件 —— 打包时少一个资源就少一类「找不到文件」的故障。
+    [!] 图标画不出来时退回纯色圆点：托盘只是可选入口，缺资源不能让它启动失败。
     """
     from PIL import Image, ImageDraw
 
     color = STATE_COLORS.get(state, STATE_COLORS["ok"])
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    try:
+        from app.brand import load_mark_image
+        img = load_mark_image(size)
+    except Exception:
+        img = None
+    if img is None:
+        img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        pad = max(2, size // 16)
+        draw.ellipse((pad, pad, size - pad, size - pad), fill=(20, 23, 28, 255),
+                     outline=(60, 66, 76, 255), width=max(1, size // 32))
     draw = ImageDraw.Draw(img)
-    pad = max(2, size // 16)
-    draw.ellipse((pad, pad, size - pad, size - pad), fill=(20, 23, 28, 255),
-                 outline=(60, 66, 76, 255), width=max(1, size // 32))
-    inner = size // 3
-    off = (size - inner) // 2
-    draw.ellipse((off, off, off + inner, off + inner), fill=color + (255,))
+    dot = max(6, size // 3)
+    margin = max(1, size // 24)
+    draw.ellipse((size - dot - margin, size - dot - margin, size - margin, size - margin),
+                 fill=color + (255,), outline=(20, 23, 28, 255), width=max(1, size // 32))
     return img
 
 
@@ -107,7 +124,7 @@ class Tray:
             return run
 
         items = [
-            Item(f"《异锁》翻译助手 —— {STATE_TEXT.get(state, state)}",
+            Item(f"{_product()} —— {STATE_TEXT.get(state, state)}",
                  None, enabled=False),
             Menu.SEPARATOR,
             # [!] 8 项封顶（§32：不要做十几个托盘菜单）。
@@ -135,7 +152,7 @@ class Tray:
         try:
             state = "paused" if self.is_paused() else self.state_of()
             self.icon.icon = make_icon_image(state)
-            self.icon.title = f"《异锁》翻译助手 —— {STATE_TEXT.get(state, state)}"
+            self.icon.title = f"{_product()} —— {STATE_TEXT.get(state, state)}"
             self.icon.menu = self._build_menu()
         except Exception:
             pass
@@ -154,7 +171,7 @@ class Tray:
         try:
             self.icon = pystray.Icon("deadlock-translator",
                                      make_icon_image("ok"),
-                                     "《异锁》翻译助手",
+                                     _product(),
                                      menu=self._build_menu())
             # run_detached 在某些后端上不灵；用后台线程跑 run() 更稳，
             # 而且它是 daemon —— 最坏情况也不会拖住退出。

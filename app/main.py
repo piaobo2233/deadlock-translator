@@ -51,6 +51,7 @@ import traceback
 import urllib.error
 import urllib.request
 
+from app import brand
 from app.config.defaults import CONFIG_SCHEMA, DEFAULT_CONFIG, default_config
 from app.config.repository import ConfigRepository
 from app.paths import application_root
@@ -2026,7 +2027,7 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
         _notify_user(
             "屏幕 OCR 依赖缺失：%s\n\n"
             "需要 opencv-python 和 pytesseract —— 见项目里的 requirements.txt" % exc,
-            "《异锁》翻译助手 —— OCR 无法启动",
+            f"{brand.DIALOG_TITLE} —— OCR 无法启动",
             allow_popup=allow_popup)
         return
 
@@ -2041,11 +2042,12 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
         print("        下载：https://github.com/UB-Mannheim/tesseract/wiki")
         _notify_user(
             "检测不到 Tesseract OCR。\n\n"
-            "请安装 Tesseract OCR，并确保 English 语言包（eng.traineddata）可用。\n"
+            "本程序自带 OCR 运行时（程序目录的 ocr 文件夹）；如果它被误删，\n"
+            "请重新安装，或安装 Tesseract OCR 并确保 English 语言包可用。\n"
             "下载：https://github.com/UB-Mannheim/tesseract/wiki\n\n"
             "装好之后重新启动本程序即可。在此之前程序会继续在后台运行，\n"
             "但**不会翻译任何聊天**。",
-            "《异锁》翻译助手 —— OCR 无法启动",
+            f"{brand.DIALOG_TITLE} —— OCR 无法启动",
             allow_popup=allow_popup)
         return
     print(f"[info] tesseract: {tess}")
@@ -2815,7 +2817,7 @@ class Overlay:
 
         self.root = tk.Tk()
         self.root.withdraw()
-        self.root.title("Deadlock 聊天翻译")
+        self.root.title(brand.WINDOW_TITLE)
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
         self.root.configure(bg=MAGIC_COLOR)
@@ -3742,7 +3744,7 @@ def static_ui_cli(action="list", cell=""):
     return 0
 
 
-def _notify_user(message: str, title: str = "《异锁》翻译助手",
+def _notify_user(message: str, title: str = brand.DIALOG_TITLE,
                  allow_popup: bool = True) -> None:
     """需要用户**看得见**的一次性提示（OCR 起不来 / 到费用上限……）。
 
@@ -3914,7 +3916,7 @@ def pending_requests_cli(action="list", request_id="", note="", journal=None):
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Deadlock 聊天翻译（队友发言 → 中文气泡）")
+    parser = argparse.ArgumentParser(description=f"{brand.PRODUCT}（{brand.SUBTITLE}：队友发言 → 中文气泡）")
     parser.add_argument("--ocr-debug", action="store_true",
                         help="把每次识别的全部原始变体都记进 run.log（采集真实数据用，日志会长）")
     parser.add_argument("--simulate", help="用假聊天文件当输入源")
@@ -4040,7 +4042,7 @@ def main() -> int:
     if args.backup:
         # 立即备份（§二十二）。写到数据目录下的 backups\。
         import app.platform.diagnostics as diagnostics
-        note = (f"《异锁》翻译助手 备份\n"
+        note = (f"{brand.PRODUCT} 备份\n"
                 f"时间：{time.strftime('%Y-%m-%d %H:%M:%S')}\n"
                 f"版本：{diagnostics.VERSION}\n")
         path = store.backup(APP_DIR, note=note)
@@ -4115,7 +4117,7 @@ def main() -> int:
             "无法确认翻译后台是否唯一：单实例保护异常，已阻止本次启动翻译链。\n"
             "本次未启动识别或 API 请求；设置和词库管理仍可独立打开。\n"
             "请先检查已有后台及系统权限，再重新启动；不要连续重复启动。",
-            "《异锁》翻译助手 —— 启动保护异常", allow_popup=not args.headless)
+            f"{brand.DIALOG_TITLE} —— 启动保护异常", allow_popup=not args.headless)
         return 3
     if not _first:
         if args.headless:
@@ -4533,7 +4535,7 @@ def main() -> int:
                     # 右下角弹出的气泡就是那个反馈。
                     try:
                         tray.icon.notify("已在后台运行。右下角图标右键可以暂停 / 打开设置 / 退出。",
-                                         "《异锁》翻译助手")
+                                         brand.PRODUCT)
                     except Exception:
                         pass
         except Exception as exc:

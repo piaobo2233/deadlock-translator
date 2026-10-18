@@ -4,7 +4,22 @@ import ctypes
 from ctypes import wintypes
 
 MUTEX_NAME = "DeadlockTranslate_SingleInstance"
+INSTALL_MUTEX_NAME = "DeadlockTranslate_InstallGuard"
+_install_handle = None
 ERROR_ALREADY_EXISTS = 183
+
+
+def retain_install_guard():
+    """冻结程序的每个进程均阻止安装覆盖，独立面板/OCR 辅助进程也适用。"""
+    global _install_handle
+    if _install_handle is None:
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.CreateMutexW.restype = wintypes.HANDLE
+        kernel.CreateMutexW.argtypes = [wintypes.LPCVOID, wintypes.BOOL, wintypes.LPCWSTR]
+        _install_handle = kernel.CreateMutexW(None, False, INSTALL_MUTEX_NAME)
+        if not _install_handle:
+            raise ctypes.WinError(ctypes.get_last_error())
+    # Windows 在进程结束时释放句柄；多个进程均可持有，不影响原有单实例协议。
 
 
 def _create_mutex():

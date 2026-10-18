@@ -177,6 +177,13 @@ class Theme:
         if minsize:
             self.root.minsize(*minsize)
         self.root.configure(bg=TOKENS["bg"])
+        # 品牌图标走公共入口：所有主窗口/子工具窗口都从 Theme 创建，只在这里设一次。
+        try:
+            from app.brand import apply_window_icon
+            apply_window_icon(self.root)
+        except Exception:
+            # 图标缺失（例如只拷了部分资源）不能阻止程序启动。
+            pass
 
         self.ttk = self._boot or ttk
         self.tk = tk

@@ -4,6 +4,7 @@ from ctypes import wintypes
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -25,11 +26,17 @@ class PanelInstanceTests(unittest.TestCase):
         for path in ROOT.glob('*.py'):shutil.copy2(path,self.program/path.name)
         for name in ('app','gui','scripts'):
             shutil.copytree(ROOT/name,self.program/name,ignore=shutil.ignore_patterns('__pycache__'))
+        # 本组验证已完成首次设置之后的面板路由；新装引导由独立用例覆盖。
+        from app.config.onboarding import mark_complete
+        self.assertTrue(mark_complete(self.program, outcome='skipped'))
         self.children=[]
         self.addCleanup(self.temp.cleanup)
         self.addCleanup(self.stop_children)
 
     def stop_children(self):
+        info = self.state().get('process')
+        if alive(info):
+            os.kill(info['pid'], signal.SIGTERM)  # Only the panel in this test's private root.
         for process in self.children:
             if process.poll() is None:
                 process.terminate()  # Only this test's direct, private CLI children.
@@ -98,7 +105,8 @@ class PanelInstanceTests(unittest.TestCase):
         self.wait(lambda:self.state().get('status')=='ready')
         self.wait(lambda:sum(p.poll() is None for p in processes)==1)
         live=[p for p in processes if p.poll() is None]
-        self.assertEqual(live[0].pid,self.state()['process']['pid'])
+        # Windows venv launchers can forward to a child Python process.
+        self.assertTrue(alive(self.state()['process']))
         for p in processes:
             if p is not live[0]:
                 out,err=p.communicate(timeout=2);self.assertEqual(p.returncode,0,out+err)
@@ -109,7 +117,7 @@ class PanelInstanceTests(unittest.TestCase):
         self.assertEqual(state['translator_token'],'')
         record=begin_translator(self.program)
         self.wait(lambda:self.state().get('translator_token')==record['token'])
-        self.close_window(first.pid)
+        self.close_window(self.state()['process']['pid'])
         out,err=first.communicate(timeout=5)
         self.assertEqual(first.returncode,0,out+err)
         self.assertTrue(alive(record['process']))
@@ -121,10 +129,11 @@ class PanelInstanceTests(unittest.TestCase):
         self.assertEqual(second.returncode,0,out+err)
 
     def test_abrupt_owner_exit_does_not_leave_permanent_panel_lock(self):
-        first=self.launch('--panel');old=self.ready()['token']
-        first.terminate();first.communicate(timeout=5)
+        first=self.launch('--panel');old_state=self.ready();old=old_state['token']
+        os.kill(old_state['process']['pid'], signal.SIGTERM)
+        first.communicate(timeout=5)
         next_panel=self.launch('--dashboard')
-        self.wait(lambda:self.state().get('token')!=old and self.state().get('process',{}).get('pid')==next_panel.pid)
+        self.wait(lambda:self.state().get('token')!=old and alive(self.state().get('process')))
         state=self.ready('cost')
         self.assertNotEqual(state['token'],old)
         self.assertIsNone(next_panel.poll())
@@ -156,7 +165,7 @@ class PanelInstanceTests(unittest.TestCase):
         self.addCleanup(lambda:end_translator(self.program,record))
         panel=self.launch('--panel');self.ready()
         self.wait(lambda:self.state().get('translator_token')==record['token'])
-        self.close_window(panel.pid)
+        self.close_window(self.state()['process']['pid'])
         self.assertEqual(self.wait(lambda:consume_action(self.program,record)),'exit')
         self.assertIsNone(panel.poll())  # Parent has not yet confirmed actual shutdown.
         self.assertEqual(consume_action(self.program,record),'')
