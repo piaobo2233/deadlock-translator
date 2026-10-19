@@ -164,8 +164,8 @@ def main():
         except UnicodeDecodeError:
             checked_text = checked.stdout.decode('gb18030')
         assert 'opencv-python / numpy / Pillow / pytesseract 都在' in checked_text, checked_text
-        assert 'Tesseract OCR' in checked_text and '没找到' not in checked_text, checked_text
-        assert 'tesseract.exe' in checked_text.lower(), checked_text
+        ocr_line = next((line for line in checked_text.splitlines() if 'Tesseract OCR' in line), '')
+        assert checked.returncode == 0 and 'tesseract.exe' in ocr_line.lower() and '没找到' not in ocr_line, checked_text
         report['bundled_dependencies'] = 'pass'
         models = bundle / '_internal/app/recognition/models'
         from PIL import Image, ImageDraw, ImageFont
@@ -215,6 +215,10 @@ def main():
             assert any('锁语' in title and 'LockLingo' in title for _hwnd, title in titles), titles
             report['first_run_guide_page'] = 'pass'
             report['branded_window_title'] = 'pass'
+            from app.runtime.panel_instance import submit
+            assert submit(bundle, page='settings')
+            wait_for(lambda: state().get('page') == 'settings')
+            report['frozen_update_settings'] = 'pass'
             if args.setup:
                 install_temp = scratch / 'installer-temp'
                 install_temp.mkdir()

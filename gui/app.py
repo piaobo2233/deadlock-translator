@@ -105,6 +105,8 @@ class App:
         self.root.bind("<Destroy>", self._on_destroy, add="+")
         self.root.configure(bg=COLORS["bg"])
         self._build_chrome()
+        from gui.updates import Updater
+        self.updater = Updater(self)
 
     def _on_destroy(self, event):
         if event.widget is self.root:

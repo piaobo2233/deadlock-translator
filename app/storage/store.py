@@ -88,6 +88,7 @@ BACKUP_FILES = (
     'learning_cache.json',
     "chatlog.jsonl",        # 聊天留档（复盘的原料）
     "notchat.jsonl",        # 误判负样本（调过滤器的回归集）
+    'updates.json',         # 更新偏好，随个人备份保留
 )
 BACKUP_DIRS = ('requests', '局记录')
 

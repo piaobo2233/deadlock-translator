@@ -4129,6 +4129,11 @@ def main() -> int:
     game_controls = None
     pipeline.start()
 
+    if not (args.offline or args.simulate or args.replay or _DIAGNOSTIC_ROOT
+            or os.environ.get('DEADLOCK_TEST_NO_NETWORK') == '1'):
+        from app.platform.updates import start_background
+        start_background(APP_DIR, capture_stop)
+
     def stop_pipeline():
         if game_controls is not None:
             game_controls.close()

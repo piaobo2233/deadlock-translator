@@ -345,6 +345,7 @@ def build_recognition_settings(parent, app):
 
 def build_settings(parent, app):
     heading(parent,app.th,'设置')
+    app.updater.build(parent)
     build_preferences(parent,app)
 
 
