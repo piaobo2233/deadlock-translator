@@ -60,6 +60,7 @@ AppUpdatesURL={#PublisherURL}/releases
 VersionInfoVersion={#NumericVersion}
 VersionInfoProductName={#AppName}
 DefaultDirName={localappdata}\Programs\LockLingo
+DisableDirPage=no
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
