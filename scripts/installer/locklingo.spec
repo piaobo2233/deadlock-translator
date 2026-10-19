@@ -6,13 +6,15 @@ from PyInstaller.utils.hooks import collect_data_files
 
 source = Path(os.environ['LOCKLINGO_BUILD_SOURCE'])
 icon = str(source / 'app/assets/brand/locklingo.ico')
+game_data = [(str(source / relative), str(Path(relative).parent))
+             for relative in ('app/translation/game_terms.json', 'app/recognition/quick_chat.json')
+             if (source / relative).is_file()]
 analysis = Analysis(
     [str(source / 'scripts/run.py')], pathex=[str(source)],
     binaries=[],
     datas=[(str(source / 'VERSION'), '.'),
            (str(source / 'app/assets'), 'app/assets'),
-           (str(source / 'app/translation/game_terms.json'), 'app/translation'),
-           (str(source / 'app/recognition/quick_chat.json'), 'app/recognition'),
+           *game_data,
            (str(source / 'app/recognition/models'), 'app/recognition/models'),
            *collect_data_files('ttkbootstrap')],
     hiddenimports=['pystray._win32'], hookspath=[str(source.parent / 'hooks')],

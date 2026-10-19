@@ -24,6 +24,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
+import release_gate
 ISS = ROOT / "scripts" / "installer" / "locklingo.iss"
 ICON = ROOT / "app" / "assets" / "brand" / "locklingo.ico"
 LANGUAGE = ROOT / "scripts" / "installer" / "ChineseSimplified.isl"
@@ -105,9 +106,11 @@ def prepare_source(archive, work):
         path = source / row["path"]
         if path.stat().st_size != row["bytes"] or digest(path) != row["sha256"]:
             raise ValueError("ZIP 文件摘要不一致：" + row["path"])
-    for name in ("ocr/tesseract.exe", "ocr/libtesseract-5.dll", "_internal/app/assets/brand/locklingo.ico"):
+    for name in ("ocr/tesseract.exe", "_internal/app/assets/brand/locklingo.ico"):
         if not (source / name).is_file():
             raise ValueError("ZIP 缺少内置 OCR 或品牌资源：" + name)
+    if not any((source / 'ocr' / name).is_file() for name in ('libtesseract-5.5.dll', 'libtesseract-5.dll')):
+        raise ValueError('ZIP 缺少内置 Tesseract C API')
     return source
 
 
@@ -123,6 +126,7 @@ def main():
         parser.error("版本号只能含字母、数字、点和连字符")
     if os.name != "nt":
         parser.error("Build on Windows")
+    release_gate.validate(ROOT, args.version)
     iscc = find_iscc(args.iscc)
     if not iscc:
         parser.error("找不到 ISCC.exe：请安装 Inno Setup 6.7+ 或传 --iscc")
@@ -140,6 +144,7 @@ def main():
                   version=args.version, iscc=iscc)
     with tempfile.TemporaryDirectory(prefix="inno-", dir=scratch) as temporary:
         source = prepare_source(args.archive, temporary)
+        release_gate.validate_bundle(ROOT, args.version, source)
         if (source / "VERSION").read_text(encoding="utf-8").strip() != args.version:
             raise ValueError("安装器版本与 ZIP 内 VERSION 不一致")
         files = [path for path in source.rglob("*") if path.is_file()]

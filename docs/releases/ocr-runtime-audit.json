@@ -1,300 +1,1513 @@
 {
   "audit_date": "2026-10-19",
-  "scope": "local rc.4 candidate; not distribution clearance",
-  "installer": {
-    "name": "tesseract-ocr-w64-setup-5.5.3.20260724.exe",
-    "url": "https://github.com/tesseract-ocr/tesseract/releases/download/5.5.3/tesseract-ocr-w64-setup-5.5.3.20260724.exe",
-    "sha256": "bee9e3434bd94fd65387d9be28cd467a41f61b1275383b55b0f59a1331270ae4"
+  "source": {
+    "kind": "msys2-packages",
+    "lock_path": "docs/releases/ocr-msys2-packages.lock.json",
+    "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+    "url": "https://repo.msys2.org/mingw/mingw64/"
   },
-  "hashes_verified": 35,
-  "runtime_version_report": "tesseract v5.5.3.20260724\n leptonica-1.87.0\n  libgif 5.2.2 : libjpeg 8d (libjpeg-turbo 3.1.3) : libpng 1.6.58 : libtiff 4.7.2 : zlib 1.3.1 : libwebp 1.6.0 : libopenjp2 2.5.4\n Found AVX512BW\n Found AVX512F\n Found AVX512VNNI\n Found AVX2\n Found AVX\n Found FMA\n Found SSE4.1\n Found libarchive 3.8.8 zlib/1.3.2 liblzma/5.8.3 bz2lib/1.0.8 liblz4/1.10.0 libzstd/1.5.7 expat/expat_2.8.2 cng/1.0 libb2/system\n Found libcurl/8.21.0 Schannel zlib/1.3.2 brotli/1.2.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.5 libssh2/1.11.1 WinLDAP\n",
-  "version_warning": "Runtime output includes compile-time dependency versions; PE resources may be generic. Neither proves package provenance.",
   "files": [
     {
       "path": "libarchive-13.dll",
-      "bytes": 972210,
-      "sha256": "ddabddfdc98e1e1342ce4a7069fb4004de6c870d7bc9f4e95ef243dd18468e97",
-      "pe_version_resource": {},
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "bytes": 1006041,
+      "sha256": "1cbf1106e09275f3a22ea3fe7e403705d6a5503468688bd824201a8b2bb54285",
+      "package": "mingw-w64-x86_64-libarchive",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libarchive/mingw64/share/licenses/libarchive/LICENSE",
+          "sha256": "30e556b3959e3985d66efefec5eaac51d4995053caa1d3cffe6eb916f146f229",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libarchive/.BUILDINFO",
+          "sha256": "a8522ba40c6b0f24f6fe30aab88f57d3a34008c280ce9d520742590bf6cbacac",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libarchive/.PKGINFO",
+          "sha256": "a9a9e785ad9d25184afb6adc6cecea96d691ecbbb0f391e25ab138e7e63690b9",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libb2-1.dll",
       "bytes": 34653,
       "sha256": "77bab532b5421d6cdddb96c3ae9a4bde144eb481ccaf243336c9f8c690a50987",
-      "pe_version_resource": {},
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "package": "mingw-w64-x86_64-libb2",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libb2/mingw64/share/licenses/libb2/LICENSE",
+          "sha256": "6a1ee543e5282cd9061881edf462e6fdab181f328da71fc2c9a6950a80e94d01",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libb2/.BUILDINFO",
+          "sha256": "f63dd6047fa417533045ed336ae6afe6b94c4c5ec309dc71acf2c7293ff82ad9",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libb2/.PKGINFO",
+          "sha256": "93e8453daf4deeb8af3e37cd8eb40d026c8917d94e01875e8599aa51c5da055f",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libbrotlicommon.dll",
       "bytes": 143429,
       "sha256": "ca7bc06ead80259971badf2cd0bfc688db9154dad65f139f49a38b4be9976f97",
-      "pe_version_resource": {},
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "package": "mingw-w64-x86_64-brotli",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-brotli/mingw64/share/licenses/brotli/LICENSE",
+          "sha256": "3d180008e36922a4e8daec11c34c7af264fed5962d07924aea928c38e8663c94",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-brotli/.BUILDINFO",
+          "sha256": "0e79b529733a6dd1e180c43f2acb0d7a81892564492d3c1de22ce04a1b4d230a",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-brotli/.PKGINFO",
+          "sha256": "90a3d61300e9e6c7457eac613d3fbed2a7fbad7d0d19960c626c5206ccec0043",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libbrotlidec.dll",
       "bytes": 62461,
       "sha256": "a142dc6cfa77cb907028aa9426f486f3d8de37855e8db2ae2894147908121881",
-      "pe_version_resource": {},
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "package": "mingw-w64-x86_64-brotli",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-brotli/mingw64/share/licenses/brotli/LICENSE",
+          "sha256": "3d180008e36922a4e8daec11c34c7af264fed5962d07924aea928c38e8663c94",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-brotli/.BUILDINFO",
+          "sha256": "0e79b529733a6dd1e180c43f2acb0d7a81892564492d3c1de22ce04a1b4d230a",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-brotli/.PKGINFO",
+          "sha256": "90a3d61300e9e6c7457eac613d3fbed2a7fbad7d0d19960c626c5206ccec0043",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libbz2-1.dll",
-      "bytes": 100964,
-      "sha256": "b79cd3a7102e359ef6324e98966a67939e58ec2b651ae2847cae84a4dfa453f7",
-      "pe_version_resource": {},
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "bytes": 108633,
+      "sha256": "a4fbb97c26662d2b8a80bf4597ed3effb69b12048b0cb1eef2c3f211e2e66673",
+      "package": "mingw-w64-x86_64-bzip2",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-bzip2/mingw64/share/licenses/bzip2/LICENSE",
+          "sha256": "c6dbbf828498be844a89eaa3b84adbab3199e342eb5cb2ed2f0d4ba7ec0f38a3",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-bzip2/.BUILDINFO",
+          "sha256": "f59c5f3f96f6bdfcdc246ca5eb8d6b6d89119ba7077830b80af1224930bb0841",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-bzip2/.PKGINFO",
+          "sha256": "e674e27fdc9da000afd9784007f73a1b4bf3597c45a0da01d5eb67b6e519c12e",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
+    },
+    {
+      "path": "libcrypto-3-x64.dll",
+      "bytes": 5501270,
+      "sha256": "26c5c4804d14049dc50e7d1a7ba5fd479c1bcee3ae5c3942a7f069f5159a4745",
+      "package": "mingw-w64-x86_64-openssl",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-openssl/mingw64/share/licenses/openssl/LICENSE",
+          "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-openssl/.BUILDINFO",
+          "sha256": "803d0012011cd0d44b20d65a657c89c86b741346f956d60702490a1852cb7e08",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-openssl/.PKGINFO",
+          "sha256": "08f7a0dff5d029c84ed60ed9a3731b6c2bb88837b09a6e98c1e4f50d43b77bfa",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libcurl-4.dll",
-      "bytes": 1226963,
-      "sha256": "3d302f9690e810fdfd950254e2f0663d0ff768737f350c602a4ed3a06e9b6b2b",
-      "pe_version_resource": {
-        "FileVersion": "8.21.0",
-        "ProductName": "The curl library",
-        "ProductVersion": "8.21.0",
-        "LegalCopyright": "Copyright (C) Daniel Stenberg, <daniel@haxx.se>."
-      },
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "bytes": 1420810,
+      "sha256": "c446cc0e7f2d1bc14046ff92c87f88c86bee15e62e2602673d4b462c885963a1",
+      "package": "mingw-w64-x86_64-curl",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-curl/mingw64/share/licenses/curl/LICENSE",
+          "sha256": "82f2f4427d6545ee5aaac4f0b80428da6cc8ba41c2cf5da3a03680ec327b9681",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-curl/.BUILDINFO",
+          "sha256": "680451d8b145a9c3b10dd0f024a5bb9d57b727ca9b34a7f4f39766a6a64d5b2a",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-curl/.PKGINFO",
+          "sha256": "f7581871b7922bf73c707e53f799b4c1af039d7e7bb8e6c51c0f4e19503353b3",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libdeflate.dll",
-      "bytes": 99228,
-      "sha256": "3f3fc3a73bc3623dc93b37bb321c484d3731d93006fd01c0495d15711826eb44",
-      "pe_version_resource": {},
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
-    },
-    {
-      "path": "libexpat-1.dll",
-      "bytes": 237603,
-      "sha256": "92ae866c6c58dd2d8366aa0e6230ba8d434d5306e8d8c3a08b7e61750fc16153",
-      "pe_version_resource": {
-        "FileVersion": "2.8.2.0",
-        "ProductVersion": "2.8.2.0"
-      },
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "bytes": 95902,
+      "sha256": "4be2ffe36137f533825a853642051f2c1f6ddd2f6515e33c2c32712bc9a6d214",
+      "package": "mingw-w64-x86_64-libdeflate",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libdeflate/mingw64/share/licenses/libdeflate/COPYING",
+          "sha256": "4ad69099cb4374836fd27583d9991e2838cd86b6e4666ab26b2d32582c91e73a",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libdeflate/.BUILDINFO",
+          "sha256": "23a580fb21a12597d473c2d467643e586d2520ee5d06b3f0f2511ea0a8ed6a18",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libdeflate/.PKGINFO",
+          "sha256": "cdc382d1ab3388590a3417403a472a48c512c4c80d207ac3480cda89a6d93bc1",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libgcc_s_seh-1.dll",
-      "bytes": 954773,
-      "sha256": "172cfdc9d83703ec0a0ca2cee08f6cf2a166b801717ee51a56b3a63b36bc2f83",
-      "pe_version_resource": {},
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "bytes": 149364,
+      "sha256": "661f70dc19fde8c25bb56387b807b7a9ab7e532cf58fa8aeee078256c19d8980",
+      "package": "mingw-w64-x86_64-libgcc",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libgcc/mingw64/share/licenses/libgcc/COPYING.RUNTIME",
+          "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libgcc/mingw64/share/licenses/libgcc/COPYING3",
+          "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libgcc/.BUILDINFO",
+          "sha256": "0ffcdf96bdf7d438eba395987f63ad37c0b38d6f7280672f7de6d818944f09f0",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libgcc/.PKGINFO",
+          "sha256": "a13f274d6929eb603703045239af17be9b1d528066f49c63829f73af0045e69b",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libgif-7.dll",
       "bytes": 45777,
       "sha256": "5b3d837ccaab84683dd93fbaddf2d98e1a9f90e0ddb8ea73dc70157adb4d26f1",
-      "pe_version_resource": {},
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "package": "mingw-w64-x86_64-giflib",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-giflib/source-license-texts/giflib-6.1.3/COPYING",
+          "sha256": "ed5d90cb4a041bddad679470a071302ab05ae5d0ec2cf8f9c97ad7b2708751e6",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-giflib/.BUILDINFO",
+          "sha256": "78b458ebbc91b232fee27d436436f3b82d044a69e70ce43b3e30079e989e2318",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-giflib/.PKGINFO",
+          "sha256": "01034f00900624ba800286876689dc7aad29d251d8621e90e2b76b66605701d0",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
+    },
+    {
+      "path": "libgomp-1.dll",
+      "bytes": 328648,
+      "sha256": "d68f23cb133886921ff2200bc279e1fea096c7ea2ae81eb8e48da97cbd1afd8d",
+      "package": "mingw-w64-x86_64-libgomp",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libgomp/mingw64/share/licenses/libgomp/COPYING.RUNTIME",
+          "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libgomp/mingw64/share/licenses/libgomp/COPYING3",
+          "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libgomp/.BUILDINFO",
+          "sha256": "95aca4ac130652055bc2966a34b144abf2bf8c649dd5b5b2af056ae790c3e024",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libgomp/.PKGINFO",
+          "sha256": "d84c539900e862cf577365bb33616aa87836893eda6fed94f06f9d5de63edb17",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libiconv-2.dll",
       "bytes": 1143148,
       "sha256": "7a282a854e01be726c6cccfe46f548c716aa45b3014818468253aaa4efbcd067",
-      "pe_version_resource": {
-        "FileVersion": "1.19",
-        "LegalCopyright": "Copyright (C) 1999-2026",
-        "ProductName": "libiconv: character set conversion library",
-        "ProductVersion": "1.19"
-      },
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "package": "mingw-w64-x86_64-libiconv",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libiconv/mingw64/share/licenses/libiconv/COPYING",
+          "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libiconv/mingw64/share/licenses/libiconv/COPYING.LIB",
+          "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libiconv/mingw64/share/licenses/libiconv/libcharset/COPYING.LIB",
+          "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libiconv/mingw64/share/licenses/libiconv/README",
+          "sha256": "4ae66e61d1c6593c84c47105b368d579bcee1af566dbb959ec63a0c48425dcf4",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libiconv/.BUILDINFO",
+          "sha256": "ccd20bd631186cd36d3a8615de2602d6c672f619846603a44360d0d726cef026",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libiconv/.PKGINFO",
+          "sha256": "23ed1c7e836c2923e16081289d0b479690c0a28684ab1804bbed8e423f308d91",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libidn2-0.dll",
       "bytes": 247081,
       "sha256": "9880b52651a0247640a2531d777380f7c35fac7efa7e3979b265ddcb78db8642",
-      "pe_version_resource": {},
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "package": "mingw-w64-x86_64-libidn2",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libidn2/source-license-texts/libidn2-2.3.8/COPYING",
+          "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libidn2/source-license-texts/libidn2-2.3.8/COPYING.LESSERv3",
+          "sha256": "e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libidn2/source-license-texts/libidn2-2.3.8/COPYING.unicode",
+          "sha256": "01d621eef165cf4d3d3dbb737aa0699178d94c6f18cf87e9dde6db3ca7790f46",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libidn2/source-license-texts/libidn2-2.3.8/COPYINGv2",
+          "sha256": "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libidn2/.BUILDINFO",
+          "sha256": "d13ef86293cdf2712c9201c20f3630a018c343bba902fb503b1ae2460a2cd18d",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libidn2/.PKGINFO",
+          "sha256": "8b883dcda35b62c1537a0d6bfca8bdb46600cf8d317156c350d41cd2ac447591",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libintl-8.dll",
       "bytes": 298731,
       "sha256": "0537c3dd2378218508ebe3cc416d72a99ee2d24ae1c5525e23458f32544ef861",
-      "pe_version_resource": {
-        "FileVersion": "1.0",
-        "LegalCopyright": "Copyright (C) 1995-2024",
-        "ProductName": "GNU libintl: accessing NLS message catalogs",
-        "ProductVersion": "1.0"
-      },
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "package": "mingw-w64-x86_64-gettext-runtime",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-gettext-runtime/mingw64/share/licenses/gettext-runtime/COPYING",
+          "sha256": "7ef2cdfe58e0c0460657b6598b49af29d4e03c1e41cbaf0e1da1eb8ad74b95d0",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-gettext-runtime/mingw64/share/licenses/gettext-runtime/intl/COPYING.LIB",
+          "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-gettext-runtime/mingw64/share/licenses/gettext-runtime/libasprintf/COPYING",
+          "sha256": "03133addae5b99a6148c538300e6d97074453089be1423b741bd081f18e2b298",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-gettext-runtime/mingw64/share/licenses/gettext-runtime/libasprintf/COPYING.LIB",
+          "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-gettext-runtime/.BUILDINFO",
+          "sha256": "098abf252a0b9f82c57d2812fdb6f6f42d047bafa7c16d850e2c1d15956fbe3b",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-gettext-runtime/.PKGINFO",
+          "sha256": "7ecd86325ab8577ef74b9c18be402eb84d1f8f1f2e8864d7a4dc56dde98399ee",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libjbig-0.dll",
-      "bytes": 62083,
-      "sha256": "275a827ba6839d47cfdbe059db1b1b403a92ff26e2b76a29362915487868bef2",
-      "pe_version_resource": {},
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "bytes": 60973,
+      "sha256": "9286b1f637ff4a249d81238ea9c9ebf4fb083727dfc4235c750bf749606d85f0",
+      "package": "mingw-w64-x86_64-jbigkit",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-jbigkit/mingw64/share/licenses/jbigkit/COPYING",
+          "sha256": "91df39d1816bfb17a4dda2d3d2c83b1f6f2d38d53e53e41e8f97ad5ac46a0cad",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-jbigkit/source-license-texts/jbigkit-2.1/COPYING",
+          "sha256": "91df39d1816bfb17a4dda2d3d2c83b1f6f2d38d53e53e41e8f97ad5ac46a0cad",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-jbigkit/source-license-texts/jbigkit-2.1/libjbig/jbig.c",
+          "sha256": "0d37723baf6e2884509c842033eb92f6baa4f110b8427701dc867aa3cac08a85",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-jbigkit/.BUILDINFO",
+          "sha256": "c755e58bbdbb5ca83c018d104e3866909a05f11faf11a171564c0dfb41a2e6a1",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-jbigkit/.PKGINFO",
+          "sha256": "3b741836115a012ab00ee01810545f72779fdf0f280b1ecd3c40709126ac6d08",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libjpeg-8.dll",
       "bytes": 967968,
       "sha256": "b564d34adaca83e73af0e2231719dd0198ea6cd074c64b2ba85bfd7182f27db7",
-      "pe_version_resource": {},
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "package": "mingw-w64-x86_64-libjpeg-turbo",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libjpeg-turbo/mingw64/share/licenses/libjpeg-turbo/LICENSE.md",
+          "sha256": "ba6bceebcba0fdd35488477c2cca8c4632ce82c74dbfbc87d886ce6fc4433579",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libjpeg-turbo/mingw64/share/licenses/libjpeg-turbo/README.ijg",
+          "sha256": "75815e3bf6484201a3c3d17a1bbf10f2e8e3237f84df10a2357ea896db2a81d6",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libjpeg-turbo/mingw64/share/licenses/libjpeg-turbo/README.md",
+          "sha256": "a44ba17ac66c57edaf0ea7c6e4b31358f08322c780e4e6af092082abb3e20793",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libjpeg-turbo/mingw64/share/licenses/libjpeg-turbo/simd/jsimdext.inc",
+          "sha256": "68c5d236785edf75344cebe8b9bec36568bd35c96eb72cc67ffecd66c17dbd74",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libjpeg-turbo/.BUILDINFO",
+          "sha256": "9a12cae8b10c57d8bae7c1f08b63cea20f472d59a2c0e141780e40bf9a70b716",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libjpeg-turbo/.PKGINFO",
+          "sha256": "c5a2a8c5a2a5d0598fb72c084b505c659700f06a2b5b11df6ee57bfff97c7e3a",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libleptonica-6.dll",
-      "bytes": 2850600,
-      "sha256": "1869b44e3d46fd830620b042477e5d60a950779582f38f60291547efb27792f1",
-      "pe_version_resource": {},
-      "material_status": "Leptonica license collected; exact binary/source-build correspondence remains to verify"
+      "bytes": 2825952,
+      "sha256": "f04aafdbab583e6aa7559c92ee06c7dc1315bdafe037024708383736b628202c",
+      "package": "mingw-w64-x86_64-leptonica",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-leptonica/mingw64/share/licenses/leptonica/LICENSE",
+          "sha256": "87829abb5bbb00b55a107365da89e9a33f86c4250169e5a1e5588505be7d5806",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-leptonica/.BUILDINFO",
+          "sha256": "d0ddbff38aca6125b730b2d53f98a6e6954aeacc4ef21b39b6e7ff9f00933312",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-leptonica/.PKGINFO",
+          "sha256": "24d1dba28ba9c9fc2059de568ab952d54a597e546f748452671e5ee4e2d4d1db",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libLerc.dll",
       "bytes": 804265,
       "sha256": "6887fb5aeabf382a835a4cb693025e8d48d9c90e82ca4eae5d2d8ffb70c6ca9a",
-      "pe_version_resource": {},
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "package": "mingw-w64-x86_64-lerc",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-lerc/mingw64/share/licenses/lerc/LICENSE",
+          "sha256": "77a8b761727c75e2167b15bfdf61b2c0bcf8792271228bebe80779106ad00671",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-lerc/.BUILDINFO",
+          "sha256": "f89b82d0b6db911b23b16e0dce14e1958c4b228121c5c9cdf207cced21823853",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-lerc/.PKGINFO",
+          "sha256": "8bea2777ac34009da9d70b58991a5e41ca65731d8116bffc452db53ffec0e3af",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "liblz4.dll",
       "bytes": 158649,
       "sha256": "35f917274bca8f19677ba66f1b3cc3c83568c3249fc43215fc16e76439c8e856",
-      "pe_version_resource": {
-        "FileVersion": "1.10.0.0",
-        "LegalCopyright": "Copyright (C) 2013-2020, Yann Collet",
-        "ProductName": "LZ4",
-        "ProductVersion": "1.10.0.0"
-      },
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "package": "mingw-w64-x86_64-lz4",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-lz4/source-license-texts/lz4-1.10.0/contrib/djgpp/LICENSE",
+          "sha256": "d011d1e02cb32b71c1ce2922ab41a2e2ad30f4ecf8de22c078d53618205abc05",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-lz4/source-license-texts/lz4-1.10.0/lib/LICENSE",
+          "sha256": "8b58c446121a109ccf32edc094bba3010a3d85e4ee3702950db55e4d3e87736c",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-lz4/source-license-texts/lz4-1.10.0/LICENSE",
+          "sha256": "4bc9c403f6b679cc076dee210e0e21c27b4e8f6d3fb43d85364c76657bfaaac5",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-lz4/.BUILDINFO",
+          "sha256": "f89ea03ee3dc13fe7d598c2b394e99e8bcf92361964a2205484c99a87b5277e3",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-lz4/.PKGINFO",
+          "sha256": "4dfe4958fd9c64b036d248a5757da268b907a02603bcd7ef69698e2543f336bb",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "liblzma-5.dll",
-      "bytes": 191836,
-      "sha256": "dc9edb9bd83b0371fe68d96cb3e70cd17b7a5aba958326a18f8210cb812432e9",
-      "pe_version_resource": {
-        "FileVersion": "5.8.3",
-        "ProductName": "XZ Utils <https://tukaani.org/xz/>",
-        "ProductVersion": "5.8.3"
-      },
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "bytes": 190709,
+      "sha256": "ccb6a179acf35e704b2ffd7f232677982c4856bd1dda1341713a27518cf97ce1",
+      "package": "mingw-w64-x86_64-xz",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-xz/mingw64/share/licenses/xz/COPYING",
+          "sha256": "616a3ad264ce29b8f1cb97e53037b139d406899ca8d1f799651e17bfa09830b8",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-xz/mingw64/share/licenses/xz/COPYING.0BSD",
+          "sha256": "0b01625d853911cd0e2e088dcfb743261034a091bb379246cb25a14cc4c74bf1",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-xz/mingw64/share/licenses/xz/COPYING.GPLv2",
+          "sha256": "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-xz/mingw64/share/licenses/xz/COPYING.GPLv3",
+          "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-xz/mingw64/share/licenses/xz/COPYING.LGPLv2.1",
+          "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-xz/.BUILDINFO",
+          "sha256": "175ff1706bab45e9c0b67689159471914b1ab5a2bd624b485df3f42cc46b49a7",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-xz/.PKGINFO",
+          "sha256": "262a34eba4127122e47bf7de178649e4c77cd18411a6429a36fc79064a71e93e",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
+    },
+    {
+      "path": "libnghttp2-14.dll",
+      "bytes": 215032,
+      "sha256": "25e6516899fd5021df8c67b92e9f7246249fb03bb7bdf56a08260a8dded06b00",
+      "package": "mingw-w64-x86_64-nghttp2",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-nghttp2/mingw64/share/licenses/nghttp2/COPYING",
+          "sha256": "6b94f3abc1aabd0c72a7c7d92a77f79dda7c8a0cb3df839a97890b4116a2de2a",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-nghttp2/.BUILDINFO",
+          "sha256": "1deb6d55b2d6ece3db40883e9205bf4bc345d8b869c32bbdc63f9561d9d0e7bd",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-nghttp2/.PKGINFO",
+          "sha256": "405e9a1d6678fafc834587da24269faacc7f0ff080fd7a5564a803e41078955c",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
+    },
+    {
+      "path": "libnghttp3-9.dll",
+      "bytes": 207858,
+      "sha256": "f94b97f5f882e70c13c2f540e2bcb3da5f5bba0e2e40dcd784dd5ef65771f001",
+      "package": "mingw-w64-x86_64-nghttp3",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-nghttp3/mingw64/share/licenses/nghttp3/COPYING",
+          "sha256": "58cc3fc8c6d6cb2485ab35eb5918e849b5bf1e56522974e106d7a39a88d61dcd",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-nghttp3/.BUILDINFO",
+          "sha256": "3bd6a83a89f09e3d2ab14d5c833564221141d0e541d4d3db2368670f4333a754",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-nghttp3/.PKGINFO",
+          "sha256": "1983ea2c66d755e13225d3bb2e5edeb20ac87ba7042a9ee115fa5342d053bd3f",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
+    },
+    {
+      "path": "libngtcp2-16.dll",
+      "bytes": 393683,
+      "sha256": "5df6354a4efbd5e797dc9ec3e0f38892a2ee89d759d781e91a0f14a70344a8f5",
+      "package": "mingw-w64-x86_64-ngtcp2",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-ngtcp2/mingw64/share/licenses/ngtcp2/COPYING",
+          "sha256": "542dd526d2ea23565f0571cc68df6f05ed11248a90ff0f32de19d8ba589db513",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-ngtcp2/.BUILDINFO",
+          "sha256": "1466ee975bb213a157f969aa53fe5da17f88861a1e9d1420e7b6ea36c85ff6e6",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-ngtcp2/.PKGINFO",
+          "sha256": "46f0c3c5808863e7589076ad64cfb8bac8bba346c974ae6801fdcc8b3ad38d9e",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
+    },
+    {
+      "path": "libngtcp2_crypto_ossl-0.dll",
+      "bytes": 54255,
+      "sha256": "6fe49128e600120ef04937b69e6f9a2447f1293697d4b8aa4c239d7549bc913a",
+      "package": "mingw-w64-x86_64-ngtcp2",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-ngtcp2/mingw64/share/licenses/ngtcp2/COPYING",
+          "sha256": "542dd526d2ea23565f0571cc68df6f05ed11248a90ff0f32de19d8ba589db513",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-ngtcp2/.BUILDINFO",
+          "sha256": "1466ee975bb213a157f969aa53fe5da17f88861a1e9d1420e7b6ea36c85ff6e6",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-ngtcp2/.PKGINFO",
+          "sha256": "46f0c3c5808863e7589076ad64cfb8bac8bba346c974ae6801fdcc8b3ad38d9e",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libopenjp2-7.dll",
       "bytes": 519082,
       "sha256": "123587086cb1a25d2a338fb9b7c1d6bda10bf9062625b4f08c6a92b3d9cafe47",
-      "pe_version_resource": {},
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "package": "mingw-w64-x86_64-openjpeg2",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-openjpeg2/mingw64/share/licenses/openjpeg/LICENSE",
+          "sha256": "a6af136f3e15038a666b61f376612a07d9a4e48cb7c01adbf3e33b3f14ab49b6",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-openjpeg2/.BUILDINFO",
+          "sha256": "8bd08ec23cdba378f20d0750ae95e92648c06bff2105f782aad8f921bbff95c9",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-openjpeg2/.PKGINFO",
+          "sha256": "a124ef0f13a2448ea5041e9cfa25d410e6ca70c06b7346ea9ae35d09ca13d42b",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libpng16-16.dll",
-      "bytes": 264269,
-      "sha256": "3737838ee8d6b893df7bdabf7439775371a57dce7e17ee6b35586023c64bd9ab",
-      "pe_version_resource": {},
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "bytes": 260070,
+      "sha256": "fdac85bb70ec3af940810036eb9838765dceb61aaf81a60b244209f99c617f3d",
+      "package": "mingw-w64-x86_64-libpng",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libpng/mingw64/share/licenses/libpng/LICENSE",
+          "sha256": "bdb0a645ea18c60507d0368379b1ac5474b92255fcc2d115e07486a7672ba526",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libpng/.BUILDINFO",
+          "sha256": "2962a24cc43c062e66e2c2efdca673e9e7f8cecea54e0b661d8b3b9d6270181a",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libpng/.PKGINFO",
+          "sha256": "5f10f2b3cb072486f311ab506736d9df5619d0831f9f5697f39a8541606d8be7",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libpsl-5.dll",
       "bytes": 105304,
       "sha256": "b31fc70eda598a39b65fe2736d815518db0652d641346f75eac40c2a0499b058",
-      "pe_version_resource": {},
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "package": "mingw-w64-x86_64-libpsl",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libpsl/mingw64/share/licenses/libpsl/COPYING",
+          "sha256": "322392e6001b2b3b0fca705dc9f11f26e12441188ecde50eb1d22909980b2925",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libpsl/.BUILDINFO",
+          "sha256": "0b0fbe872b75dd16b98ad81e4e9919173eb6829cccad61a4445c52195d93d01d",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libpsl/.PKGINFO",
+          "sha256": "69d77870ca57915e0f1ae633671540e8c5cab6a098eb551a27fcaa6062dc54c4",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libsharpyuv-0.dll",
       "bytes": 53757,
       "sha256": "ab0c9f61dc69b6bcdff1011e215f8d5fd6e5096aba9be3386ab87f217fbbeffe",
-      "pe_version_resource": {},
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "package": "mingw-w64-x86_64-libwebp",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libwebp/mingw64/share/licenses/libwebp/COPYING",
+          "sha256": "5aec868f669e384a22372a4e8a1a6cd7d44c64cd451f960ca69cc170d1e13acf",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libwebp/.BUILDINFO",
+          "sha256": "4d968afe4d1f3b312939d3e693342b37369f398595e0334ba8b447220a2acc50",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libwebp/.PKGINFO",
+          "sha256": "81aa44a468591c24ee467fa3aa40adbb47ef4cdc433a7f5b540f4da45d197222",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libssh2-1.dll",
-      "bytes": 271318,
-      "sha256": "ee7fe3e749859334c99e9261689481dd879811122598d22585421f95d29fc7ae",
-      "pe_version_resource": {
-        "FileVersion": "1.11.1",
-        "ProductName": "The libssh2 library",
-        "ProductVersion": "1.11.1",
-        "LegalCopyright": "Copyright (C) The libssh2 project and its contributors."
-      },
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "bytes": 312147,
+      "sha256": "a8e1cc06bfff6be779066c5dc34ce740ed0226dcb6f75f46d9c915aee19a21b1",
+      "package": "mingw-w64-x86_64-libssh2",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libssh2/mingw64/share/licenses/libssh2/LICENSE",
+          "sha256": "f7f9633cf9ff2f1333f3d7ce46973a8716a4d2a2815ad56f30d437d5fea7bafe",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libssh2/.BUILDINFO",
+          "sha256": "fe8bfeaf4fe96fe2965af2b0f76aa39df62583fa22ed98f417ec8afd2e4265b4",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libssh2/.PKGINFO",
+          "sha256": "1c71d82d79e6d6fa4cc992a93d91ec2eddf0959cfc3b951953025438459e4cba",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
+    },
+    {
+      "path": "libssl-3-x64.dll",
+      "bytes": 997269,
+      "sha256": "a3ddb63a654e05844cf59d463c9557eed7ae675d59fd2c47f3415f5e1fc067f5",
+      "package": "mingw-w64-x86_64-openssl",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-openssl/mingw64/share/licenses/openssl/LICENSE",
+          "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-openssl/.BUILDINFO",
+          "sha256": "803d0012011cd0d44b20d65a657c89c86b741346f956d60702490a1852cb7e08",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-openssl/.PKGINFO",
+          "sha256": "08f7a0dff5d029c84ed60ed9a3731b6c2bb88837b09a6e98c1e4f50d43b77bfa",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libstdc++-6.dll",
-      "bytes": 26390974,
-      "sha256": "5fe5d4d8f6636eb6f2dc55be99dc5dc8a6c40db1abdf592e84480d1e6985abd0",
-      "pe_version_resource": {},
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "bytes": 2659216,
+      "sha256": "b720a96289bcd6d9ec6f5f1f5612f1b1a523ce15d3ada20fe119791274cb512f",
+      "package": "mingw-w64-x86_64-libstdc++",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libstdc++/mingw64/share/licenses/libstdc++/COPYING.RUNTIME",
+          "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libstdc++/mingw64/share/licenses/libstdc++/COPYING3",
+          "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libstdc++/.BUILDINFO",
+          "sha256": "f5da4c282745f159b20bbb7155b395b2ac8a897c0442ea666182bd4abf2180f0",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libstdc++/.PKGINFO",
+          "sha256": "c54da2cb40b88132335e12d593800bbdfdd09f5acdf825eb9b6f78b3f03c7761",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
-      "path": "libtesseract-5.dll",
-      "bytes": 3501048,
-      "sha256": "54d54528b453ce3a5ba79487687f8df43e7b194b9ea97beba74200453fe1fb46",
-      "pe_version_resource": {},
-      "material_status": "Tesseract license and AUTHORS collected; installer dependency coverage is separate"
+      "path": "libtesseract-5.5.dll",
+      "bytes": 4231056,
+      "sha256": "667fe09b037678b16c58de5c46f2add2fa8dc42d35e35ed2f1959fa99b20d29a",
+      "package": "mingw-w64-x86_64-tesseract-ocr",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-tesseract-ocr/mingw64/share/licenses/tesseract-ocr/LICENSE",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-tesseract-ocr/.BUILDINFO",
+          "sha256": "d9b792052d440bc53e0cc3759fdfce1a496f82f942a0b41fe5b5dcfdd03a85dc",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-tesseract-ocr/.PKGINFO",
+          "sha256": "4c141da64427e89b94b8be081b840768958a2cbdac79e78a90ceec042959572f",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libtiff-6.dll",
-      "bytes": 625178,
-      "sha256": "47fe69165bf8e211aaa84224f51f145dc894e330fe7ca167f7c99419e0c8c894",
-      "pe_version_resource": {},
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "bytes": 619851,
+      "sha256": "8f9dd61dbac532e61e79b7ad864b47e2e10b10ba152f7e3073e8fad8fc5f7d65",
+      "package": "mingw-w64-x86_64-libtiff",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libtiff/mingw64/share/licenses/libtiff/LICENSE.md",
+          "sha256": "0e27c2382d7b8147972bbb746e04059a1152c8d0fda9d03ef1399d1a433c4ade",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libtiff/.BUILDINFO",
+          "sha256": "8c11134422014753e5af358fdcc107f3732b900e10e78f86abdf8a9260c65a17",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libtiff/.PKGINFO",
+          "sha256": "13bb2fee7dc83f84dcd61e407e8f1cbfd5b764741c4308262aa78b4dbeef2119",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libunistring-5.dll",
       "bytes": 2251328,
       "sha256": "b91e2850d3668d4931056a8f4d35783b8ec3eea3735485108a936a072cd16071",
-      "pe_version_resource": {
-        "FileVersion": "1.4.2",
-        "LegalCopyright": "Copyright (C) 2001-2019",
-        "ProductName": "GNU libunistring: Unicode string library",
-        "ProductVersion": "1.4.2"
-      },
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "package": "mingw-w64-x86_64-libunistring",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libunistring/mingw64/share/licenses/libunistring/LICENSE",
+          "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libunistring/mingw64/share/licenses/libunistring/LICENSE.LIB",
+          "sha256": "a853c2ffec17057872340eee242ae4d96cbf2b520ae27d903e1b2fef1a5f9d1c",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libunistring/.BUILDINFO",
+          "sha256": "1d235a9597d141dbbcd4e8f8e935dc592082ccf78ce4d9e39d1c8e5478def3b9",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libunistring/.PKGINFO",
+          "sha256": "3b8d07f5177221f23fd31318c682de90021f9b8e000f8bbaccbc05ee494015d1",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libwebp-7.dll",
       "bytes": 749724,
       "sha256": "c6c21a10f8cfe13270832e64640b82709e1d87b956b5f15af435a6c25acd6bbf",
-      "pe_version_resource": {},
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "package": "mingw-w64-x86_64-libwebp",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libwebp/mingw64/share/licenses/libwebp/COPYING",
+          "sha256": "5aec868f669e384a22372a4e8a1a6cd7d44c64cd451f960ca69cc170d1e13acf",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libwebp/.BUILDINFO",
+          "sha256": "4d968afe4d1f3b312939d3e693342b37369f398595e0334ba8b447220a2acc50",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libwebp/.PKGINFO",
+          "sha256": "81aa44a468591c24ee467fa3aa40adbb47ef4cdc433a7f5b540f4da45d197222",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libwebpmux-3.dll",
       "bytes": 82858,
       "sha256": "2c8a2e9d7901ec65330f31f9989c2a07ef0506e903b485fcd8b241a6bab9b88f",
-      "pe_version_resource": {},
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "package": "mingw-w64-x86_64-libwebp",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libwebp/mingw64/share/licenses/libwebp/COPYING",
+          "sha256": "5aec868f669e384a22372a4e8a1a6cd7d44c64cd451f960ca69cc170d1e13acf",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libwebp/.BUILDINFO",
+          "sha256": "4d968afe4d1f3b312939d3e693342b37369f398595e0334ba8b447220a2acc50",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libwebp/.PKGINFO",
+          "sha256": "81aa44a468591c24ee467fa3aa40adbb47ef4cdc433a7f5b540f4da45d197222",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libwinpthread-1.dll",
-      "bytes": 65955,
-      "sha256": "6a661d5846d80a91394dbb9b2dab87ba3cc705eac80ad45fe73677bff70cd6d2",
-      "pe_version_resource": {
-        "ProductVersion": "1, 0, 0, 0",
-        "FileVersion": "1, 0, 0, 0",
-        "LegalCopyright": "Copyright (C) MinGW-W64 Project Members 2010-2023"
-      },
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "bytes": 68954,
+      "sha256": "05f9bfaee85ab38e3073bac78a7cbec8cf7f503288fa8f8071c9c02f45ccd27a",
+      "package": "mingw-w64-x86_64-libwinpthread",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libwinpthread/mingw64/share/licenses/libwinpthread/COPYING",
+          "sha256": "63263614cdd29f2f93cba85e992f041b31f9fc7b4033692f31269489a8a1b177",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libwinpthread/.BUILDINFO",
+          "sha256": "6a549b50f46a89fd369996ea4b1ec9f53b2acbb94626e3c18c19133201b51d7b",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-libwinpthread/.PKGINFO",
+          "sha256": "cf1e24d484cf783dd5bd330f76e9ef348dcce3a242b41fb0f710aeac430ebb36",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "libzstd.dll",
       "bytes": 1218273,
       "sha256": "b95c223a9548a9ecf51377c962e0bc8f0c51eb0c6f67a296dbc885996f0dd40d",
-      "pe_version_resource": {},
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
-    },
-    {
-      "path": "tessdata/eng.traineddata",
-      "bytes": 4113088,
-      "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
-      "pe_version_resource": {},
-      "material_status": "Pinned tessdata_fast model provenance and Apache-2.0 collected"
+      "package": "mingw-w64-x86_64-zstd",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-zstd/mingw64/share/licenses/zstd/LICENSE",
+          "sha256": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-zstd/.BUILDINFO",
+          "sha256": "1abd12ff8df7b1d53dc651e7abc719b7479affb01cd2ba9e4cc5b6d5e0ff4e7e",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-zstd/.PKGINFO",
+          "sha256": "e64d3022df101f60218ed83e46367b39cf3900d6dc7cc7d723411d73a3f74ff0",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "tesseract.exe",
-      "bytes": 1867784,
-      "sha256": "c66f0f12ed76f6aa455dac97684bbc86756d6a732380bee09122454cfda3f420",
-      "pe_version_resource": {},
-      "material_status": "Tesseract license and AUTHORS collected; installer dependency coverage is separate"
+      "bytes": 90091,
+      "sha256": "1b6fe79846732c10dfca15ed2110d597e04fa060da93ce64fcf76b9ae5e7f606",
+      "package": "mingw-w64-x86_64-tesseract-ocr",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-tesseract-ocr/mingw64/share/licenses/tesseract-ocr/LICENSE",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-tesseract-ocr/.BUILDINFO",
+          "sha256": "d9b792052d440bc53e0cc3759fdfce1a496f82f942a0b41fe5b5dcfdd03a85dc",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-tesseract-ocr/.PKGINFO",
+          "sha256": "4c141da64427e89b94b8be081b840768958a2cbdac79e78a90ceec042959572f",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
     },
     {
       "path": "zlib1.dll",
       "bytes": 128488,
       "sha256": "93e9243a44c29200eeacaf9658efe2558581770e4b11ca4b500e18e424a6e3b5",
-      "pe_version_resource": {},
-      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+      "package": "mingw-w64-x86_64-zlib",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-zlib/mingw64/share/licenses/zlib/LICENSE",
+          "sha256": "e32ff4e00d9d94930537635291da39e7e612703334bf6fde8c7f1686fe8a45a2",
+          "role": "license"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-zlib/.BUILDINFO",
+          "sha256": "99413465765a90ed47a85e270f2d1cab936963decde935647bfca2c8ff5244d9",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/licenses/msys2/mingw-w64-x86_64-zlib/.PKGINFO",
+          "sha256": "9dc22d54bc2e29324c7925cdea7e627f896b55674f7b626f52e756aadfc100c3",
+          "role": "package_metadata"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-sources.json",
+          "sha256": "d4b65322850e863c53770fabd215abeea3f062653a295a0b7690fa75ec3fb202",
+          "role": "source_build"
+        },
+        {
+          "path": "docs/releases/ocr-msys2-packages.lock.json",
+          "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+          "role": "binary_source"
+        }
+      ]
+    },
+    {
+      "path": "tessdata/eng.traineddata",
+      "bytes": 4113088,
+      "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+      "package": "project-pinned-tessdata-fast",
+      "distribution_status": "verified",
+      "evidence": [
+        {
+          "path": "app/recognition/models/LICENSE",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "role": "license"
+        },
+        {
+          "path": "app/recognition/models/provenance.json",
+          "sha256": "379b18449c9114811f94a76de393a67242bcebf9a8332619458d54c5cda26a8b",
+          "role": "source_build"
+        }
+      ]
     }
-  ]
+  ],
+  "conclusion": "Actual 40 PE files + pinned model; 34 binary packages, 32 exact source packages. Full original sources/recipes/patches supplied as release asset. Old installer bytes not selected.",
+  "compatibility": "CLI version query and 21 local native/replay tests passed; eight-language frozen smoke remains required.",
+  "source_offer": "Corresponding source and build recipes alongside binaries, at no charge. See ocr-msys2-sources.json."
 }

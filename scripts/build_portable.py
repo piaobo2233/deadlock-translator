@@ -20,6 +20,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import ocr_runtime  # noqa: E402  (sibling build helper)
+import release_gate
 
 EXE_NAME = "DeadlockTranslate"
 GUI_NAME = "LockLingo"
@@ -31,6 +32,9 @@ def digest(path):
 
 
 def copy_licenses(destination):
+    shared = ROOT / 'docs/licenses/ValveResourceFormat'
+    if shared.is_dir():
+        shutil.copytree(shared, destination / 'ValveResourceFormat', dirs_exist_ok=True)
     packages = ('numpy', 'opencv-python', 'pillow', 'pytesseract', 'ttkbootstrap',
                 'packaging', 'defusedxml', 'darkdetect', 'pyinstaller', 'pystray', 'six')
     for name in packages:
@@ -61,7 +65,7 @@ def copy_licenses(destination):
     shutil.copy2(license_path, destination / 'Python-Tcl-Tk' / license_path.name)
 
 
-def copy_ocr_licenses(bundle):
+def copy_ocr_licenses(bundle, distribution='local_test_only'):
     """随包 OCR 运行时的来源、摘要与许可：不只放一句「来自 Tesseract」。"""
     target = bundle / 'licenses' / 'tesseract'
     target.mkdir(parents=True, exist_ok=True)
@@ -69,20 +73,34 @@ def copy_ocr_licenses(bundle):
         source = ROOT / 'docs/licenses/tesseract' / name
         if source.is_file():
             shutil.copy2(source, target / name)
+    if distribution == 'materials_verified':
+        audit = json.loads((ROOT / 'docs/releases/ocr-runtime-audit.json').read_text(encoding='utf-8'))
+        for row in audit['files']:
+            for evidence in row['evidence']:
+                if evidence['role'] in {'license', 'notice', 'source_build', 'package_metadata', 'binary_source'}:
+                    source = ROOT / evidence['path']
+                    destination = target / 'components' / evidence['path']
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(source, destination)
+        shutil.copy2(ROOT / 'docs/releases/ocr-runtime-audit.json', target / 'distribution-audit.json')
     manifest = ocr_runtime.load_manifest()
     shutil.copy2(ocr_runtime.MANIFEST_PATH, target / 'runtime-manifest.json')
+    identity = ocr_runtime.source_identity(manifest)
     lines = [
         f"随包 OCR 运行时：{manifest['runtime']}",
-        f"来源安装器：{manifest['installer']['url']}",
-        f"安装器 SHA-256：{manifest['installer']['sha256']}",
+        f"来源：{identity['url']}",
+        f"来源锁定 SHA-256：{identity['sha256']}",
         f"文件选择：{manifest['selection']}",
         "",
         "逐文件 SHA-256 见 licenses/tesseract/runtime-manifest.json 与包内 manifest.json。",
-        "Tesseract 许可：Apache-2.0（licenses/tesseract/LICENSE）；Leptonica 许可见",
-        "licenses/tesseract/LEPTONICA-LICENSE.txt。运行时由官方安装器原样解出，未修改。",
-        "其余随附 DLL 属其上游项目（GCC runtime、libjpeg、libpng、libtiff、libarchive 等），",
-        "完整传递许可审计见 docs/THIRD-PARTY-NOTICES.md 的未完成边界说明。",
-        "本候选包只作本地验收；公开分发前必须补齐传递组件的许可与再分发依据。",
+        "各组件的原始许可、NOTICE、GCC runtime exception 与构建元数据均保留。",
+        "MSYS2 二进制包原样提取，未修改；Tesseract 原始许可 Apache-2.0 不覆盖其余 DLL。",
+        "GPL 适用的 OCR 组合按 GPL-3.0-or-later 条款提供，原创 MIT 声明保留。",
+        "完整对应源码、配方和补丁与本版本二进制一同免费提供：",
+        f"https://github.com/piaobo2233/deadlock-translator/releases/tag/v{(ROOT / 'VERSION').read_text().strip()}",
+        "附件名：LockLingo-1.0.0-beta.1-ocr-sources.zip；精确逐包目录见包内 source evidence。",
+        ("本候选包只作本地验收；公开分发前必须补齐传递组件的许可与再分发依据。"
+         if distribution == 'local_test_only' else "本构建材料核对记录见 licenses/tesseract/distribution-audit.json。"),
         "",
     ]
     (bundle / 'OCR-RUNTIME.txt').write_text("\n".join(lines), encoding='utf-8')
@@ -112,6 +130,7 @@ def main():
     if not args.version or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-'
                                for c in args.version):
         parser.error('Invalid version')
+    distribution = release_gate.validate(ROOT, args.version)
     if not BRAND_ICON.is_file():
         parser.error('Missing brand icon: ' + str(BRAND_ICON))
     manifest = ocr_runtime.validate(args.ocr_runtime)
@@ -130,9 +149,12 @@ def main():
         work = Path(temporary)
         source = work / 'source'
         source.mkdir()
+        from release_gate import GAME_FILES, bundled_game_files
+        excluded_game_files = set(GAME_FILES) - set(bundled_game_files(ROOT))
         for folder in ('app', 'gui'):
             shutil.copytree(ROOT / folder, source / folder,
-                            ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+                            ignore=shutil.ignore_patterns('__pycache__', '*.pyc',
+                                *(Path(name).name for name in excluded_game_files)))
         (source / 'scripts').mkdir()
         shutil.copytree(ROOT / 'scripts/installer/hooks', work / 'hooks')
         shutil.copy2(ROOT / 'scripts/run.py', source / 'scripts/run.py')
@@ -153,11 +175,12 @@ def main():
         shutil.copy2(ROOT / 'docs/THIRD-PARTY-NOTICES.md', bundle / 'THIRD-PARTY-NOTICES.md')
         shutil.copy2(ROOT / 'docs/guides/首版测试与分享.md', bundle / '先读我.md')
         (bundle / 'VERSION').write_text(args.version + '\n', encoding='utf-8')
+        (bundle / 'DISTRIBUTION.json').write_text(json.dumps(distribution, indent=2) + '\n', encoding='utf-8')
         (bundle / 'BUILD-SOURCE.json').write_text(json.dumps(
             dict(version=args.version, python=sys.version.split()[0], files=source_manifest),
             ensure_ascii=False, indent=2), encoding='utf-8')
         ocr_runtime.copy_into(bundle, args.ocr_runtime, manifest)
-        copy_ocr_licenses(bundle)
+        copy_ocr_licenses(bundle, distribution['distribution'])
         copy_licenses(bundle / 'licenses')
         check_contents(bundle)
         files = sorted(path for path in bundle.rglob('*') if path.is_file())

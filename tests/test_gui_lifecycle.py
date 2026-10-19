@@ -220,13 +220,23 @@ class GuiLifecycleTests(unittest.TestCase):
             self.assertIn(text, self.app.status.cget('text'))
 
     def test_cost_actions_are_visible_at_default_window_size(self):
-        self.app.open_page("cost")
-        self.app.root.update()
-        bottom = self.app.canvas.winfo_rooty() + self.app.canvas.winfo_height()
-        buttons = [w for w in self.widgets() if w.winfo_class() == "Button"
-                   and w.cget('text')=='刷新']
-        self.assertEqual([w.cget('text') for w in buttons], ['刷新'])
-        self.assertTrue(all(w.winfo_rooty() + w.winfo_height() <= bottom for w in buttons))
+        previous=self.app.root.tk.call('tk','scaling')
+        try:
+            for scaling in (1.332282448377581,2.0):
+                with self.subTest(scaling=scaling):
+                    self.app.root.tk.call('tk','scaling',scaling)
+                    self.app.open_page('home')
+                    self.app.open_page('cost')
+                    self.app.root.update()
+                    bottom=self.app.canvas.winfo_rooty()+self.app.canvas.winfo_height()
+                    buttons=[w for w in self.widgets() if w.winfo_class()=='Button'
+                             and w.cget('text')=='刷新']
+                    self.assertEqual([w.cget('text') for w in buttons],['刷新'])
+                    self.assertTrue(all(w.winfo_rooty()+w.winfo_height()<=bottom for w in buttons))
+                    if scaling<1.4:
+                        self.assertEqual(int(self.app.cost_controls['trend'].cget('height')),145)
+        finally:
+            self.app.root.tk.call('tk','scaling',previous)
 
     def test_cost_corrupt_ledger_is_not_presented_as_zero_or_normal(self):
         from pathlib import Path

@@ -15,6 +15,8 @@ WINDOWS_PUBLIC_TESTS = (
     'test_public_export', 'test_check_runner', 'test_check_scope', 'test_tray_lifecycle',
     'test_close_preferences', 'test_composer', 'test_workspace_ui', 'test_onboarding',
     'test_onboarding_ui', 'test_usage_dashboard', 'test_panel_instance', 'test_receive_send',
+    'test_latency_acceptance', 'test_release_gate', 'test_terms_optional',
+    'test_game_resources', 'test_msys2_ocr',
 )
 
 

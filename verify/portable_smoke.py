@@ -130,8 +130,10 @@ def main():
         bundle = scratch / prefix
         assert not (bundle / 'data').exists()
         assert not (bundle / '首次安装OCR').exists(), '旧 OCR 安装器不应再随包分发'
-        for name in ('ocr/tesseract.exe', 'ocr/libtesseract-5.dll', 'ocr/tessdata/eng.traineddata'):
+        for name in ('ocr/tesseract.exe', 'ocr/tessdata/eng.traineddata'):
             assert (bundle / name).is_file(), name
+        from app.recognition.resident import native_library
+        dll = native_library(bundle / 'ocr/tesseract.exe')
         for name in ('_internal/app/assets/brand/locklingo.ico',
                      '_internal/app/assets/brand/locklingo-32.png'):
             assert (bundle / name).is_file(), name
@@ -182,7 +184,7 @@ def main():
         payload = dict(width=sample.width, height=sample.height, mode=7, source=False,
                        pixels=base64.b64encode(sample.tobytes()).decode())
         worker = subprocess.run([str(executable), '--ocr-worker',
-                                 str(bundle / 'ocr/libtesseract-5.dll'), str(models),
+                                 str(dll), str(models),
                                  'eng+spa+por+fra+deu', ''],
                                 cwd=bundle, env=env, input=json.dumps(payload) + '\n',
                                 capture_output=True, text=True, encoding='utf-8', timeout=20)

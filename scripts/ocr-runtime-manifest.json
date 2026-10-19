@@ -1,17 +1,18 @@
 {
-  "installer": {
-    "name": "tesseract-ocr-w64-setup-5.5.3.20260724.exe",
-    "url": "https://github.com/tesseract-ocr/tesseract/releases/download/5.5.3/tesseract-ocr-w64-setup-5.5.3.20260724.exe",
-    "sha256": "bee9e3434bd94fd65387d9be28cd467a41f61b1275383b55b0f59a1331270ae4"
+  "source": {
+    "kind": "msys2-packages",
+    "lock_path": "docs/releases/ocr-msys2-packages.lock.json",
+    "sha256": "7e9d792e6ed47bcf15e10be3d54b4d3e29f1f5dfbf8b8b353afd0ba7445943cf",
+    "url": "https://repo.msys2.org/mingw/mingw64/"
   },
-  "runtime": "Tesseract 5.5.3 official Windows x64 release build",
-  "selection": "tesseract.exe plus its PE import closure from the installer payload",
-  "license": "licenses/tesseract/LICENSE (Apache-2.0) plus upstream notices",
+  "runtime": "Tesseract 5.5.3 MSYS2 mingw64 fixed binary packages",
+  "selection": "tesseract.exe and actual PE import closure from SHA-256 locked packages; pinned tessdata_fast model",
+  "license": "Original component notices retained; GPL-3.0-or-later terms for the GPL-covered OCR combination; GCC runtime exceptions retained",
   "files": [
     {
       "path": "libarchive-13.dll",
-      "bytes": 972210,
-      "sha256": "ddabddfdc98e1e1342ce4a7069fb4004de6c870d7bc9f4e95ef243dd18468e97"
+      "bytes": 1006041,
+      "sha256": "1cbf1106e09275f3a22ea3fe7e403705d6a5503468688bd824201a8b2bb54285"
     },
     {
       "path": "libb2-1.dll",
@@ -30,33 +31,38 @@
     },
     {
       "path": "libbz2-1.dll",
-      "bytes": 100964,
-      "sha256": "b79cd3a7102e359ef6324e98966a67939e58ec2b651ae2847cae84a4dfa453f7"
+      "bytes": 108633,
+      "sha256": "a4fbb97c26662d2b8a80bf4597ed3effb69b12048b0cb1eef2c3f211e2e66673"
+    },
+    {
+      "path": "libcrypto-3-x64.dll",
+      "bytes": 5501270,
+      "sha256": "26c5c4804d14049dc50e7d1a7ba5fd479c1bcee3ae5c3942a7f069f5159a4745"
     },
     {
       "path": "libcurl-4.dll",
-      "bytes": 1226963,
-      "sha256": "3d302f9690e810fdfd950254e2f0663d0ff768737f350c602a4ed3a06e9b6b2b"
+      "bytes": 1420810,
+      "sha256": "c446cc0e7f2d1bc14046ff92c87f88c86bee15e62e2602673d4b462c885963a1"
     },
     {
       "path": "libdeflate.dll",
-      "bytes": 99228,
-      "sha256": "3f3fc3a73bc3623dc93b37bb321c484d3731d93006fd01c0495d15711826eb44"
-    },
-    {
-      "path": "libexpat-1.dll",
-      "bytes": 237603,
-      "sha256": "92ae866c6c58dd2d8366aa0e6230ba8d434d5306e8d8c3a08b7e61750fc16153"
+      "bytes": 95902,
+      "sha256": "4be2ffe36137f533825a853642051f2c1f6ddd2f6515e33c2c32712bc9a6d214"
     },
     {
       "path": "libgcc_s_seh-1.dll",
-      "bytes": 954773,
-      "sha256": "172cfdc9d83703ec0a0ca2cee08f6cf2a166b801717ee51a56b3a63b36bc2f83"
+      "bytes": 149364,
+      "sha256": "661f70dc19fde8c25bb56387b807b7a9ab7e532cf58fa8aeee078256c19d8980"
     },
     {
       "path": "libgif-7.dll",
       "bytes": 45777,
       "sha256": "5b3d837ccaab84683dd93fbaddf2d98e1a9f90e0ddb8ea73dc70157adb4d26f1"
+    },
+    {
+      "path": "libgomp-1.dll",
+      "bytes": 328648,
+      "sha256": "d68f23cb133886921ff2200bc279e1fea096c7ea2ae81eb8e48da97cbd1afd8d"
     },
     {
       "path": "libiconv-2.dll",
@@ -75,8 +81,8 @@
     },
     {
       "path": "libjbig-0.dll",
-      "bytes": 62083,
-      "sha256": "275a827ba6839d47cfdbe059db1b1b403a92ff26e2b76a29362915487868bef2"
+      "bytes": 60973,
+      "sha256": "9286b1f637ff4a249d81238ea9c9ebf4fb083727dfc4235c750bf749606d85f0"
     },
     {
       "path": "libjpeg-8.dll",
@@ -85,8 +91,8 @@
     },
     {
       "path": "libleptonica-6.dll",
-      "bytes": 2850600,
-      "sha256": "1869b44e3d46fd830620b042477e5d60a950779582f38f60291547efb27792f1"
+      "bytes": 2825952,
+      "sha256": "f04aafdbab583e6aa7559c92ee06c7dc1315bdafe037024708383736b628202c"
     },
     {
       "path": "libLerc.dll",
@@ -100,8 +106,28 @@
     },
     {
       "path": "liblzma-5.dll",
-      "bytes": 191836,
-      "sha256": "dc9edb9bd83b0371fe68d96cb3e70cd17b7a5aba958326a18f8210cb812432e9"
+      "bytes": 190709,
+      "sha256": "ccb6a179acf35e704b2ffd7f232677982c4856bd1dda1341713a27518cf97ce1"
+    },
+    {
+      "path": "libnghttp2-14.dll",
+      "bytes": 215032,
+      "sha256": "25e6516899fd5021df8c67b92e9f7246249fb03bb7bdf56a08260a8dded06b00"
+    },
+    {
+      "path": "libnghttp3-9.dll",
+      "bytes": 207858,
+      "sha256": "f94b97f5f882e70c13c2f540e2bcb3da5f5bba0e2e40dcd784dd5ef65771f001"
+    },
+    {
+      "path": "libngtcp2-16.dll",
+      "bytes": 393683,
+      "sha256": "5df6354a4efbd5e797dc9ec3e0f38892a2ee89d759d781e91a0f14a70344a8f5"
+    },
+    {
+      "path": "libngtcp2_crypto_ossl-0.dll",
+      "bytes": 54255,
+      "sha256": "6fe49128e600120ef04937b69e6f9a2447f1293697d4b8aa4c239d7549bc913a"
     },
     {
       "path": "libopenjp2-7.dll",
@@ -110,8 +136,8 @@
     },
     {
       "path": "libpng16-16.dll",
-      "bytes": 264269,
-      "sha256": "3737838ee8d6b893df7bdabf7439775371a57dce7e17ee6b35586023c64bd9ab"
+      "bytes": 260070,
+      "sha256": "fdac85bb70ec3af940810036eb9838765dceb61aaf81a60b244209f99c617f3d"
     },
     {
       "path": "libpsl-5.dll",
@@ -125,23 +151,28 @@
     },
     {
       "path": "libssh2-1.dll",
-      "bytes": 271318,
-      "sha256": "ee7fe3e749859334c99e9261689481dd879811122598d22585421f95d29fc7ae"
+      "bytes": 312147,
+      "sha256": "a8e1cc06bfff6be779066c5dc34ce740ed0226dcb6f75f46d9c915aee19a21b1"
+    },
+    {
+      "path": "libssl-3-x64.dll",
+      "bytes": 997269,
+      "sha256": "a3ddb63a654e05844cf59d463c9557eed7ae675d59fd2c47f3415f5e1fc067f5"
     },
     {
       "path": "libstdc++-6.dll",
-      "bytes": 26390974,
-      "sha256": "5fe5d4d8f6636eb6f2dc55be99dc5dc8a6c40db1abdf592e84480d1e6985abd0"
+      "bytes": 2659216,
+      "sha256": "b720a96289bcd6d9ec6f5f1f5612f1b1a523ce15d3ada20fe119791274cb512f"
     },
     {
-      "path": "libtesseract-5.dll",
-      "bytes": 3501048,
-      "sha256": "54d54528b453ce3a5ba79487687f8df43e7b194b9ea97beba74200453fe1fb46"
+      "path": "libtesseract-5.5.dll",
+      "bytes": 4231056,
+      "sha256": "667fe09b037678b16c58de5c46f2add2fa8dc42d35e35ed2f1959fa99b20d29a"
     },
     {
       "path": "libtiff-6.dll",
-      "bytes": 625178,
-      "sha256": "47fe69165bf8e211aaa84224f51f145dc894e330fe7ca167f7c99419e0c8c894"
+      "bytes": 619851,
+      "sha256": "8f9dd61dbac532e61e79b7ad864b47e2e10b10ba152f7e3073e8fad8fc5f7d65"
     },
     {
       "path": "libunistring-5.dll",
@@ -160,8 +191,8 @@
     },
     {
       "path": "libwinpthread-1.dll",
-      "bytes": 65955,
-      "sha256": "6a661d5846d80a91394dbb9b2dab87ba3cc705eac80ad45fe73677bff70cd6d2"
+      "bytes": 68954,
+      "sha256": "05f9bfaee85ab38e3073bac78a7cbec8cf7f503288fa8f8071c9c02f45ccd27a"
     },
     {
       "path": "libzstd.dll",
@@ -169,19 +200,19 @@
       "sha256": "b95c223a9548a9ecf51377c962e0bc8f0c51eb0c6f67a296dbc885996f0dd40d"
     },
     {
-      "path": "tessdata/eng.traineddata",
-      "bytes": 4113088,
-      "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
-    },
-    {
       "path": "tesseract.exe",
-      "bytes": 1867784,
-      "sha256": "c66f0f12ed76f6aa455dac97684bbc86756d6a732380bee09122454cfda3f420"
+      "bytes": 90091,
+      "sha256": "1b6fe79846732c10dfca15ed2110d597e04fa060da93ce64fcf76b9ae5e7f606"
     },
     {
       "path": "zlib1.dll",
       "bytes": 128488,
       "sha256": "93e9243a44c29200eeacaf9658efe2558581770e4b11ca4b500e18e424a6e3b5"
+    },
+    {
+      "path": "tessdata/eng.traineddata",
+      "bytes": 4113088,
+      "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
     }
   ]
 }

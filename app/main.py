@@ -737,6 +737,9 @@ def load_glossary(path: str = "", *, builtins_enabled=True) -> dict:
         path = GLOSSARY_PATH
     entries = store.load_glossary_file(path)
     builtins = dict(DEFAULT_GLOSSARY) if builtins_enabled else {}
+    if builtins_enabled:
+        from app.translation.terms import exact_terms
+        builtins.update(exact_terms())
 
     if not entries and not os.path.exists(path):
         # [!] 2026-10-08：导出内置词库**之前**，先看看根目录有没有老版本的词库。

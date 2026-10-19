@@ -28,6 +28,17 @@ def run():
         from app.recognition.resident import worker
         worker(*sys.argv[2:])
         return 0
+    if sys.argv[1:2] == ['--prepare-game-resources']:
+        if len(sys.argv) != 3:
+            raise SystemExit('Usage: --prepare-game-resources GAME_DIRECTORY')
+        import json
+        from app.game_data.service import prepare
+        from app.paths import application_root
+        bundle = prepare(application_root(), sys.argv[2])
+        print(json.dumps(dict(build_id=bundle['snapshot']['build_id'],
+                              terms=len(bundle['terms']['terms']),
+                              messages=len(bundle['quick_chat']['messages']), restart_required=True)))
+        return 0
     from app.main import run as run_application
     return run_application()
 

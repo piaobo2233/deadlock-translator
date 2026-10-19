@@ -11,7 +11,7 @@ from unittest.mock import patch
 import numpy as np
 import app.main as dt
 import app.recognition.ocr as ocr
-from app.recognition.resident import ResidentReader
+from app.recognition.resident import ResidentReader, native_library
 from app.runtime.pipeline import TranslationPipeline
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -20,7 +20,8 @@ ROOT=Path(__file__).resolve().parents[1]
 class ResidentTests(unittest.TestCase):
     def setUp(self):
         executable=ocr.find_tesseract()
-        if not executable or not (Path(executable).parent/'libtesseract-5.dll').is_file():
+        if not executable or not any((Path(executable).parent/name).is_file()
+                                     for name in ('libtesseract-5.5.dll', 'libtesseract-5.dll')):
             self.skipTest('Installed native Tesseract DLL unavailable')
         self.executable=executable
         self.models=ROOT/'app/recognition/models'
@@ -62,7 +63,7 @@ class ResidentTests(unittest.TestCase):
     def test_packaged_entry_route_runs_only_worker_protocol(self):
         with tempfile.TemporaryDirectory() as directory:
             result=subprocess.run([sys.executable,str(ROOT/'scripts/run.py'),'--ocr-worker',
-                str(Path(self.executable).parent/'libtesseract-5.dll'),str(self.models),'eng',''],
+                str(native_library(self.executable)),str(self.models),'eng',''],
                 input='',capture_output=True,text=True,encoding='utf-8',cwd=directory,timeout=8)
             self.assertEqual(result.returncode,0,result.stderr)
             self.assertEqual(result.stdout.strip(),'{"ready": true}')

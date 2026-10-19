@@ -57,7 +57,8 @@ class MatchOcrTests(unittest.TestCase):
             for box in ocr.find_bubbles(image,screen=screen):
                 body=locate_body(image,box,scale=screen[1]/1440)
                 decision=select_candidate(ocr.ocr_variants(image,box,screen=screen,region=body),
-                                          dt.DEFAULT_GLOSSARY,dt.recognition_rules())
+                                          dt.DEFAULT_GLOSSARY,dt.recognition_rules(),
+                                          verify_body=lambda text: ocr.source_evidence(image,body,text))
                 results.append((body,decision))
         return results
 

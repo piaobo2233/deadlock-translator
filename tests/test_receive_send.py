@@ -94,12 +94,14 @@ class ReceiveTests(unittest.TestCase):
 
     def test_latency_denominator_includes_missed_truth_messages(self):
         from verify.latency_acceptance import summarize
-        rows=[dict(id=str(i),eligible=True,appeared_at=0,drawn_at=1 if i<8 else None,route='api') for i in range(10)]
+        rows=[dict(id=str(i),eligible=True,appeared_at=0,drawn_at=1 if i<8 else None,
+                   correct=True if i<8 else None,route='api') for i in range(10)]
         score=summarize(rows)['groups']['all']
         self.assertEqual(score['within_2s_rate'],.8)
         self.assertEqual(score['missed'],2)
         self.assertFalse(score['target_met'])
         rows[8]['drawn_at']=1
+        rows[8]['correct']=True
         self.assertTrue(summarize(rows)['groups']['all']['target_met'])
         rows[9]['drawn_at']=4.1
         self.assertFalse(summarize(rows)['groups']['all']['target_met'])

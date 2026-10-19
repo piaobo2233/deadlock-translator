@@ -131,7 +131,8 @@ def build_cost(parent, app, load_config=None, money=None, priced=None):
     from gui.usage_charts import UsageChart, visible_models
     from app.brand import apply_window_icon
     th=app.th; c=COLORS
-    heading(parent,th,'API 用量',compact=True)
+    header=heading(parent,th,'API 用量',compact=True)
+    extra_header_height=max(0,int(header.winfo_children()[0].cget('height'))-72)
     selected=th.tk.IntVar(parent, value=7)
     ledger=usage.UsageStats(store.data_path(app.root_dir,'stats.json'))
     values={}; titles={}; buttons={}; detail_window=[None]
@@ -154,7 +155,10 @@ def build_cost(parent, app, load_config=None, money=None, priced=None):
         button.configure(padx=8,pady=3)
         button.pack(side='right',padx=(6,0));buttons[days]=button
     inspect=text(parent,th,'指向图表或聚焦后按左右键，查看具体数值',small=True,muted=True)
-    trend=UsageChart(parent,th,mode='trend',inspect=lambda value:inspect.configure(text=value),height=145)
+    # Preserve room for the bottom actions when the DPI-aware title band grows.
+    # At 100% the band is still 72px and the approved chart stays 145px tall.
+    trend=UsageChart(parent,th,mode='trend',inspect=lambda value:inspect.configure(text=value),
+                     height=max(100,145-extra_header_height))
     trend.pack(fill='x')
     inspect.pack(fill='x',pady=(4,4))
     metrics=text(parent,th,'',small=True,wraplength=800,justify='left')

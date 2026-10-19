@@ -577,4 +577,45 @@ class WorkspaceTests(unittest.TestCase):
         self.assertTrue(any('API Key' in value for value in texts(self.app.page)))
         self.assertFalse(any('Claude' in value or '兜底' in value for value in texts(self.app.page)))
 
+    def test_heading_band_reserves_room_for_the_title_at_high_dpi(self):
+        from gui.decoration import CityArt
+        root=self.app.root
+        def fits(art):
+            texts=[item for item in art.find_all() if art.type(item)=='text']
+            self.assertEqual(len(texts),2)
+            self.assertLessEqual(art.bbox(texts[0])[3],art.bbox(texts[1])[1])
+            self.assertLessEqual(art.bbox(texts[1])[3],art.winfo_height())
+        root.tk.call('tk','scaling',1.332282448377581)
+        compact=CityArt(root,self.app.th,title='API 用量',eyebrow='API USAGE',height=72)
+        compact.pack(fill='x');root.update_idletasks()
+        self.assertEqual(compact.winfo_height(),72)  # 100% DPI keeps the approved band
+        fits(compact);compact.destroy()
+        root.tk.call('tk','scaling',2.0)
+        scaled=CityArt(root,self.app.th,title='API 用量',eyebrow='API USAGE',height=72)
+        scaled.pack(fill='x');root.update_idletasks();scaled.draw()
+        self.assertGreater(scaled.winfo_height(),72)  # 150% DPI: band follows font height
+        fits(scaled);scaled.destroy()
+
+    def test_model_rows_keep_amount_and_request_counts_separate_at_high_dpi(self):
+        from gui.usage_charts import UsageChart
+        from app.storage import usage
+        from app.storage.accounting import empty_costs
+        rows=[]
+        for name,attempts,tokens,amount in (('deepseek-flash',1510,6324,.0148),
+                                           ('deepseek-v4-flash',3,247,.0006)):
+            bucket=usage.empty_bucket();bucket.update(api_attempts=attempts,total_tokens=tokens)
+            fee=empty_costs();fee.update(known_amount=amount,known_attempts=attempts)
+            bucket['request_cost']=fee;rows.append((name,bucket))
+        root=self.app.root
+        root.tk.call('tk','scaling',2.0)
+        chart=UsageChart(root,self.app.th,mode='models',inspect=lambda value:None,height=90)
+        chart.pack(fill='x');root.update_idletasks()
+        chart.set_rows(rows);root.update_idletasks();chart.draw()
+        boxes=[chart.bbox(item) for item in chart.find_all() if chart.type(item)=='text']
+        self.assertGreaterEqual(len(boxes),6)
+        for amount,stats in ((boxes[1],boxes[2]),(boxes[4],boxes[5])):
+            self.assertLessEqual(amount[2],stats[0])
+            self.assertLessEqual(stats[2],chart.winfo_width())
+        chart.destroy()
+
 if __name__=='__main__':unittest.main()

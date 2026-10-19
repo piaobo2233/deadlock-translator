@@ -113,7 +113,8 @@ class FallbackTests(unittest.TestCase):
 class NativeCompatibilityTests(unittest.TestCase):
     def test_actual_fallbacks_and_source_models_survive_mode_switches(self):
         executable = ocr.find_tesseract()
-        if not executable or not (Path(executable).parent / 'libtesseract-5.dll').exists():
+        if not executable or not any((Path(executable).parent / name).is_file()
+                                     for name in ('libtesseract-5.5.dll', 'libtesseract-5.dll')):
             self.skipTest('Native Tesseract DLL unavailable')
         from app.recognition.resident import ResidentReader
         models = Path(ocr.__file__).parent / 'models'

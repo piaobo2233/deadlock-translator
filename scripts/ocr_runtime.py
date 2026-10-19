@@ -25,7 +25,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "scripts" / "ocr-runtime-manifest.json"
-DEFAULT_RUNTIME = ROOT / ".temp" / "ocr-runtime"
+DEFAULT_RUNTIME = ROOT / ".temp" / "ocr-msys2-runtime"
 MODEL_SOURCE = ROOT / "app" / "recognition" / "models" / "eng.traineddata"
 MODEL_PROVENANCE = ROOT / "app" / "recognition" / "models" / "provenance.json"
 
@@ -41,6 +41,10 @@ def digest(path) -> str:
 
 def load_manifest(path=MANIFEST_PATH) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def source_identity(manifest):
+    return manifest.get('source') or manifest.get('installer', {})
 
 
 def validate(runtime, manifest=None) -> dict:

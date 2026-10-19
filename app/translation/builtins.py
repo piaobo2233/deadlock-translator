@@ -143,6 +143,4 @@ DEFAULT_GLOSSARY = {
 }
 
 
-from app.translation.terms import exact_terms
-DEFAULT_GLOSSARY.update(exact_terms())
 

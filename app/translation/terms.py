@@ -1,13 +1,29 @@
 """Small official-name dictionary; sentences receive references, never word splicing."""
-import json,re
-from functools import lru_cache
-from pathlib import Path
+import re
+from app.game_data.service import catalogue
 
 # These names also have ordinary meanings. Let sentence context decide.
 AMBIGUOUS=frozenset(('seven','lash','mirage','warden','grey','ivy','inferno','haze','paradox','pocket','dynamo','vindicta'))
-@lru_cache(maxsize=1)
 def records():
-    return json.loads(Path(__file__).with_name('game_terms.json').read_text(encoding='utf-8'))['terms']
+    try:
+        rows = catalogue('terms')['terms']
+        if not isinstance(rows, list) or any(
+                not isinstance(row, dict) or not isinstance(row.get('english'), str)
+                or not row['english'].strip() or not isinstance(row.get('chinese'), str)
+                or not row['chinese'].strip() for row in rows):
+            raise ValueError('Invalid game term records')
+        return rows
+    except (OSError, ValueError, KeyError, TypeError):
+        # Optional game data must never prevent importing the built-in dictionary.
+        return []
+
+
+def _clear():
+    from app.game_data.service import _activated
+    _activated.cache_clear()
+
+
+records.cache_clear = _clear
 
 def exact_terms():
     return {row['english'].casefold():row['chinese'] for row in records()

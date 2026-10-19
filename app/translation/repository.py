@@ -75,6 +75,8 @@ class AuthorityView:
         self._stamp = None
 
     def _stamps(self):
+        from app.translation.terms import exact_terms
+        self.game_terms = exact_terms() if self.builtins and self.builtins_enabled else {}
         stamps = []
         for path in (*self.paths.values(), self.review_path, self.pending_path, Path(self.learning_cache.path)):
             try:
@@ -86,7 +88,7 @@ class AuthorityView:
                 stamps.append(None)
             except OSError:
                 stamps.append("unreadable")
-        return tuple(stamps), self.builtins_enabled, self.learning_policy
+        return tuple(stamps), self.builtins_enabled, self.learning_policy, tuple(self.game_terms.items())
 
     def refresh(self):
         stamp = self._stamps()
@@ -113,7 +115,7 @@ class AuthorityView:
     def _build(self, collections, receipts):
         self.storage_error = any(info["status"] not in {"readable", "missing"}
                                  for info, _ in collections.values())
-        active_builtins = self.builtins if self.builtins_enabled else {}
+        active_builtins = dict(self.builtins, **self.game_terms) if self.builtins_enabled else {}
         self.disabled_builtins = set() if self.builtins_enabled else set(self.builtins)
         self.values, self.sources = dict(active_builtins), {k: "glossary" for k in active_builtins}
         self.inactive, self.blocked, self.legacy_blocked = set(), set(), set()

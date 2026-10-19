@@ -62,6 +62,8 @@ def build_onboarding(parent, app):
                     "未命中的新句子才需要联网接口。",
          small=True, muted=True, wraplength=820, justify="left").pack(anchor="w", pady=(4, 0))
 
+    from gui.game_resources import build
+    build(parent, app)
     area = section(parent, th, "① 翻译服务商")
     text(area, th, "选预设会带出官方接口地址和默认模型；选「自定义兼容接口」后地址与模型都可以自己改。",
          small=True, muted=True, wraplength=820, justify="left").pack(anchor="w", pady=(0, 8))

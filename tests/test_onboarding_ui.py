@@ -207,6 +207,50 @@ class OnboardingUiTests(unittest.TestCase):
         self.assertIn("标记写入失败", self.app.status.cget("text"))
         self.assertFalse(onboarding.is_complete(self.root))
 
+    def test_game_data_preparation_runs_in_background_and_survives_page_switch(self):
+        from app.game_data import service
+        started, release = threading.Event(), threading.Event()
+        self.addCleanup(release.set)
+        def prepare(*_args):
+            started.set()
+            self.assertTrue(release.wait(3))
+            return {'snapshot': {'build_id': 'fixture'}}
+        with patch.object(service, 'inspect', return_value=(None, '尚未准备')), \
+                patch.object(service, 'discover', return_value=Path('fixture')), \
+                patch.object(service, 'prepare', side_effect=prepare) as operation, \
+                patch('app.config.providers.test_connection') as network:
+            self.open_guide()
+            manager = self.app.game_resources
+            self.wait_until(lambda: not manager.busy)
+            manager.controls['prepare'].invoke()
+            self.assertTrue(started.wait(1))
+            manager.prepare()
+            self.assertTrue(self.app.open_page('home'))
+            self.app.root.update()
+            self.assertTrue(manager.busy)
+            self.assertTrue(self.app.open_page('settings'))
+            self.app.root.update()
+            release.set()
+            self.wait_until(lambda: not manager.busy)
+            self.assertIn('请重启助手', manager.controls['status'].cget('text'))
+            self.assertEqual(operation.call_count, 1)
+            network.assert_not_called()
+            self.assertFalse(self.errors)
+
+    def test_reopening_settings_reports_game_update_instead_of_stale_ready_status(self):
+        from app.game_data import service
+        with patch.object(service, 'inspect', side_effect=[(None, '旧版本资料可用'),
+                                                          (None, '游戏已更新，请重新准备')]):
+            self.open_guide()
+            manager = self.app.game_resources
+            self.wait_until(lambda: not manager.busy)
+            self.assertIn('旧版本资料可用', manager.controls['status'].cget('text'))
+            self.app.open_page('home')
+            self.app.open_page('settings')
+            self.wait_until(lambda: not manager.busy)
+            self.assertIn('请重新准备', manager.controls['status'].cget('text'))
+            self.assertFalse(self.errors)
+
 
 if __name__ == "__main__":
     unittest.main()

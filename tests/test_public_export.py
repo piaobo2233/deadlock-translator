@@ -12,6 +12,15 @@ spec.loader.exec_module(export)
 
 
 class PublicExportTests(unittest.TestCase):
+    def test_hashed_evidence_and_upstream_notices_are_exported_verbatim(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(export, 'ConfigRepository') as repository:
+            repository.return_value.load.return_value = {}
+            source = Path(directory) / 'proof.md'
+            source.write_bytes(b'original evidence\r\n')
+            for name in ('docs/releases/proof.json', 'docs/releases/game-data-validation.md',
+                         'docs/licenses/upstream/README.md'):
+                with self.subTest(name=name):
+                    self.assertEqual(export.checked_payloads({name: source})[name], source.read_bytes())
     def test_private_tree_and_credential_are_rejected_without_revealing_the_value(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(export, 'ConfigRepository') as repository:
             repository.return_value.load.return_value = {'api_key': 'fixture-secret-for-export'}

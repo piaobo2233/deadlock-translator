@@ -109,11 +109,13 @@ class ReviewCandidateTests(unittest.TestCase):
 
 class OfficialTermsTests(unittest.TestCase):
     def test_official_pairs_are_real_names_and_no_sentence_splicing(self):
-        self.assertGreater(len(records()),100)
-        self.assertTrue(all(row['tokens'] and row['source'] and row['english']!=row['chinese'] for row in records()))
-        self.assertNotIn('seven',exact_terms())
-        self.assertIn('Seven',hint('help seven on my lane'))
-        self.assertEqual(hint('an unrelated ordinary sentence'),'')
-        self.assertNotIn('push abrams',exact_terms())
+        data = {'terms': [dict(english='Seven',chinese='测试歧义名',tokens=['fixture'],source='fixture'),
+                          dict(english='Fixture Beacon',chinese='测试信标',tokens=['fixture2'],source='fixture')]}
+        with patch('app.translation.terms.catalogue', return_value=data):
+            self.assertEqual(len(records()),2)
+            self.assertNotIn('seven',exact_terms())
+            self.assertIn('Seven',hint('help seven on my lane'))
+            self.assertEqual(hint('an unrelated ordinary sentence'),'')
+            self.assertNotIn('push Fixture Beacon',exact_terms())
 
 if __name__=='__main__':unittest.main()

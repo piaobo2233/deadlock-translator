@@ -112,15 +112,16 @@ class OcrRuntimeManifestTests(unittest.TestCase):
         spec.loader.exec_module(self.module)
         self.manifest = self.module.load_manifest()
 
-    def test_manifest_is_pinned_to_the_official_installer(self):
+    def test_manifest_is_pinned_to_reviewed_runtime_sources(self):
         manifest = self.manifest
-        self.assertEqual(manifest['installer']['sha256'], self.module.INSTALLER_SHA256)
-        self.assertEqual(manifest['installer']['name'], self.module.INSTALLER_NAME)
-        self.assertTrue(manifest['installer']['url'].startswith('https://github.com/tesseract-ocr/'))
+        source = self.module.source_identity(manifest)
+        self.assertEqual(source['kind'], 'msys2-packages')
+        lock = ROOT / source['lock_path']
+        self.assertEqual(hashlib.sha256(lock.read_bytes()).hexdigest(), source['sha256'])
         self.assertIn('5.5.3', manifest['runtime'])
         paths = [row['path'] for row in manifest['files']]
         self.assertEqual(len(paths), len(set(paths)))
-        for required in ('tesseract.exe', 'libtesseract-5.dll', 'tessdata/eng.traineddata',
+        for required in ('tesseract.exe', 'libtesseract-5.5.dll', 'tessdata/eng.traineddata',
                          'libleptonica-6.dll'):
             self.assertIn(required, paths)
         for row in manifest['files']:
@@ -134,7 +135,7 @@ class OcrRuntimeManifestTests(unittest.TestCase):
         self.assertIn('Apache License', (licenses / 'LICENSE').read_text(encoding='utf-8'))
 
     def test_staged_runtime_matches_the_manifest_when_present(self):
-        staged = ROOT / '.temp' / 'ocr-runtime'
+        staged = self.module.DEFAULT_RUNTIME
         if not staged.is_dir():
             self.skipTest('OCR runtime is prepared on demand (scripts/ocr_runtime.py prepare)')
         self.module.validate(staged, self.manifest)

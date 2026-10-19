@@ -35,6 +35,10 @@ def check_links(root):
     checked = 0
     errors = []
     for document in documents:
+        # Preserve upstream license/NOTICE copies verbatim. Their README links
+        # refer to the separately supplied upstream source, not our document tree.
+        if document.is_relative_to(root / 'docs/licenses'):
+            continue
         text = document.read_text(encoding='utf-8-sig')
         text = re.sub(r'(?ms)^\s*(`{3,}|~{3,})[^\n]*\n.*?^\s*\1\s*$', '', text)
         parser = Links()

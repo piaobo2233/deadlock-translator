@@ -5,3 +5,10 @@
 *.yaml text eol=lf
 # cmd.exe can skip/truncate commands in UTF-8 batch files with LF-only newlines.
 *.bat text eol=crlf
+# Preserve SHA-bound audit evidence and original third-party license bytes.
+docs/releases/*.json -text
+scripts/ocr-runtime-manifest.json -text
+docs/releases/game-data-validation.md -text -eol
+docs/licenses/** -text -eol
+app/recognition/models/LICENSE -text
+app/recognition/models/provenance.json -text

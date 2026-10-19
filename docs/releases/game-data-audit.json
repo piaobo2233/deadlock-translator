@@ -1,0 +1,33 @@
+{
+  "audit_date": "2026-10-19",
+  "route": "local_generation",
+  "distribution_files": [],
+  "permission_status": "unconfirmed",
+  "files": [
+    {
+      "path": "app/translation/game_terms.json",
+      "sha256": "28b7b0517d070a85464485a670715abb40ca676282c33cf63413e4e57de1b8bb",
+      "distribution_status": "open"
+    },
+    {
+      "path": "app/recognition/quick_chat.json",
+      "sha256": "58011704ea0efe00e4bac28d2d8187ba2a39185d970d7f5a6eb851c0face7e68",
+      "distribution_status": "open"
+    }
+  ],
+  "checks": {
+    "startup_without_data": "PASS",
+    "same_install_snapshot": "PASS",
+    "upgrade_feedback": "PASS",
+    "preserve_user_data": "PASS",
+    "frozen_generation": "PASS"
+  },
+  "evidence": [
+    {
+      "path": "docs/releases/game-data-validation.md",
+      "sha256": "e70469ff72d2444e3a222c78de13fc3add07598cd36e0efdae227eeabc78dddd",
+      "role": "validation"
+    }
+  ],
+  "conclusion": "Local generation validated on synthetic fixtures and current installed game with frozen CLI; new exports and binaries exclude developer catalogues. Full game acceptance deferred for Beta."
+}

@@ -339,7 +339,8 @@ class CaptureAndWorkerTests(unittest.TestCase):
     def test_real_native_ocr_still_confirms_three_frames_with_adaptive_capture(self):
         import app.main as main
         executable = ocr.find_tesseract()
-        if not executable or not (Path(executable).parent / 'libtesseract-5.dll').is_file():
+        if not executable or not any((Path(executable).parent / name).is_file()
+                                     for name in ('libtesseract-5.5.dll', 'libtesseract-5.dll')):
             self.skipTest('Installed native Tesseract DLL unavailable')
         part = ocr.imread_unicode(str(Path(__file__).resolve().parents[1] /
                                      'verify/truth/body/portrait_go_context.png'))

@@ -30,7 +30,7 @@ PRIVATE_PARTS = {'data', 'backups', '.git', '.temp', 'truth', 'truth_candidates'
 
 
 def git(base, *arguments):
-    return subprocess.check_output(['git', '-c', 'safe.directory=' + str(base), '-C', str(base),
+    return subprocess.check_output(['git', '-c', 'safe.directory=' + Path(base).as_posix(), '-C', str(base),
                                     *arguments])
 
 
@@ -57,9 +57,14 @@ def public_files(base):
     for name in (
         'LICENSE', 'VERSION', 'requirements.txt', 'requirements-build.txt', 'pyproject.toml', '.gitignore', '.gitattributes',
         '启动.vbs', 'scripts/build.bat', 'scripts/ocr-runtime-manifest.json',
-        'app/translation/game_terms.json', 'app/recognition/quick_chat.json',
         'docs/THIRD-PARTY-NOTICES.md', 'docs/guides/安装与首次使用.md',
         'docs/releases/distribution-audit.md', 'docs/releases/ocr-runtime-audit.json',
+        'docs/releases/game-data-audit.json',
+        'docs/guides/本机游戏资料.md', 'docs/releases/v1.0.0-beta.1.md',
+        'docs/releases/ocr-msys2-packages.lock.json', 'docs/releases/ocr-msys2-sources.json',
+        'docs/PROJECT-NOTICE.md', 'docs/releases/README.md', 'tools/extract_game_terms.py',
+        'docs/releases/game-data-validation.md',
+        'verify/game_resources_smoke.py',
         'docs/guides/首版测试与分享.md', 'docs/guides/接收与中文转英文.md',
         'docs/guides/软件更新.md', 'docs/releases/v1.0.0-test.4-rc.4.md',
         'docs/releases/v1.0.0-test.4-rc.1.md', 'docs/releases/v1.0.0-test.4-rc.2.md',
@@ -69,6 +74,12 @@ def public_files(base):
         'verify/source_launcher_smoke.py',
     ):
         selected[name] = ROOT / name
+    from scripts.release_gate import GAME_FILES, bundled_game_files
+    for name in GAME_FILES:
+        selected.pop(name, None)
+    for name in bundled_game_files(ROOT):
+        if (ROOT / name).is_file():
+            selected[name] = ROOT / name
     for target, name in TEMPLATES.items():
         template = ROOT / 'docs/releases' / name
         if template.is_file():
@@ -91,7 +102,11 @@ def checked_payloads(selected):
         if source.resolve() != source.absolute():
             raise ValueError('Linked source file: ' + name)
         body = source.read_bytes()
-        if source.suffix in {'.py', '.md', '.toml', '.yml', '.json', '.html', '.svg'}:
+        # Audit proofs and upstream notices are byte-bound by SHA-256. Preserve
+        # JSON and those verbatim documents instead of changing their line endings.
+        pinned_document = (name.startswith('docs/licenses/')
+                           or name == 'docs/releases/game-data-validation.md')
+        if not pinned_document and relative.suffix in {'.py', '.md', '.toml', '.yml', '.html', '.svg'}:
             body = body.replace(b'\r\n', b'\n')
         if any(secret in body for secret in secrets):
             raise ValueError('Actual credential found in: ' + name)
@@ -108,6 +123,8 @@ def main():
     parser.add_argument('--destination', type=Path, required=True)
     parser.add_argument('--report', type=Path, required=True)
     args = parser.parse_args()
+    from scripts.release_gate import validate_game_data
+    validate_game_data(ROOT)
     base, destination = args.public_base.resolve(), args.destination.absolute()
     if destination.exists():
         parser.error('Destination already exists; preserve it and select a new path')

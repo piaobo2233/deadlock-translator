@@ -11,6 +11,11 @@ from test_ocr_body import synthetic_chat
 from app.vision.body import locate_body, BodyRegion
 
 
+def fixture_catalogue():
+    return QuickChat(dict(names=['代行敕令'], messages=[dict(chinese=value) for value in
+        ('谢了！', '上了', '撤退', '帮忙护送灵瓮', '{s:param_1}好了！')]))
+
+
 class QuickChatFilterTests(unittest.TestCase):
     def test_local_templates_require_manual_official_label_and_exact_glyphs(self):
         import base64,json,tempfile
@@ -29,16 +34,16 @@ class QuickChatFilterTests(unittest.TestCase):
             mask=base64.b64encode(np.packbits(mask).tobytes()).decode())
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/'visual.json'
-            self.assertFalse(QuickChatTemplates(path,QuickChat()).matches(array,region))
+            self.assertFalse(QuickChatTemplates(path,fixture_catalogue()).matches(array,region))
             path.write_text(json.dumps(dict(templates=[row])),encoding='utf-8')
-            templates=QuickChatTemplates(path,QuickChat())
+            templates=QuickChatTemplates(path,fixture_catalogue())
             self.assertTrue(templates.matches(array,region))
             for text in ('go','gj','ES','REM','omg','its uh'):
                 english=synthetic_chat((text,))
                 self.assertFalse(templates.matches(english,locate_body(english,(0,0,*english.shape[1::-1]))))
             row['verified']=False
             path.write_text(json.dumps(dict(templates=[row])),encoding='utf-8')
-            self.assertFalse(QuickChatTemplates(path,QuickChat()).matches(array,region))
+            self.assertFalse(QuickChatTemplates(path,fixture_catalogue()).matches(array,region))
 
     def test_final_chinese_read_never_yields_a_local_glossary_guess(self):
         import numpy as np
@@ -82,7 +87,7 @@ class QuickChatFilterTests(unittest.TestCase):
         self.assertFalse(chat_body_sized(BodyRegion(rect=(0,0,200,96),line_count=15)))
 
     def test_only_official_chinese_messages_and_known_dynamic_names_match(self):
-        catalog = QuickChat()
+        catalog = fixture_catalogue()
         for text in ('谢了！', '上了', '撤退', '帮忙护送灵瓮', '代行敕令好了！'):
             with self.subTest(text=text):
                 self.assertTrue(catalog.matches(text))

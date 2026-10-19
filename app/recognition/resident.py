@@ -14,13 +14,22 @@ import sys
 import threading
 
 
+def native_library(executable):
+    directory = Path(executable).parent
+    for name in ('libtesseract-5.5.dll', 'libtesseract-5.dll'):
+        path = directory / name
+        if path.is_file():
+            return path
+    raise OSError('Resident C API unavailable')
+
+
 class ResidentReader:
     def __init__(self, executable, models, languages, words='', *, startup_timeout=5):
         self.process = None
         self._lock = threading.Lock()
         self._responses = queue.Queue()
-        dll = Path(executable).parent / 'libtesseract-5.dll'
-        if sys.platform != 'win32' or not dll.is_file():
+        dll = native_library(executable)
+        if sys.platform != 'win32':
             raise OSError('Resident C API unavailable')
         env = dict(os.environ, OMP_THREAD_LIMIT='1', PYTHONUTF8='1')
         # The GUI bootloader/pythonw has no standard streams. The hidden helper

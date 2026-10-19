@@ -1,5 +1,6 @@
 """Native, resizable ledger charts with keyboard and pointer inspection."""
 import tkinter as tk
+from tkinter import font as tkfont
 
 from app.storage import usage
 from gui.theme import COLORS as C
@@ -10,6 +11,7 @@ class UsageChart(tk.Canvas):
         super().__init__(parent, bg=C['bg'], height=height, width=1,
                          highlightthickness=1, highlightbackground=C['border'], takefocus=True)
         self.th, self.mode, self.inspect = th, mode, inspect
+        self.small = tkfont.Font(root=self, font=th.font_small)
         self.rows, self.points, self.selected = [], [], 0
         self.bind('<Configure>', lambda _e: self.draw())
         self.bind('<Motion>', self.motion)
@@ -81,14 +83,24 @@ class UsageChart(tk.Canvas):
 
     def draw_models(self, width, height):
         from gui.cost_view import range_cost, _amount_text
-        count = len(self.rows)
+        rows=[(name, bucket, range_cost(bucket)) for name, bucket in self.rows]
+        count = len(rows)
         row_height = max(28, (height-12)/max(count,1))
-        max_amount = max([range_cost(b)['amount'] or 0 for _, b in self.rows] + [.0001])
+        max_amount = max([info['amount'] or 0 for _, _, info in rows] + [.0001])
         name_width = min(165, width*.23)
-        bar_right = max(name_width+25, width-250)
-        for index, (name, bucket) in enumerate(self.rows):
+        texts=[(('已知 ' if info['status']=='partial' else '')+_amount_text(info),
+                f"{bucket.get('api_attempts',0)} 次 · {bucket.get('total_tokens',0):,} Token")
+               for _, bucket, info in rows]
+        # [!] Both texts are anchored in pixel-reserved slots, but the small
+        #     font grows with the display scaling. At 150% DPI the amount and
+        #     "N 次 · M Token" strings overlapped (the reported "小数点和
+        #     次数重在一起"). Reserve their measured widths; 250px is the
+        #     approved 100% geometry, so lower DPI output stays pixel-identical.
+        reserve = max(250, 40+max(self.small.measure(amount) for amount, _ in texts)
+                            + max(self.small.measure(stats) for _, stats in texts))
+        bar_right = max(name_width+25, width-reserve)
+        for index, ((name, bucket, info), (amount_label, stats)) in enumerate(zip(rows, texts)):
             y = 8+row_height*(index+.5)
-            info = range_cost(bucket)
             shown = name if len(name) <= 20 else name[:19]+'…'
             self.label(13,y,shown,fill=C['fg'])
             self.create_line(name_width,y,bar_right,y,fill=C['card_hi'],width=11)
@@ -96,9 +108,8 @@ class UsageChart(tk.Canvas):
             if amount is not None and amount > 0:
                 end = name_width+(bar_right-name_width)*amount/max_amount
                 self.create_line(name_width,y,end,y,fill=C['accent'] if index==0 else C['ok'],width=11)
-            amount_label=('已知 ' if info['status']=='partial' else '')+_amount_text(info)
             self.label(bar_right+12,y,amount_label,fill=C['fg'])
-            self.label(width-12,y,f"{bucket.get('api_attempts',0)} 次 · {bucket.get('total_tokens',0):,} Token",anchor='e')
+            self.label(width-12,y,stats,anchor='e')
             self.points.append((width/2,y,index))
 
     def motion(self, event):

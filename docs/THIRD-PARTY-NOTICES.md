@@ -1,5 +1,15 @@
 # 第三方组件、技术来源与许可
 
+## 1.0.0-beta.1 当前 OCR 分发
+
+本版本用固定 MSYS2 mingw64 包替换历史官方安装器提取运行库：实际 40 个 EXE/DLL 和一个固定英文模型，来自 34 个二进制包、32 个对应源码包。二进制包摘要、原始 BUILDINFO 的配方哈希、逐份精确 PKGBUILD、源码归档及补丁摘要分别在 [包锁定](releases/ocr-msys2-packages.lock.json)、[源码映射](releases/ocr-msys2-sources.json)和[实际逐文件审计](releases/ocr-runtime-audit.json)。原始许可、署名和构建元数据保存在 `docs/licenses/msys2/`，随包复制到 `licenses/tesseract/components/`；未修改上游二进制。
+
+各原组件许可继续适用，包括 GCC runtime exception、LGPL 和 BSD 等文本。特别是同源 jbigkit 的 `libjbig/jbig.c` 明确允许 GPLv2 或任何后续版本；本次选用 GPLv3 路径，GPL 适用的 OCR 组合按 GPL-3.0-or-later 条款提供，保留组件原始 Apache-2.0 等声明，不能把整个 OCR 运行库概括成 Apache-2.0。项目原创源码的 MIT 声明保留。
+
+对应源码、全部选中配方及补丁作为同一 Release 的 `LockLingo-1.0.0-beta.1-ocr-sources.zip` 免费提供，附单独 SHA-256；目录中的每个源码包可按源码映射核对并用 7-Zip / Zstandard 解包。`PKGBUILD` 和 `.BUILDINFO` 记录上游构建方法、选项、依赖和工具版本；这是发行方原始二进制的来源对应，未声称本机重建可逐字节复现。OCR 的 DLL 位于独立 `ocr` 目录，可使用自行构建的兼容组件替换；Python 常驻 worker 的源码在本版本公开标签的 `app/recognition/resident.py`。
+
+下文 test.3/test.4 安装器来源和未闭合状态均为历史记录，不适用于本次已替换的字节，也不改写旧附件事实。
+
 感谢各项目的作者和贡献者。本文以公开源码与 **1.0.0-test.4** 构建产物为核对对象（2026-10-17）；项目原创代码的 [MIT](../LICENSE) 不替代第三方许可。技术用途摘要见[技术致谢](ACKNOWLEDGEMENTS.md)，游戏及截图来源见[项目与素材说明](PROJECT-NOTICE.md)。已发布的 test.1/test.2/test.3 旧包内附的旧说明仍是历史版本。
 
 ## 核对依据
@@ -68,6 +78,8 @@ test.4 构建实际版本（2026-10-17 本机构建环境，随 `licenses/` 收�
 基础 CI 使用 GitHub 官方 [checkout](https://github.com/actions/checkout) 与 [setup-python](https://github.com/actions/setup-python)，工作流固定提交摘要；它们用于仓库检查，不进入助手下载包。
 
 ## 游戏、图片与字体
+
+**本机游戏资料解析**：`app/game_data/valve.py` 的有限 KV3 v5 解码参考并适配社区 [ValveResourceFormat 固定提交](https://github.com/ValveResourceFormat/ValveResourceFormat/tree/73f5ee5a02531f946b5f3e83dc79b264097cf8d3)，原项目为 MIT；原始署名和完整许可保存在 [LICENSE](licenses/ValveResourceFormat/LICENSE)，冻结包同附 `licenses/ValveResourceFormat/LICENSE`。这是社区格式实现，不代表 Valve 官方授权或格式规范。解析器只读取本机安装文件，不附带提取出的游戏资料。
 
 `app/translation/game_terms.json` 来自本机安装的 Valve 游戏本地化文件配对整理，包含来源摘要，并随 test.3 分发；其单独再分发授权依据尚未核实。具体边界见[项目与素材说明](PROJECT-NOTICE.md)，不能概括成“不包含任何游戏数据表”或“全部内容均属项目 MIT”。
 
