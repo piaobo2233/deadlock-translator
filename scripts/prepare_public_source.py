@@ -55,10 +55,11 @@ def public_files(base):
             if source.is_file():
                 selected[source.relative_to(ROOT).as_posix()] = source
     for name in (
-        'LICENSE', 'VERSION', 'requirements.txt', 'pyproject.toml', '.gitignore', '.gitattributes',
+        'LICENSE', 'VERSION', 'requirements.txt', 'requirements-build.txt', 'pyproject.toml', '.gitignore', '.gitattributes',
         '启动.vbs', 'scripts/build.bat', 'scripts/ocr-runtime-manifest.json',
         'app/translation/game_terms.json', 'app/recognition/quick_chat.json',
         'docs/THIRD-PARTY-NOTICES.md', 'docs/guides/安装与首次使用.md',
+        'docs/releases/distribution-audit.md', 'docs/releases/ocr-runtime-audit.json',
         'docs/guides/首版测试与分享.md', 'docs/guides/接收与中文转英文.md',
         'docs/guides/软件更新.md', 'docs/releases/v1.0.0-test.4-rc.4.md',
         'docs/releases/v1.0.0-test.4-rc.1.md', 'docs/releases/v1.0.0-test.4-rc.2.md',

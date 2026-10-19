@@ -128,10 +128,20 @@ class MultilingualTests(unittest.TestCase):
     def test_native_hotkey_registration_conflict_is_reported_without_injection(self):
         from app.platform.win_input import WindowsInput
         errors = []
-        first = WindowsInput({'send': 'Ctrl+Alt+T'}, lambda action: None, errors.append)
-        second = WindowsInput({'send': 'Ctrl+Alt+T'}, lambda action: None, errors.append)
+        # The user's existing translator or another app may own the default key.
+        # Find a free fixture combination without sending any keyboard input.
+        for number in range(1, 12):
+            hotkey = f'Ctrl+Alt+Shift+F{number}'
+            first = WindowsInput({'send': hotkey}, lambda action: None, errors.append)
+            if first.start():
+                break
+            first.close()
+        else:
+            self.fail(f'No fixture hotkey could be registered: {errors}')
+        self.addCleanup(first.close)
+        errors.clear()
+        second = WindowsInput({'send': hotkey}, lambda action: None, errors.append)
         try:
-            self.assertTrue(first.start(), errors)
             self.assertFalse(second.start())
             self.assertTrue(any('快捷键未启用' in error for error in errors))
         finally:

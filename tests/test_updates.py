@@ -200,9 +200,16 @@ class UpdateUiTests(unittest.TestCase):
         self.guard.start()
         self.addCleanup(self.guard.stop)
         self.app = App(str(self.root))
-        self.addCleanup(self.app.root.destroy)
+        self.addCleanup(self.close)
         self.app.open_page('settings')
         self.updater = self.app.updater
+
+    def close(self):
+        import gc
+        self.app.root.destroy()
+        self.updater = self.app = None
+        # Tcl objects must be reclaimed here, before later tests start workers.
+        gc.collect()
 
     def test_notes_skip_defer_manual_recheck_and_navigation(self):
         updater = self.updater

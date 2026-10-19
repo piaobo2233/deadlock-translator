@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 
 NETWORK_GUARD = '''import os,socket,urllib.request
@@ -35,6 +36,8 @@ def create_scope(root):
         if (root/name).is_dir(): shutil.copytree(root/name,source/name,ignore=ignore)
     guard=output/'guard'
     guard.mkdir()
+    temporary=output/'tmp'
+    temporary.mkdir()
     (guard/'sitecustomize.py').write_text(NETWORK_GUARD,encoding='utf-8')
     recovered=[]
     labels=source/'verify/truth_candidates/candidates.jsonl'
@@ -62,6 +65,8 @@ def create_scope(root):
                                   sha256=hashlib.sha256(content.stdout).hexdigest(),human_label=row))
     (output/'recovered_frames.json').write_text(json.dumps(recovered,ensure_ascii=False,indent=2),encoding='utf-8')
     env=dict(os.environ,DEEPSEEK_API_KEY='',DEADLOCK_CHECK_ISOLATED='1',
+             TEMP=str(temporary),TMP=str(temporary),TMPDIR=str(temporary),
+             PATH=str(Path(sys.executable).parent)+os.pathsep+os.environ.get('PATH',''),
              PYTHONPATH=str(guard)+os.pathsep+str(source))
     _write_retention(output, status='active', explicit_keep=False)
     return output,source,guard,env
@@ -132,7 +137,7 @@ def finish_scope(output, summary, report=None, keep=False, keep_failures=3):
         raise ValueError('Report directory cannot be redirected through links')
     report_dir.mkdir(parents=True,exist_ok=True)
     for path in (output/'source/.temp/check').glob('*'):
-        if path.name in {'unit.log','regression.log','suites.json'} and path.is_file():
+        if path.name in {'unit.log','regression.log','windows-public.log','suites.json'} and path.is_file():
             shutil.copy2(path,report_dir/path.name)
     recovered=output/'recovered_frames.json'
     if recovered.is_file():

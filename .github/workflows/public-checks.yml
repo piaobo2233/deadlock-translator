@@ -33,3 +33,24 @@ jobs:
         run: python -m unittest discover -s tests -p test_portable_build.py -v
       - name: Check local document targets
         run: python scripts/check_public.py --links
+
+  windows-checks:
+    name: Windows Tk, update and storage boundaries
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - name: Check out public source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up candidate Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13.14'
+          architecture: x64
+      - name: Install exact candidate package versions
+        run: python -m pip install -r requirements-build.txt
+      - name: Check dependency compatibility
+        run: python -m pip check
+      - name: Run isolated offline Windows checks
+        run: python -X utf8 scripts/check.py --windows-public --report .temp/windows-check.json

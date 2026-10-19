@@ -25,13 +25,27 @@ python -m unittest discover -s tests -p test_public_export.py -v
 python scripts/check_public.py --links
 ```
 
-现有 CI 只验证语法、便携包隐私边界和本地文档文件目标；安装器输入与公开导出的额外用例已在本地运行。Windows/Tk、热键、真实 API、OCR 与整局效果需另验，详见[测试状态](TESTING.md)。公开树不包含私人截图、完整人工真值、data 或开发历史，因此不能复现所有本机测试。
+CI 保留 Linux 语法、包隐私和文档检查，并新增 Windows 2025 / CPython 3.13.14 x64 作业，安装固定依赖后运行下列离线子集。它覆盖 Tk、更新、存储、安装输入和 VBS 启动器，不下载 OCR，不执行安装器或请求真实 API。公开树不含私人截图和完整真值，因此不能复现所有识别回归。详见[测试状态](TESTING.md)。
+
+```powershell
+python -m pip install -r requirements-build.txt
+python -m pip check
+python -X utf8 scripts/check.py --windows-public --report .temp/windows-check.json
+```
+
+测试会新建源码隔离目录，使用独立临时目录并对测试及子进程拒绝真实网络。`--suite-timeout` 默认每套件 360 秒，超时仍保存失败报告和部分日志。测试结束后报告保留在 `.temp/check/reports/`。
+
+## 固定构建环境
+
+`requirements.txt` 保留源码运行的最低兼容范围；候选发行构建使用根目录 `requirements-build.txt` 的 14 项精确版本（含传递依赖），Windows x64、CPython 3.13.14、Tcl/Tk 8.6.12。应在新环境安装固定依赖并执行 `python -m pip check`，不要将现有开发环境整体复制进包。外部输入仍须按清单校验 OCR 安装器；已验证的 Inno Setup 为 6.7.3。版本固定不等于所有构建字节可复现，尚未固定 Windows 镜像和各下载文件哈希。
 
 ## 内置 OCR 与当前用户安装器
 
 在 64 位 Windows 准备运行依赖、PyInstaller、pefile、7-Zip 与 Inno Setup 6.7+。工具只用于构建，不把开发 Python 环境或用户配置直接复制进包。
 
 ```powershell
+python -m pip install -r requirements-build.txt
+python -m pip check
 # 从固定官方安装器解出运行时；来源和摘要见脚本及第三方清单
 python scripts/ocr_runtime.py prepare --installer "C:\Downloads\tesseract-ocr-w64-setup-5.5.3.20260724.exe" --sevenzip "C:\Program Files\7-Zip\7z.exe" --output .temp/ocr-runtime
 python scripts/ocr_runtime.py verify

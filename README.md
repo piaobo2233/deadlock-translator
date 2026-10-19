@@ -2,7 +2,7 @@
 
 为《异锁》（Deadlock）玩家提供聊天翻译和跨语言回复的 Windows 桌面工具。
 
-[![公开源码基础检查](https://github.com/piaobo2233/deadlock-translator/actions/workflows/public-checks.yml/badge.svg?branch=main)](https://github.com/piaobo2233/deadlock-translator/actions/workflows/public-checks.yml)
+[![公开源码检查](https://github.com/piaobo2233/deadlock-translator/actions/workflows/public-checks.yml/badge.svg?branch=main)](https://github.com/piaobo2233/deadlock-translator/actions/workflows/public-checks.yml)
 
 **Windows 10/11 · 64 位** · [MIT 原创源码](LICENSE)
 

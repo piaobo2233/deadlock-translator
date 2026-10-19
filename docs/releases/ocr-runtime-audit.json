@@ -1,0 +1,300 @@
+{
+  "audit_date": "2026-10-19",
+  "scope": "local rc.4 candidate; not distribution clearance",
+  "installer": {
+    "name": "tesseract-ocr-w64-setup-5.5.3.20260724.exe",
+    "url": "https://github.com/tesseract-ocr/tesseract/releases/download/5.5.3/tesseract-ocr-w64-setup-5.5.3.20260724.exe",
+    "sha256": "bee9e3434bd94fd65387d9be28cd467a41f61b1275383b55b0f59a1331270ae4"
+  },
+  "hashes_verified": 35,
+  "runtime_version_report": "tesseract v5.5.3.20260724\n leptonica-1.87.0\n  libgif 5.2.2 : libjpeg 8d (libjpeg-turbo 3.1.3) : libpng 1.6.58 : libtiff 4.7.2 : zlib 1.3.1 : libwebp 1.6.0 : libopenjp2 2.5.4\n Found AVX512BW\n Found AVX512F\n Found AVX512VNNI\n Found AVX2\n Found AVX\n Found FMA\n Found SSE4.1\n Found libarchive 3.8.8 zlib/1.3.2 liblzma/5.8.3 bz2lib/1.0.8 liblz4/1.10.0 libzstd/1.5.7 expat/expat_2.8.2 cng/1.0 libb2/system\n Found libcurl/8.21.0 Schannel zlib/1.3.2 brotli/1.2.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.5 libssh2/1.11.1 WinLDAP\n",
+  "version_warning": "Runtime output includes compile-time dependency versions; PE resources may be generic. Neither proves package provenance.",
+  "files": [
+    {
+      "path": "libarchive-13.dll",
+      "bytes": 972210,
+      "sha256": "ddabddfdc98e1e1342ce4a7069fb4004de6c870d7bc9f4e95ef243dd18468e97",
+      "pe_version_resource": {},
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libb2-1.dll",
+      "bytes": 34653,
+      "sha256": "77bab532b5421d6cdddb96c3ae9a4bde144eb481ccaf243336c9f8c690a50987",
+      "pe_version_resource": {},
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libbrotlicommon.dll",
+      "bytes": 143429,
+      "sha256": "ca7bc06ead80259971badf2cd0bfc688db9154dad65f139f49a38b4be9976f97",
+      "pe_version_resource": {},
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libbrotlidec.dll",
+      "bytes": 62461,
+      "sha256": "a142dc6cfa77cb907028aa9426f486f3d8de37855e8db2ae2894147908121881",
+      "pe_version_resource": {},
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libbz2-1.dll",
+      "bytes": 100964,
+      "sha256": "b79cd3a7102e359ef6324e98966a67939e58ec2b651ae2847cae84a4dfa453f7",
+      "pe_version_resource": {},
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libcurl-4.dll",
+      "bytes": 1226963,
+      "sha256": "3d302f9690e810fdfd950254e2f0663d0ff768737f350c602a4ed3a06e9b6b2b",
+      "pe_version_resource": {
+        "FileVersion": "8.21.0",
+        "ProductName": "The curl library",
+        "ProductVersion": "8.21.0",
+        "LegalCopyright": "Copyright (C) Daniel Stenberg, <daniel@haxx.se>."
+      },
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libdeflate.dll",
+      "bytes": 99228,
+      "sha256": "3f3fc3a73bc3623dc93b37bb321c484d3731d93006fd01c0495d15711826eb44",
+      "pe_version_resource": {},
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libexpat-1.dll",
+      "bytes": 237603,
+      "sha256": "92ae866c6c58dd2d8366aa0e6230ba8d434d5306e8d8c3a08b7e61750fc16153",
+      "pe_version_resource": {
+        "FileVersion": "2.8.2.0",
+        "ProductVersion": "2.8.2.0"
+      },
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libgcc_s_seh-1.dll",
+      "bytes": 954773,
+      "sha256": "172cfdc9d83703ec0a0ca2cee08f6cf2a166b801717ee51a56b3a63b36bc2f83",
+      "pe_version_resource": {},
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libgif-7.dll",
+      "bytes": 45777,
+      "sha256": "5b3d837ccaab84683dd93fbaddf2d98e1a9f90e0ddb8ea73dc70157adb4d26f1",
+      "pe_version_resource": {},
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libiconv-2.dll",
+      "bytes": 1143148,
+      "sha256": "7a282a854e01be726c6cccfe46f548c716aa45b3014818468253aaa4efbcd067",
+      "pe_version_resource": {
+        "FileVersion": "1.19",
+        "LegalCopyright": "Copyright (C) 1999-2026",
+        "ProductName": "libiconv: character set conversion library",
+        "ProductVersion": "1.19"
+      },
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libidn2-0.dll",
+      "bytes": 247081,
+      "sha256": "9880b52651a0247640a2531d777380f7c35fac7efa7e3979b265ddcb78db8642",
+      "pe_version_resource": {},
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libintl-8.dll",
+      "bytes": 298731,
+      "sha256": "0537c3dd2378218508ebe3cc416d72a99ee2d24ae1c5525e23458f32544ef861",
+      "pe_version_resource": {
+        "FileVersion": "1.0",
+        "LegalCopyright": "Copyright (C) 1995-2024",
+        "ProductName": "GNU libintl: accessing NLS message catalogs",
+        "ProductVersion": "1.0"
+      },
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libjbig-0.dll",
+      "bytes": 62083,
+      "sha256": "275a827ba6839d47cfdbe059db1b1b403a92ff26e2b76a29362915487868bef2",
+      "pe_version_resource": {},
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libjpeg-8.dll",
+      "bytes": 967968,
+      "sha256": "b564d34adaca83e73af0e2231719dd0198ea6cd074c64b2ba85bfd7182f27db7",
+      "pe_version_resource": {},
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libleptonica-6.dll",
+      "bytes": 2850600,
+      "sha256": "1869b44e3d46fd830620b042477e5d60a950779582f38f60291547efb27792f1",
+      "pe_version_resource": {},
+      "material_status": "Leptonica license collected; exact binary/source-build correspondence remains to verify"
+    },
+    {
+      "path": "libLerc.dll",
+      "bytes": 804265,
+      "sha256": "6887fb5aeabf382a835a4cb693025e8d48d9c90e82ca4eae5d2d8ffb70c6ca9a",
+      "pe_version_resource": {},
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "liblz4.dll",
+      "bytes": 158649,
+      "sha256": "35f917274bca8f19677ba66f1b3cc3c83568c3249fc43215fc16e76439c8e856",
+      "pe_version_resource": {
+        "FileVersion": "1.10.0.0",
+        "LegalCopyright": "Copyright (C) 2013-2020, Yann Collet",
+        "ProductName": "LZ4",
+        "ProductVersion": "1.10.0.0"
+      },
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "liblzma-5.dll",
+      "bytes": 191836,
+      "sha256": "dc9edb9bd83b0371fe68d96cb3e70cd17b7a5aba958326a18f8210cb812432e9",
+      "pe_version_resource": {
+        "FileVersion": "5.8.3",
+        "ProductName": "XZ Utils <https://tukaani.org/xz/>",
+        "ProductVersion": "5.8.3"
+      },
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libopenjp2-7.dll",
+      "bytes": 519082,
+      "sha256": "123587086cb1a25d2a338fb9b7c1d6bda10bf9062625b4f08c6a92b3d9cafe47",
+      "pe_version_resource": {},
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libpng16-16.dll",
+      "bytes": 264269,
+      "sha256": "3737838ee8d6b893df7bdabf7439775371a57dce7e17ee6b35586023c64bd9ab",
+      "pe_version_resource": {},
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libpsl-5.dll",
+      "bytes": 105304,
+      "sha256": "b31fc70eda598a39b65fe2736d815518db0652d641346f75eac40c2a0499b058",
+      "pe_version_resource": {},
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libsharpyuv-0.dll",
+      "bytes": 53757,
+      "sha256": "ab0c9f61dc69b6bcdff1011e215f8d5fd6e5096aba9be3386ab87f217fbbeffe",
+      "pe_version_resource": {},
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libssh2-1.dll",
+      "bytes": 271318,
+      "sha256": "ee7fe3e749859334c99e9261689481dd879811122598d22585421f95d29fc7ae",
+      "pe_version_resource": {
+        "FileVersion": "1.11.1",
+        "ProductName": "The libssh2 library",
+        "ProductVersion": "1.11.1",
+        "LegalCopyright": "Copyright (C) The libssh2 project and its contributors."
+      },
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libstdc++-6.dll",
+      "bytes": 26390974,
+      "sha256": "5fe5d4d8f6636eb6f2dc55be99dc5dc8a6c40db1abdf592e84480d1e6985abd0",
+      "pe_version_resource": {},
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libtesseract-5.dll",
+      "bytes": 3501048,
+      "sha256": "54d54528b453ce3a5ba79487687f8df43e7b194b9ea97beba74200453fe1fb46",
+      "pe_version_resource": {},
+      "material_status": "Tesseract license and AUTHORS collected; installer dependency coverage is separate"
+    },
+    {
+      "path": "libtiff-6.dll",
+      "bytes": 625178,
+      "sha256": "47fe69165bf8e211aaa84224f51f145dc894e330fe7ca167f7c99419e0c8c894",
+      "pe_version_resource": {},
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libunistring-5.dll",
+      "bytes": 2251328,
+      "sha256": "b91e2850d3668d4931056a8f4d35783b8ec3eea3735485108a936a072cd16071",
+      "pe_version_resource": {
+        "FileVersion": "1.4.2",
+        "LegalCopyright": "Copyright (C) 2001-2019",
+        "ProductName": "GNU libunistring: Unicode string library",
+        "ProductVersion": "1.4.2"
+      },
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libwebp-7.dll",
+      "bytes": 749724,
+      "sha256": "c6c21a10f8cfe13270832e64640b82709e1d87b956b5f15af435a6c25acd6bbf",
+      "pe_version_resource": {},
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libwebpmux-3.dll",
+      "bytes": 82858,
+      "sha256": "2c8a2e9d7901ec65330f31f9989c2a07ef0506e903b485fcd8b241a6bab9b88f",
+      "pe_version_resource": {},
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libwinpthread-1.dll",
+      "bytes": 65955,
+      "sha256": "6a661d5846d80a91394dbb9b2dab87ba3cc705eac80ad45fe73677bff70cd6d2",
+      "pe_version_resource": {
+        "ProductVersion": "1, 0, 0, 0",
+        "FileVersion": "1, 0, 0, 0",
+        "LegalCopyright": "Copyright (C) MinGW-W64 Project Members 2010-2023"
+      },
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "libzstd.dll",
+      "bytes": 1218273,
+      "sha256": "b95c223a9548a9ecf51377c962e0bc8f0c51eb0c6f67a296dbc885996f0dd40d",
+      "pe_version_resource": {},
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    },
+    {
+      "path": "tessdata/eng.traineddata",
+      "bytes": 4113088,
+      "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+      "pe_version_resource": {},
+      "material_status": "Pinned tessdata_fast model provenance and Apache-2.0 collected"
+    },
+    {
+      "path": "tesseract.exe",
+      "bytes": 1867784,
+      "sha256": "c66f0f12ed76f6aa455dac97684bbc86756d6a732380bee09122454cfda3f420",
+      "pe_version_resource": {},
+      "material_status": "Tesseract license and AUTHORS collected; installer dependency coverage is separate"
+    },
+    {
+      "path": "zlib1.dll",
+      "bytes": 128488,
+      "sha256": "93e9243a44c29200eeacaf9658efe2558581770e4b11ca4b500e18e424a6e3b5",
+      "pe_version_resource": {},
+      "material_status": "Open: exact upstream source/build provenance, license texts and redistribution obligations"
+    }
+  ]
+}
