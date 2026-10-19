@@ -61,14 +61,14 @@ class ResidentReader:
     def finished(self):
         return self.process is None or self.process.poll() is not None
 
-    def read(self, image, mode, *, source=False, timeout=2):
+    def read(self, image, mode, *, source=False, timeout=2, language=''):
         # One helper owns both language contexts; no native thread touches Tk.
         with self._lock:
             if self.process is None or self.process.poll() is not None:
                 raise OSError('Resident OCR stopped')
             try:
                 height, width = image.shape[:2]
-                payload = dict(width=width, height=height, mode=mode, source=source,
+                payload = dict(width=width, height=height, mode=mode, source=source, language=language,
                     pixels=base64.b64encode(image.tobytes()).decode('ascii'))
                 self.process.stdin.write(json.dumps(payload) + '\n')
                 self.process.stdin.flush()
@@ -129,15 +129,20 @@ def worker(dll, models, languages, words):
         function.restype, function.argtypes = result, arguments
     contexts = []
     try:
-        for index, language in enumerate((languages, 'chi_sim+' + languages, 'chi_sim+eng')):
+        source_languages = '+'.join(dict.fromkeys(('chi_sim', *languages.split('+'))))
+        def initialize(language, use_words=False):
             api = lib.TessBaseAPICreate()
             contexts.append(api)
-            use_words = bool(words) and index == 0
+            use_words = bool(words) and use_words
             names = (string * 1)(b'user_words_file') if use_words else None
             values = (string * 1)(words.encode('utf-8')) if use_words else None
             if not api or lib.TessBaseAPIInit4(api, models.encode('utf-8'), language.encode('ascii'),
                     1, None, 0, names, values, 1 if use_words else 0, 0):
                 raise OSError('Native model initialization failed')
+            return api
+        defaults = [initialize(languages, True), initialize(source_languages)]
+        english = None
+        scripts = {}
         print(json.dumps({'ready': True}), flush=True)
         for line in sys.stdin:
             request = json.loads(line)
@@ -145,7 +150,27 @@ def worker(dll, models, languages, words):
             pixels = base64.b64decode(request['pixels'], validate=True)
             if not 0 < width * height <= 16000000 or len(pixels) != width * height:
                 raise ValueError('Invalid grayscale image')
-            api = contexts[2 if request['source'] == 'english' else bool(request['source'])]
+            language = request.get('language', '')
+            if language:
+                if language not in ('jpn', 'kor', 'rus'):
+                    raise ValueError('Invalid script model')
+                key = (language, bool(request['source']))
+                if key not in scripts:
+                    # Keep one script pair, rather than retaining six more full
+                    # model contexts after a multilingual conversation.
+                    if scripts and next(iter(scripts))[0] != language:
+                        for old in scripts.values():
+                            lib.TessBaseAPIDelete(old)
+                            contexts.remove(old)
+                        scripts.clear()
+                    scripts[key] = initialize(language + '+eng+chi_sim', not request['source'])
+                api = scripts[key]
+            elif request['source'] == 'english':
+                if english is None:
+                    english = initialize('chi_sim+eng')
+                api = english
+            else:
+                api = defaults[bool(request['source'])]
             buffer = ctypes.create_string_buffer(pixels)
             lib.TessBaseAPISetPageSegMode(api, request['mode'])
             lib.TessBaseAPIClearAdaptiveClassifier(api)

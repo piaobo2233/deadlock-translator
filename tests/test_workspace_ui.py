@@ -59,6 +59,27 @@ class WorkspaceTests(unittest.TestCase):
     def draft(self,d,value):
         d.draft.delete('1.0','end');d.draft.insert('1.0',value)
 
+    def test_dictionary_snapshot_reuses_reads_and_tracks_external_changes(self):
+        self.seed();d=self.dictionary('formal');self.choose(d,'first');self.draft(d,'快照草稿')
+        with patch.object(d.service,'_read',wraps=d.service._read) as queue_read, patch.object(store,'read_json',wraps=store.read_json) as reads:
+            d.refresh();d.keyword.set('first');d.refresh();d.pick('review');d.refresh()
+            queue_read.assert_not_called();reads.assert_not_called()
+        with patch.object(d.service,'_read',wraps=d.service._read) as queue_read:
+            d.reload();queue_read.assert_called_once()
+        d.pick('formal');self.choose(d,'first')
+        self.assertEqual(d.draft.get('1.0','end-1c'),'快照草稿')
+        entries=store.load_glossary_file(self.glossary);entries['external']=store.glossary_entry('外部修改')
+        store.save_glossary_file(self.glossary,entries)
+        with patch.object(d.service,'_read',wraps=d.service._read) as queue_read:
+            d.refresh();queue_read.assert_called_once()
+        self.assertTrue(any(row['key']=='external' for row in d.rows))
+        current=str(d.draft);d.refresh();self.assertEqual(str(d.draft),current)
+        self.assertEqual(d.draft.get('1.0','end-1c'),'快照草稿')
+        Path(self.glossary).write_text('{broken',encoding='utf-8');d.refresh();self.assertTrue(d.blocked)
+        Path(self.glossary).write_text(json.dumps(dict(version=2,entries=entries)),encoding='utf-8')
+        d.reload();self.assertFalse(d.blocked)
+        self.assertEqual(d.draft.get('1.0','end-1c'),'快照草稿')
+
     def test_seven_nav_and_independent_usage_and_unknown_error(self):
         self.assertEqual(list(self.app.nav_buttons),['home','send','dictionary','recognition','api','cost','settings'])
         for name,current in (('home','home'),('ingame','recognition'),('cost','cost')):
@@ -411,10 +432,9 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(d.new_original.get(),'new draft');self.assertEqual(d.draft.get('1.0','end-1c'),'新增草稿')
         self.button('保存新词条').invoke();self.assertEqual(store.load_glossary_file(self.glossary)['new draft']['zh'],'新增草稿')
         store.save_memory_file(store.data_path(self.root,'translations.json'),{'historic':store.memory_entry('历史译文')})
-        d.pick('memory');self.choose(d,'historic');self.assertEqual(d.draft.cget('state'),'disabled')
-        for text in ('保存修改','停用这条','重新启用','确认并加入词库'):
-            with self.assertRaises(StopIteration):self.button(text)
-        self.assertFalse(d.add_button.winfo_manager())
+        from app.translation import memory_ops
+        self.assertEqual(memory_ops.rows(store.data_path(self.root,'translations.json'))[0]['translation'], '历史译文')
+        self.assertEqual(set(d.tabs), {'formal','review','processed'})
         d.tabs['formal'].invoke();self.app.root.update();self.button('＋ 添加词条').invoke()
         self.assertEqual(d.state['tab'],'formal');self.assertTrue(all(r['key']!='historic' for r in d.rows))
         d.new_original.insert(0,'history button formal');self.draft(d,'只写正式词库');self.button('保存新词条').invoke()

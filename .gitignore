@@ -38,6 +38,7 @@ notchat.jsonl
 backups/
 run.log
 run.log.1
+debug.log
 run_上一局.log
 
 # ---------------- 运行时状态（不是用户数据，随时可删） ----------------

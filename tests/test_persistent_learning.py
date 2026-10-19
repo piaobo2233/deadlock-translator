@@ -273,7 +273,7 @@ print(json.dumps(dict(text=r.text,source=r.source,attempts=r.api_attempts)))
         self.assertFalse((self.root/'learning_cache.json').exists())
         evidence=engine.journal.read('together')['quality_checks']
         self.assertEqual(evidence['checks'],dict(empty='pass',model_echo='reject',source_garbage='not_run',not_chinese='not_run'))
-        self.assertEqual(engine._learn_fail_streak,0)
+        self.assertEqual(engine._fail_streak,0)
 
     def test_explicit_legacy_learning_recovery_is_zero_http_and_no_formal_write(self):
         first=self.engine()

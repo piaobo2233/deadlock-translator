@@ -61,9 +61,7 @@ class Consensus:
         self.static_seen = {}
         # 确认名单：由调用方注入，参与抑制，**本类绝不修改它**。
         self.static_blacklist = set()
-        # 本会话自动学到的静态位置：参与抑制，但**只活在这次进程里**。
-        # 分家的理由见 _is_static 的说明。
-        self.static_learned = set()
+        # 自动观测候选仅供人工审查，不参与抑制。
         self.static_candidates = {}
         # [!] 2026-10-11：被静态名单挡掉的次数。原来这件事**完全不可见**
         #     （feed 直接 return None，连 [BUBBLE] 都不打），博士因此在"什么都
@@ -118,7 +116,6 @@ class Consensus:
         prev = self.static_seen.get(pk)
         if prev and prev[0] == key:
             if now - prev[1] >= self.static_seconds:
-                self.static_learned.add(pk)
                 self.static_candidates.setdefault(pk, {"text": key, "at": now})
         else:
             self.static_seen[pk] = (key, now)

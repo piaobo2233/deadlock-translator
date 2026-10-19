@@ -205,7 +205,8 @@ class SourceModelTests(unittest.TestCase):
         manifest=json.loads((models/'provenance.json').read_text())
         for name,info in manifest['files'].items():
             self.assertEqual(hashlib.sha256((models/name).read_bytes()).hexdigest(),info['sha256'])
-        self.assertIn('app\\recognition\\models;app\\recognition\\models',(root/'scripts/build.bat').read_text(encoding='utf-8'))
+        self.assertIn("(str(source / 'app/recognition/models'), 'app/recognition/models')",
+                      (root/'scripts/installer/locklingo.spec').read_text(encoding='utf-8'))
 
     def test_ocr_failure_and_timeout_never_claim_source_verification(self):
         import subprocess

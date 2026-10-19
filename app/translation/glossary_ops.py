@@ -9,11 +9,13 @@
     尤其是「删除」：在「内置表 + 用户文件」的合并模型下，
     删除**必须落成墓碑**。写错了就是那个最难查的 bug ——
     用户点了删除、看着没了、重启又回来了，而且不报任何错。
-    详见 deadlock_translate.load_glossary 的说明。
+    合并规则见 app.translation.glossary。
 """
 
 import os
-import app.main as dt
+from app.paths import application_root
+from app.translation.builtins import DEFAULT_GLOSSARY
+from app.translation.glossary import merge_glossary
 import app.storage.store as store
 from app.translation.query import QueryKey, normalize_query
 
@@ -30,7 +32,7 @@ STATUS_DELETED = "已删除"
 
 
 def _path(path: str = "") -> str:
-    return path or dt.GLOSSARY_PATH
+    return path or store.data_path(application_root(), 'glossary.json')
 
 
 def _norm(word: str) -> str:
@@ -56,7 +58,7 @@ def _aliases(entries, name):
     return [key for key in entries if _norm(key) == name] or [name]
 
 
-def rows(path: str = "", hits=None) -> list:
+def rows(path: str = "", hits=None, *, entries=None, config=None) -> list:
     """合并视图 → 界面用的行。
 
     [!] 必须用**合并后**的视图（内置表 + 文件），不能只列文件条目：
@@ -66,12 +68,13 @@ def rows(path: str = "", hits=None) -> list:
     每行：
         word / translation / cat / hits / last_used / status / source / in_file
     """
-    entries = _entries(path)
+    if entries is None:
+        entries = _entries(path)
     from app.config.validation import normalize_config
     config_path = os.path.join(os.path.dirname(_path(path)), 'config.json')
-    raw = store.read_json(config_path,{})
+    raw = store.read_json(config_path,{}) if config is None else config
     config,_ = normalize_config(raw if isinstance(raw,dict) else {})
-    merged = dt.load_glossary(_path(path),builtins_enabled=config['builtins_enabled'])
+    merged = merge_glossary(entries, builtins_enabled=config['builtins_enabled'])
     out = []
     for word in sorted(set(merged) | set(entries)):
         entry = entries.get(word) or {}
@@ -167,7 +170,7 @@ def restore(path: str, word: str):
         if any(entries[key].get('quarantine_reason') for key in aliases):
             reason='这条历史译文需要人工核对；请在待审核确认，或编辑译文后保存'
             return False
-        if any(not entries[key].get("zh") for key in aliases) and name not in dt.DEFAULT_GLOSSARY:
+        if any(not entries[key].get("zh") for key in aliases) and name not in DEFAULT_GLOSSARY:
             reason = "这条没有译文，恢复不了（先编辑它填上译文）"
             return False
         for key in aliases:
@@ -189,7 +192,7 @@ def set_enabled(path: str, word: str, enabled: bool) -> bool:
             entry["enabled"] = bool(enabled)
             if enabled:
                 entry["deleted"] = False
-                entry["restored_builtin"] = not bool(entry.get("zh")) and name in dt.DEFAULT_GLOSSARY
+                entry["restored_builtin"] = not bool(entry.get("zh")) and name in DEFAULT_GLOSSARY
             if key not in entries:
                 entry["query_key"] = QueryKey.from_text(str(word)).as_dict()
             entries[key] = entry
@@ -199,7 +202,7 @@ def set_enabled(path: str, word: str, enabled: bool) -> bool:
 def stats(path: str = "") -> dict:
     """给界面上那行状态用的计数。"""
     entries = _entries(path)
-    merged = dt.load_glossary(_path(path))
+    merged = merge_glossary(entries)
     return {
         "active": len(merged),
         "total": len(set(merged) | set(entries)),
@@ -207,7 +210,7 @@ def stats(path: str = "") -> dict:
                         if not v.get("deleted") and v.get("enabled") is False),
         "deleted": sum(1 for v in entries.values() if v.get("deleted")),
         "file": len(entries),
-        "builtin": len(dt.DEFAULT_GLOSSARY),
+        "builtin": len(DEFAULT_GLOSSARY),
     }
 
 
@@ -233,7 +236,7 @@ def import_rows(path: str, items: list, hits=None) -> dict:
     """
     result = {"added": 0, "duplicate": 0, "invalid": 0}
     def merge(entries):
-        existing = {_norm(key) for key in entries} | set(dt.DEFAULT_GLOSSARY)
+        existing = {_norm(key) for key in entries} | set(DEFAULT_GLOSSARY)
         for item in items or []:
             if not isinstance(item, dict):
                 result["invalid"] += 1

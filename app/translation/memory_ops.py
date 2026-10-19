@@ -16,7 +16,7 @@
 
 import os
 
-import app.main as dt
+from app.paths import application_root
 import app.translation.glossary_ops as glossary_ops
 import app.storage.store as store
 from app.translation.query import QueryKey
@@ -37,7 +37,7 @@ ROWS_HINT = ("翻译记忆是句子级的历史译文，由程序自动积累。
 
 
 def _path(path: str = "") -> str:
-    return path or dt.MEMORY_PATH
+    return path or store.data_path(application_root(), 'translations.json')
 
 
 def _load(path: str) -> dict:

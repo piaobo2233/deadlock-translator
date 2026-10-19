@@ -13,7 +13,7 @@ LABELS = dict(pending='本地未命中，在线翻译未启用',none='未配置�
 LABELS['learning_capacity'] = '候选缓存已满'
 LABELS['review_capacity'] = '审核记录不可写或待审核已满'
 LABELS['review_storage'] = '审核记录保存或恢复未完成'
-LABELS['source_unverified'] = '原图英文证据不足，未请求接口'
+LABELS['source_unverified'] = '原图正文复核不足，未请求接口'
 LABELS.update(delivery_error='结果交付异常', shared_capacity='同句等待已满',
               request_abandoned='未知结果已放弃')
 

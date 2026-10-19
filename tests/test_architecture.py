@@ -51,8 +51,6 @@ class ArchitectureTests(unittest.TestCase):
         forbidden = {"deadlock_translate", "deadlock_ocr", "gui", "tkinter"}
         independent = ("config", "storage", "runtime", "translation", "vision", "presentation")
         for path in (p for name in independent for p in (ROOT / "app" / name).rglob("*.py")):
-            if path.name in {"glossary_ops.py", "memory_ops.py"}:
-                continue  # Existing UI operations depend on the application assembly.
             tree = ast.parse(path.read_text(encoding="utf-8"))
             for node in ast.walk(tree):
                 names = []

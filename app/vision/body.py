@@ -186,6 +186,16 @@ def _glyph_lines(crop, scale, *, exclude_edge_components=False):
                     and min(abs(line[0][1] + line[0][3] - baseline) for baseline in baselines)
                     >= typical_height]
     selected.extend(g for line in single_lines for g in line)
+    # A leading 一 is a flat stroke, so it cannot establish chat geometry on its
+    # own. Once a line is established, retain nearby strokes inside its text band.
+    for x, y, width, height, area in stats[1:]:
+        if (0 < height <= max(2, round(3 * scale)) and area >= 6 * scale * scale
+                and max(8 * scale, typical_height * .6) <= width <= typical_height * 1.7
+                and x > edge and x + width < crop.shape[1] - edge
+                and any(abs(y + height / 2 - (g[1] + g[3] / 2)) <= typical_height * .4
+                        and min(abs(x + width - g[0]), abs(x - g[0] - g[2])) <= typical_height * 1.5
+                        for g in selected)):
+            selected.append(tuple(map(int, (x, y, width, height))))
     return selected, len(coherent) + len(single_lines)
 
 

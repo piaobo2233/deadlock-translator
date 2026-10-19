@@ -29,17 +29,19 @@ from app.translation.results import TranslationResult, TranslationStatus
 
 
 class ReceiveTests(unittest.TestCase):
-    def test_receive_languages_and_any_han(self):
+    def test_receive_languages_and_mixed_bodies(self):
         for value in ('hola equipo', 'precisamos de ajuda', 'attendez moi', 'Wir brauchen Hilfe',
-                      'où êtes vous', 'não agora', 'danke', 'gracias', 'wait for me'):
+                      'où êtes vous', 'não agora', 'danke', 'gracias', 'wait for me',
+                      '一緒に攻撃しよう', 'まって', '같이 공격해요', 'Ждите меня',
+                      '中 push together', 'push 中'):
             self.assertTrue(dt.is_chat_text(value, {}), value)
             selection = dt.select_candidate([('body7', value)], {}, dt.recognition_rules())
             self.assertEqual(selection.text, value)
             self.assertEqual(dt._translation_quality_report(value, '一起行动', {})['reason'], '')
-        for value in ('中 push together', 'push 中', 'a𠀀b'):
+        for value in ('等我一起推', 'a𠀀b', '我们在 A 点', '按 O 键', '我们在 mid', '玩 Deadlock', '用 Haze Seven'):
             self.assertTrue(contains_han(value))
             self.assertFalse(dt.is_chat_text(value, {}))
-        for value in ('O0O0 O00', 'Ждите меня', 'eeeeeeee rrrrrrr'):
+        for value in ('O0O0 O00', 'eeeeeeee rrrrrrr', 'ああああああ', 'ㅋㅋㅋㅋㅋㅋ'):
             self.assertFalse(dt.is_chat_text(value, {}), value)
 
     def test_source_preserves_accents_word_boundaries_and_numbers(self):
@@ -48,7 +50,8 @@ class ReceiveTests(unittest.TestCase):
         self.assertTrue(read('não agora', 'não agora').verified)
         self.assertFalse(read('no agora', 'não agora').verified)
         self.assertFalse(read('wait 2', 'wait 3').verified)
-        self.assertEqual(read('中 push', 'push').reason, 'native_chinese')
+        self.assertEqual(read('中 push', 'push').reason, 'source_disagrees')
+        self.assertTrue(read('中 push', '中 push').verified)
 
     def test_first_ocr_time_and_pipeline_deadline_include_votes(self):
         clock = [10.]

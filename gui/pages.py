@@ -262,28 +262,6 @@ def _text(app, holder, key, config, width=22, secret=False, path=False):
     return var
 
 
-def _section(parent, th, tag):
-    """区块 = **工业标签 + 细线 + 内容区**（§10：靠排版层级，不靠 Card）。
-
-    标签用大写英文（§12）—— 那是"设备丝印"的视觉语言，不是装英文。
-    内容仍然是中文。
-    """
-    return th.section(parent, tag)
-
-
-def _page_title(parent, th, en, cn=""):
-    """统一页首：设备标签在上、清晰标题在下，避免每页各画一套标题。"""
-    box = th.tk.Frame(parent, bg=COLORS["bg"])
-    box.pack(fill="x", pady=(2, th.t["sp_m"]))
-    if cn:
-        th.label(box, cn, bg=COLORS["bg"], fg=COLORS["fg"],
-                 font=th.font_title, wraplength=520, justify="left").pack(anchor="w", pady=(3, 0))
-    else:
-        th.label(box, en, bg=COLORS["bg"], fg=COLORS["fg"],
-                 font=th.font_title).pack(anchor="w", pady=(3, 0))
-    return box
-
-
 def _render_spec(app, parent, keys, config):
     """按 settings_spec 渲染一组设置项。**文案和默认值都来自规格。**"""
     th = app.th

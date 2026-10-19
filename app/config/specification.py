@@ -41,7 +41,7 @@ SPEC = [
     dict(key='recognize_hotkey', page='OCR', type='text', label='识别快捷键',
          hint='手动模式按下后识别所选区域；修改后重启助手。', live=False),
     dict(key='auto_send', page='常规', type='bool', label='回填后自动发送',
-         hint='默认关闭；下次输入翻译时使用，成功回填且输入/焦点未变化时按 Enter。', live=True),
+         hint='默认开启；关闭后只回填。成功回填且输入/焦点未变化时按 Enter，沿用当前频道。', live=True),
     dict(key='recognition_mode', page='OCR', type='choice', options=('realtime','manual'),
          label='识别模式', hint='实时持续识别；手动模式仅按快捷键识别。修改后重启助手。', live=False),
     dict(key='capture_preset', page='OCR', type='choice', options=('auto','1920x1080','2560x1440','3840x2160'),

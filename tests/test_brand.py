@@ -12,6 +12,26 @@ ICON_SHA256 = '14f1933681f917163f7e30b0a364a6e3eb6543f7552226ed6e1792a75bbcea68'
 
 
 class BrandAssetTests(unittest.TestCase):
+    def assert_shell_brand(self, window):
+        import os
+        if os.name != 'nt':
+            return
+        import ctypes
+        from app.platform.window_identity import (
+            property_store, property_key, PropertyKey, PropVariant)
+        with property_store(window) as (store, table):
+            get = ctypes.WINFUNCTYPE(ctypes.HRESULT, ctypes.c_void_p,
+                ctypes.POINTER(PropertyKey), ctypes.POINTER(PropVariant))(table[5])
+            for pid, expected in ((5, brand.APP_ID), (3, brand.icon_path() + ',0')):
+                value = PropVariant()
+                self.assertGreaterEqual(get(store, ctypes.byref(property_key(pid)),
+                                            ctypes.byref(value)), 0)
+                try:
+                    self.assertEqual(value.vt, 31)
+                    self.assertEqual(value.value.text, expected)
+                finally:
+                    ctypes.OleDLL('ole32').PropVariantClear(ctypes.byref(value))
+
     def test_user_visible_names_are_centralized(self):
         self.assertEqual(brand.NAME_CN, '锁语')
         self.assertEqual(brand.NAME_EN, 'LockLingo')
@@ -48,12 +68,29 @@ class BrandAssetTests(unittest.TestCase):
             self.skipTest(f"No display: {type(exc).__name__}")
         try:
             self.assertTrue(brand.apply_window_icon(probe))
+            self.assert_shell_brand(probe)
         finally:
             probe.destroy()
         from app.platform.tray import make_icon_image
         images = {state: make_icon_image(state, 32).tobytes()
                   for state in ('ok', 'api', 'paused', 'error')}
         self.assertEqual(len(set(images.values())), 4)
+
+    def test_borderless_overlay_keeps_shell_brand_after_mapping(self):
+        import os
+        if os.name != 'nt':
+            self.skipTest('Windows overlay only')
+        from app.main import Overlay
+        from app.config.defaults import default_config
+        overlay = Overlay(default_config())
+        try:
+            self.assert_shell_brand(overlay.root)
+            overlay.root.deiconify()
+            overlay.root.update()
+            overlay.root.withdraw()
+            self.assert_shell_brand(overlay.root)
+        finally:
+            overlay.root.destroy()
 
     def test_docs_brand_package_is_kept_outside_the_runtime_assets(self):
         docs = ROOT / 'docs' / 'assets' / 'locklingo'
@@ -117,6 +154,7 @@ class PortableBuildContentTests(unittest.TestCase):
             root = Path(directory)
             (root / 'ocr' / 'tessdata').mkdir(parents=True)
             (root / '_internal' / 'app' / 'assets' / 'brand').mkdir(parents=True)
+            (root / '_internal' / 'pystray').mkdir()
             self.build.check_contents(root)
 
     def test_user_data_and_credentials_are_still_rejected(self):
@@ -135,8 +173,9 @@ class PortableBuildContentTests(unittest.TestCase):
     def test_version_suffix_and_artifact_name_are_branded(self):
         source = (ROOT / 'scripts' / 'build_portable.py').read_text(encoding='utf-8')
         self.assertIn("LockLingo-{args.version}-windows-x64", source)
-        self.assertIn('--icon', source)
-        self.assertIn('app/assets', source)
+        spec = (ROOT / 'scripts/installer/locklingo.spec').read_text(encoding='utf-8')
+        self.assertIn("app/assets/brand/locklingo.ico", spec)
+        self.assertEqual(spec.count('icon=icon'), 2)
         self.assertIn('ocr_runtime.copy_into', source)
 
 

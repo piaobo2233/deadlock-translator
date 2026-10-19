@@ -32,7 +32,7 @@ def digest(path):
 
 def copy_licenses(destination):
     packages = ('numpy', 'opencv-python', 'pillow', 'pytesseract', 'ttkbootstrap',
-                'packaging', 'defusedxml', 'darkdetect', 'pyinstaller')
+                'packaging', 'defusedxml', 'darkdetect', 'pyinstaller', 'pystray', 'six')
     for name in packages:
         try:
             distribution = metadata.distribution(name)
@@ -90,7 +90,7 @@ def copy_ocr_licenses(bundle):
 
 def check_contents(bundle):
     forbidden_roots = {'data', 'backups', '.git', '.temp', 'verify', 'tests'}
-    forbidden_names = {'config.json', 'runtime.json', 'run.log', 'chatlog.jsonl', '.env', 'pystray'}
+    forbidden_names = {'config.json', 'runtime.json', 'run.log', 'chatlog.jsonl', '.env'}
     for path in bundle.rglob('*'):
         if path.is_symlink() or (hasattr(path, 'is_junction') and path.is_junction()):
             raise ValueError('Linked release artifact')
@@ -134,6 +134,7 @@ def main():
             shutil.copytree(ROOT / folder, source / folder,
                             ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
         (source / 'scripts').mkdir()
+        shutil.copytree(ROOT / 'scripts/installer/hooks', work / 'hooks')
         shutil.copy2(ROOT / 'scripts/run.py', source / 'scripts/run.py')
         (source / 'VERSION').write_text(args.version + '\n', encoding='utf-8')
         source_manifest = [dict(path=path.relative_to(source).as_posix(), sha256=digest(path))

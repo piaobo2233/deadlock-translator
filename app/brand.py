@@ -22,6 +22,21 @@ DIALOG_TITLE = PRODUCT
 ICON_FILE = "locklingo.ico"
 MARK_FILE = "locklingo-32.png"
 MARK_LARGE_FILE = "locklingo-64.png"
+APP_ID = "LockLingo.Desktop"
+
+
+def apply_process_identity() -> bool:
+    """让 Windows 将锁语窗口归入自身应用，而非 Python 宿主。"""
+    if os.name != "nt":
+        return False
+    try:
+        import ctypes
+        api = ctypes.WinDLL("shell32").SetCurrentProcessExplicitAppUserModelID
+        api.argtypes = [ctypes.c_wchar_p]
+        api.restype = ctypes.c_long
+        return api(APP_ID) == 0
+    except Exception:
+        return False
 
 
 def asset_dir() -> str:
@@ -54,7 +69,14 @@ def apply_window_icon(window) -> bool:
     if not path:
         return False
     try:
+        window.iconbitmap(default=path)
         window.iconbitmap(path)
+        if os.name == "nt":
+            try:
+                from app.platform.window_identity import apply
+                apply(window, APP_ID, PRODUCT, path)
+            except Exception as exc:
+                print(f"[warn] 窗口应用标识未设置：{exc}")
         return True
     except Exception:
         pass

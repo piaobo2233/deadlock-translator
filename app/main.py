@@ -1,39 +1,12 @@
 # -*- coding: utf-8 -*-
-"""《异锁》(Deadlock) 聊天翻译 —— 只做入向：队友发言 → 中文译文，画成游戏自己的聊天气泡。
+"""《异锁》(Deadlock) 聊天接收、发送翻译与桌面运行装配。
 
-游戏身份：《异锁》= Deadlock，Steam AppID 1422450，Valve 出品，内部代号 citadel。
-          （不是《死亡搁浅》——那是 AppID 1190460，小岛工作室。）
-          官方中文名是《异锁》，但 Steam 商店元数据各语言均返回 "Deadlock"。
+接收通过屏幕 OCR 提取双方聊天，本地精确查表或按配置请求 API，成功译文
+由浮窗显示；未完成原因进入面板。发送翻译由面板和游戏输入路径提供。
+源码入口为 python -m app / scripts/run.py，日志输入仅供隔离模拟。
 
-设计依据全部来自游戏本体的 CSS（从 pak01_dir.vpk 里扒出来的真实数值）：
-    panorama/styles/citadel_hud_top_bar_chat.vcss_c
-        .ChatMessage        { max-width: 250px; padding: 1px 10px; animation: chat_appear 0.3s; }
-        .bubble_bg          { background-color: gradient(0% 0%, 0% 100%, from(#D9FFEE), to(#a4c7b7));
-                              box-shadow: 3px 3px 0px #0C0C0C;
-                              border: 1px solid #0C0C0C; border-radius: 3px; }
-        GameAll 版本        { from(#effff8), to(#ceb2aa) }
-        #MessageText        { font-size: 15px; font-weight: bold; color: black; line-height: 15px; }
-        @keyframes chat_appear { 0%{opacity:0} 50%{translateX(5px) translateY(5px)} 100%{opacity:1} }
-
-也就是说游戏气泡是「浅色渐变底 + 黑色粗体字 + 硬阴影」，不是深色面板。
-本文件严格照抄这套规格。
-
-一条链路，零第三方依赖：
-    console.log（-condebug 已生效）→ 认聊天行 → 本地短语表/LLM 翻中文
-        → Canvas 画成游戏风格气泡 → 10 秒淡出
-
-用法：
-    python -m app                        # 正式使用
-    python -m app --simulate demo.txt    # 不进游戏，喂假聊天验证
-    python -m app --offline              # 不调 API，只测抓取+浮窗
-    python -m app --headless             # 不弹浮窗，只打终端
-
-全局热键：
-
-局内短译请求策略：
-    新安装默认 deepseek-flash；已有模型配置保持不动。
-    已核验的官方 DeepSeek 接口/模型显式关闭思考，保留有界输出。
-    自定义兼容接口不添加供应商专用字段；截断不保存，也不自动付费重试。
+平台 DPI 在创建窗口前设置；模拟/回放必须先配置输入沙箱，再进行迁移与日志写入。
+请求日志、权威视图和绘制回执分别保护付费恢复、人工决定和实际显示证据。
 """
 
 import argparse
@@ -108,6 +81,7 @@ def _enable_dpi_awareness() -> bool:
         return False
 
 
+brand.apply_process_identity()
 DPI_AWARE = _enable_dpi_awareness()
 
 def _app_dir() -> str:
@@ -239,7 +213,7 @@ BUBBLE_ALLY_TOP, BUBBLE_ALLY_BOTTOM = "#F2EFE8", "#D8D4CB"   # 友方：浅暖�
 BUBBLE_ALL_TOP, BUBBLE_ALL_BOTTOM = "#F7EFE4", "#DCCFC0"     # 全体：偏暖米
 # [!] 「左侧强调条」**已删除** —— 游戏原版聊天气泡上根本没有这条竖色条，
 #     它是这个 UI 里最扎眼的一处违和。所以 ACCENT_* 不再有任何用途。
-#     对应地 _draw_bubble 的 accent 参数恒为 None。
+#     绘制保持游戏原版气泡样式。
 # 琥珀 API 标签表示本条消息走了接口，不代表已确认扣费。
 # 来源随具体消息传递，不按译文查共享集合，避免免费重复句继承标记。
 MAGIC_COLOR = "#010203"                                       # 透明色键，别乱改
@@ -291,151 +265,8 @@ STATS_PATH = store.data_path(APP_DIR, "stats.json")
 GLOSSARY_STATS_PATH = store.data_path(APP_DIR, "glossary_stats.json")
 MEMORY_LIMIT = 8000          # 记忆条目上限，超了淘汰最早插入的
 
-# 内置词汇库。首次运行会导出成 glossary.json，之后以文件为准（改文件优先）
-DEFAULT_GLOSSARY = {
-    # ---- 社交 / 应答 ----
-    "gg": "打得好", "ggwp": "打得好，干得漂亮", "gg wp": "打得好，干得漂亮",
-    "good game": "打得好", "wp": "干得漂亮", "well played": "干得漂亮",
-    "ns": "打得好", "nice": "漂亮", "nice one": "漂亮", "noice": "漂亮",
-    "clean": "干净利落", "gj": "干得好", "good shit": "干得好",
-    "ty": "谢谢", "thx": "谢谢", "thanks": "谢谢", "thank you": "谢谢",
-    "tysm": "太谢谢了", "appreciate it": "谢了",
-    "yw": "不客气", "np": "没事", "no problem": "没事", "npnp": "没事没事",
-    "lol": "哈哈", "lmao": "笑死", "lmfao": "笑死", "haha": "哈哈",
-    "ez": "轻松拿下", "ez game": "轻松拿下", "rip": "完了",
-    "gl": "好运", "hf": "玩得开心", "glhf": "好运，玩得开心",
-    "omg": "我天", "wtf": "什么鬼", "wth": "什么鬼", "ffs": "真是服了",
-    "sry": "抱歉", "sorry": "抱歉", "my bad": "我的锅", "mb": "我的锅",
-    "my fault": "我的锅", "mb all": "我的锅，各位",
-    "yes": "是", "yep": "是", "no": "不", "nope": "不",
-    "ok": "好", "okay": "好", "k": "行", "sure": "行", "fine": "行",
-    "nvm": "没事了", "nevermind": "没事了",
-    "gtg": "我得走了", "g2g": "我得走了", "cya": "回头见", "see ya": "回头见",
-    "brb": "马上回来", "omw": "马上到", "afk": "挂机中", "im back": "我回来了",
-
-    # ---- 最基础的日常词 ----
-    # [!] 这批是**从真实日志里捞出来的**，不是我猜的：
-    #     博士那一局里被 OCR 采用最多的文本是 good(7) / hello(5) / goto school(7)，
-    #     而这些词一个都不在词汇库里 —— 于是打「good」也要走 API 花钱。
-    #     常用词进库后既省钱、又立刻有译文。
-    "good": "好", "good job": "干得好", "nice": "不错", "nice one": "漂亮",
-    "hello": "你好", "hi": "嗨", "hey": "嘿", "yo": "哟",
-    "go to": "去", "goto": "去", "school": "学校",
-    "yes": "是", "no": "不是", "ok": "好", "okay": "好",
-    "thanks": "谢谢", "thank you": "谢谢你", "please": "请", "sorry": "抱歉",
-    "wait": "等一下", "look": "看", "see": "看到", "here": "这里", "there": "那里",
-    "one": "一", "two": "二", "three": "三", "some": "一些", "all": "全部",
-    "dead": "死了", "alive": "活着", "kill": "杀", "killed": "被杀了",
-    "dive": "冲进去", "retreat": "撤退", "charge": "冲", "cover": "掩护",
-
-    # ---- 游戏常用缩写补全 ----
-    # 现有 239 条里已经有一批（sry/gg/wp/omw/afk/thx/np/ez/rip/lol/mid/top/urn…），
-    # 这里补的是实测查出来还缺的 57 个。命中即零 API 成本。
-    "tyvm": "非常感谢", "pls": "请", "plz": "请", "mybad": "我的错", "gjob": "干得好",
-    "otw": "在路上了", "bbiab": "一会儿回来", "rq": "先撤一下", "bbl": "待会儿聊",
-    "ttyl": "回头聊", "gn": "晚安", "gm": "早上好", "wb": "欢迎回来",
-    "kk": "好", "yup": "嗯", "nah": "不", "idk": "不知道", "idc": "无所谓",
-    "maybe": "也许",
-    "flank": "绕后", "disengage": "脱战",
-    "obj": "目标",
-    "deny": "反补", "denies": "反补", "lasthit": "补刀", "cs": "补刀数", "lh": "补刀",
-    "ults": "大招", "cds": "技能冷却", "slow": "减速", "root": "定身",
-    "silence": "沉默", "burst": "爆发", "aoe": "范围伤害", "dps": "输出",
-    "kek": "哈哈", "rofl": "笑死", "xd": "哈哈", "oof": "哎呀",
-    "noob": "菜鸟", "nub": "菜鸟", "pro": "高手",
-    "fyi": "供参考", "btw": "顺带说", "tbh": "说实话", "imo": "我觉得",
-    "imho": "我认为", "ngl": "说实话", "fr": "真的", "rn": "现在",
-    "atm": "目前", "asap": "尽快",
-    "min": "分钟", "soon": "马上", "later": "待会", "tmr": "明天", "today": "今天",
-
-    # ---- 单字常用语 ----
-    # [!] 这些不只是为了翻译，更是给 OCR 垃圾过滤器用的白名单。
-    #     过滤器要求「至少 2 个像英文单词的 token」，所以 "go" 这种单个短词
-    #     本来会被当垃圾丢掉（实测：博士发了个 go，被过滤了）。
-    #     放进词汇库后，过滤器会走「认识的短句直接放行」这条路。
-    "go": "上", "go go": "走走走", "back": "撤回来", "b": "撤",
-    "push": "推", "mid": "中路", "top": "上路", "bot": "下路",
-    "help": "帮忙", "care": "小心", "careful": "小心", "safe": "安全",
-    "yes": "是", "no": "不是", "ok": "好", "okay": "好",
-    "thx": "谢谢", "ty": "谢了", "np": "没事",
-    "run": "跑", "ult": "大招", "wait": "等一下", "stop": "停",
-    "now": "现在", "fast": "快点", "ward": "做视野", "gank": "抓人",
-    "enemy": "敌人", "miss": "不见了", "missing": "不见了",
-    "up": "上", "down": "下", "left": "左", "right": "右",
-    "one sec": "等一下", "1 sec": "等一下", "sec": "等一下",
-    "wait": "等等", "hold on": "等等", "hold": "等等",
-    "stop": "停下", "chill": "别急",
-
-    # ---- 战场指令 ----
-    "push": "推", "push mid": "推中路", "push lane": "推线", "push tower": "推塔",
-    "group up": "集合", "group": "集合", "all mid": "全部中路",
-    "engage": "开团", "go in": "上", "go": "上", "go go": "上上上", "now": "现在",
-    "rotate": "转线", "rotate mid": "转中路", "gank": "抓一波", "dive": "越塔",
-    "defend": "守", "def": "守", "defend base": "守家", "hold base": "守家",
-    "split push": "分推", "split": "分推", "farm": "打钱", "farming": "在打钱",
-    "retreat": "撤退", "fall back": "撤退", "b": "撤", "back off": "别打",
-    "regroup": "重新集合", "reset": "回城补",
-    "focus": "集火", "focus him": "集火他", "focus the carry": "集火核心",
-    "peel": "给我解围", "cover me": "掩护我",
-    "help": "来帮忙", "help me": "来帮我", "need help": "需要支援",
-    "need backup": "需要支援",
-    "care": "小心", "careful": "小心", "watch out": "小心", "watch": "注意",
-    "missing": "不见了", "mia": "不见了", "he is missing": "他不见了",
-
-    # ---- 地图 / 目标 ----
-    "mid": "中路", "top": "上路", "bottom": "下路", "bot": "下路",
-    "lane": "线", "jungle": "野区", "camp": "野怪", "camps": "野怪",
-    "shrine": "圣坛", "shrine buff": "圣坛增益",
-    "urn": "魂瓮", "soul urn": "魂瓮", "urn is up": "魂瓮刷了",
-    "rejuv": "复生者", "rejuvenator": "复生者", "rej": "复生者",
-    "mid boss": "中boss", "midboss": "中boss",
-    "walker": "行者", "guardian": "守护者", "patron": "主神",
-    "trooper": "小兵", "troopers": "小兵", "creeps": "小兵", "minions": "小兵",
-    "flex slot": "灵活槽位", "flex": "灵活槽位",
-    "t1": "一塔", "t2": "二塔", "t3": "三塔",
-    "base": "基地", "spawn": "泉水", "fountain": "泉水",
-    "objective": "目标", "objectives": "目标",
-
-    # ---- 状态 / 资源 ----
-    "oom": "没蓝了", "no mana": "没蓝了", "out of mana": "没蓝了",
-    "low hp": "血量低", "hp": "血量", "health": "血量",
-    "dead": "死了", "i died": "我死了", "im dead": "我死了", "died": "死了",
-    "respawn": "复活", "respawning": "在复活", "re": "重新开",
-    "ult": "大招", "ultimate": "大招", "no ult": "没大招", "ult ready": "大招好了",
-    "cd": "冷却", "on cd": "在冷却", "cooldown": "冷却",
-    "ready": "好了", "im ready": "我好了", "not ready": "还没好",
-    "buying": "在买东西", "shopping": "在买东西", "shop": "商店",
-    "recall": "回城", "tp": "传送", "teleport": "传送",
-    "stun": "眩晕", "stunned": "被晕了", "frozen": "被冻了",
-    "heal": "治疗", "healing": "在治疗", "regen": "回血",
-    "shield": "护盾", "armor": "护甲",
-    "stack": "叠层", "souls": "灵魂", "gold": "钱",
-    "fed": "对面肥了", "snowball": "滚雪球", "throw": "送掉了",
-    "report": "举报", "ff": "投降", "surrender": "投降",
-
-    # ---- 位置 / 视角 ----
-    "here": "这里", "over here": "这边", "on me": "在我这",
-    "behind you": "你后面", "behind us": "我们后面", "in front": "前面",
-    "left": "左边", "right": "右边",
-    "river": "河道", "roam": "游走", "ward": "视野",
-
-    # ---- 常用口语（2026-10-07 补） ----
-    # [!] 为什么单独补这一批：新增了一条判据「**单个词**的消息必须命中词库」
-    #     （见 is_chat_text 里的说明），它砍掉了 10/11 的 OCR 幻觉垃圾
-    #     （was / man / we / shift / dean / ing / for …）。
-    #     为了让真人口语一个都不被误杀，把这批实测常见的单词补全。
-    "bro": "兄弟", "dude": "兄弟", "mate": "兄弟", "guys": "各位",
-    "why": "为啥", "come": "来", "come here": "过来", "team": "队伍",
-    "danger": "危险", "die": "死了", "five": "五秒", "smoke": "烟雾",
-    "vision": "视野", "tower": "塔", "baron": "男爵", "attack": "打他",
-    "yeah": "嗯", "nt": "打得不错", "gb": "打得好", "tyt": "等会聊",
-    "gogo": "上上上", "gogogo": "上上上",
-    "fuck": "操", "shit": "妈的",
-}
-
-
-from app.translation.terms import exact_terms
-DEFAULT_GLOSSARY.update(exact_terms())
+from app.translation.builtins import DEFAULT_GLOSSARY
+from app.translation.glossary import merge_glossary
 
 class TranslationMemory:
     """落盘的翻译记忆：翻过一次的句子，下次直接取，不再花 API。
@@ -897,22 +728,10 @@ class LocalCache:
 
 
 def load_glossary(path: str = "", *, builtins_enabled=True) -> dict:
-    """读 glossary.json；没有就先把内置默认导出一份，方便直接编辑。
+    """加载词库并保留首次导出、旧数据迁移的入口契约。
 
-    返回的是**合并后的视图**（内置表 + 文件，再减掉墓碑），
-    也就是程序实际用的那一份 —— 界面显示条数也必须用这个，
-    否则会出现「仪表盘说 295、主程序说 320」这种让人不信统计的事。
-
-    [!] 2026-10-07 阶段 0：改用 store 读写，并补上**墓碑过滤**。
-
-        这是「删不掉的词库」的修复点。合并方式一直是：
-            merged = dict(DEFAULT_GLOSSARY)   # 内置 320 条，硬编码在本文件里
-            merged.update(用户 glossary.json)
-        所以**只从 glossary.json 里删一条，它下次还会从内置表里回来** ——
-        用户在词库管理器里点「删除」、看着没了、重启又回来了，
-        而且**不报任何错**，是最难查的一类 bug。
-        现在删除会落成 deleted 墓碑，这里在**合并之后**再清一遍，
-        内置表里的同名词条才会真的消失。
+    纯合并规则由 translation.glossary 维护；迁移只作用于当前运行根目录，
+    显式传入的外部路径不能触碰程序用户数据。已有坏文件不覆盖。
     """
     if not path:
         path = GLOSSARY_PATH
@@ -954,18 +773,7 @@ def load_glossary(path: str = "", *, builtins_enabled=True) -> dict:
                   "原文件保持不动，不会被覆盖。")
         return builtins
 
-    user = store.glossary_flat(entries)
-    if not builtins_enabled:
-        user = {k:v for k,v in user.items() if entries.get(k,{}).get('source') != 'builtin'}
-    merged = dict(builtins)
-    merged.update({str(k).strip().lower(): str(v) for k, v in user.items() if v})
-    # [!] 墓碑 + 停用，都必须在**合并之后**再清一遍 ——
-    #     内置表那 320 条是硬编码的，只从文件里去掉是没用的。
-    #     墓碑那半是阶段 0 修的；停用那半是阶段 3 被同一个测试抓出来的，
-    #     同一类 bug 换了个字段又来了一次。见 store.glossary_inactive。
-    for name in store.glossary_inactive(entries):
-        merged.pop(name, None)
-    return merged
+    return merge_glossary(entries, builtins_enabled=builtins_enabled)
 
 # ---------- 日志行识别 ----------
 TS = re.compile(r"^\d{2}/\d{2} \d{2}:\d{2}:\d{2}\s*")
@@ -1094,9 +902,7 @@ def parse_chat(raw: str):
 
 
 def is_chinese(text: str) -> bool:
-    cjk = len(CJK.findall(text))
-    latin = len(re.findall(r"[A-Za-z]", text))
-    return cjk >= 2 and cjk >= latin
+    return native_chinese(text)
 
 
 def glossary_key(text: str, glossary: dict):
@@ -1461,7 +1267,7 @@ def iter_simulate_source(path: str, loop: bool = True, delay: float = 1.2):
             yield parsed + (None,)
 
 
-from app.recognition.languages import contains_han, foreign_chat, latin_words
+from app.recognition.languages import native_chinese, foreign_chat, latin_words
 
 _WORDISH = re.compile(r"[A-Za-z]{2,}")
 _VOWELS = set("aeiouyAEIOUY")
@@ -1637,7 +1443,7 @@ def is_chat_text(text: str, glossary: dict) -> bool:
         规则散落 → 没法当整体测试 → 两边容易改飞。
         现在合成一个函数，测试和实现共用同一份逻辑。
     """
-    if contains_han(text or ''):
+    if native_chinese(text or ''):
         return False
     if foreign_chat(text):
         return True
@@ -2644,7 +2450,8 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                             continue
                         if early_evidence:
                             from app.recognition.source import for_text
-                            evidence = for_text(early_evidence[0], candidate.text)
+                            readings = [for_text(value, candidate.text) for value in early_evidence]
+                            evidence = next((value for value in readings if value.verified), readings[0])
                         else:
                             evidence = read_source(candidate.text,
                                 identity.first_seen_at+4.0 if identity.first_seen_at is not None else None)
@@ -2852,6 +2659,8 @@ class Overlay:
         self._ensure_passthrough()
         self.root.bind("<Map>", lambda _event: self._ensure_passthrough(), add="+")
         self.root.withdraw()
+        # Tk 在设置无边框样式时可能重建 HWND；品牌属性必须写在最终窗口上。
+        brand.apply_window_icon(self.root)
 
     # ---- 字体 ----
     def _build_fonts(self) -> None:
@@ -2921,7 +2730,7 @@ class Overlay:
         return self.canvas.create_polygon(points, smooth=True, **kwargs)
 
     def _draw_bubble(self, x, y, w, h, top_color, bottom_color, tag,
-                     pointer=False, accent=None):
+                     pointer=False):
         """气泡 = 硬阴影 + 垂直渐变 + 1px 黑边，照抄游戏原版。
 
         [!] 2026-10-07 美化，对照 verify/truth/match_bubble.png（游戏原版气泡）：
@@ -3069,11 +2878,10 @@ class Overlay:
             # Width candidates are fitted against source, obstacles and screen below.
             body = translated
             blocks.append({
-                "kind": "msg", "body": body,
+                "body": body,
                 "index": index, "bubble_id": bid,
                 "top": BUBBLE_ALL_TOP if channel == "all" else BUBBLE_ALLY_TOP,
                 "bottom": BUBBLE_ALL_BOTTOM if channel == "all" else BUBBLE_ALLY_BOTTOM,
-                "accent": None,      # 左侧强调条已删除（游戏原版没有）
                 "has_pos": bool(pos and len(pos) >= 4),
                 "pos": pos,
             })
@@ -3090,7 +2898,7 @@ class Overlay:
             if block.get("bubble_id") is not None and not block["has_pos"]:
                 entries[block["index"]] = DrawEntry(block["index"], reason="invalid_geometry")
                 continue
-            if block["kind"] == "msg" and pos and len(pos) >= 4:
+            if pos and len(pos) >= 4:
                 for bubble_w_max in widths(pos,(sw,sh),getattr(self,'font_size',15),len(block['body'])):
                     text_max=max(60,bubble_w_max-BUBBLE_PAD_X*2)
                     # Do not silently truncate a long translation to five lines.
@@ -3153,31 +2961,27 @@ class Overlay:
                  block["by"] - (6 if block.get('pointer_side') == 'below' else 0),
                  block["bx"] + width + BUBBLE_SHADOW,
                  block["by"] + height + BUBBLE_SHADOW))
-            if block['kind'] == 'msg':
-                footprints[block['index']] = self.label_rects[-1]
+            footprints[block['index']] = self.label_rects[-1]
 
-            if block["kind"] == "msg":
-                tag = f"m{msg_index}"
-                slide = 0
-                self._draw_bubble(x + slide, y + slide, width, height,
-                                  block["top"], block["bottom"], tag,
-                                  pointer=('left' if block.get('pointer_side') == 'right' else block.get("has_pos", False)),
-                                  accent=block.get("accent"))
+            tag = f"m{msg_index}"
+            self._draw_bubble(x, y, width, height,
+                              block["top"], block["bottom"], tag,
+                              pointer=('left' if block.get('pointer_side') == 'right' else block.get("has_pos", False)))
 
-                text_x = x + BUBBLE_PAD_X + slide
-                center = y + height / 2 + slide
-                total_text = sum(step for _, _, _, step in block["lines"])
-                cursor = center - total_text / 2
-                for text, font, color, step in block["lines"]:
-                    self.canvas.create_text(
-                        text_x, cursor + step / 2,
-                        text=text, anchor="w", font=font, fill=color, tags=tag,
-                    )
-                    cursor += step
-                msg_index += 1
-                entries[block["index"]] = DrawEntry(block["index"],
-                    (block["bx"], block["by"], block["bx"] + width + BUBBLE_SHADOW,
-                     block["by"] + height + BUBBLE_SHADOW))
+            text_x = x + BUBBLE_PAD_X
+            center = y + height / 2
+            total_text = sum(step for _, _, _, step in block["lines"])
+            cursor = center - total_text / 2
+            for text, font, color, step in block["lines"]:
+                self.canvas.create_text(
+                    text_x, cursor + step / 2,
+                    text=text, anchor="w", font=font, fill=color, tags=tag,
+                )
+                cursor += step
+            msg_index += 1
+            entries[block["index"]] = DrawEntry(block["index"],
+                (block["bx"], block["by"], block["bx"] + width + BUBBLE_SHADOW,
+                 block["by"] + height + BUBBLE_SHADOW))
 
             self.rows.append(tag)
 
@@ -3253,36 +3057,7 @@ class Overlay:
         self.root.mainloop()
 
 
-# ---------- 凭据脱敏 ----------
-# [!] 2026-10-07 产品化升级 · Phase 1（§十四 / §二十 / §二十一）：
-#     API Key **绝对不能**出现在日志、错误信息、诊断输出里。
-#
-#     做法刻意选的是「**出口统一过滤**」，而不是「记得别打印」：
-#       只要有一处忘记，key 就永久留在 run.log 里 ——
-#       而 run.log 恰恰是**会发给别人看的**（平时排查就是把 run.log 贴给我）。
-#       靠自觉守不住，必须在出口拦一道。
-_KEY_RE = re.compile(r"sk-[A-Za-z0-9_\-]{8,}")
-
-
-def mask_key(key: str) -> str:
-    """`sk-EXAMPLE...test` → `sk-****test`。界面和日志只允许出现这个形式。"""
-    text = str(key or "").strip()
-    if not text:
-        return "（未配置）"
-    if len(text) <= 8:
-        return "****"
-    return f"{text[:3]}****{text[-4:]}"
-
-
-def redact_secrets(text: str) -> str:
-    """把文本里出现的任何 API Key 打成掩码形式。
-
-    `_Tee.write` 在写文件前会调它 —— 所以**任何**走 print 的代码路径
-    都不可能把 key 漏进 run.log，哪怕将来有人手滑 print 了 config。
-    """
-    if not text or "sk-" not in text:
-        return text                      # 快路径：绝大多数行不含 key，别白跑正则
-    return _KEY_RE.sub(lambda m: mask_key(m.group(0)), text)
+from app.platform.logging import mask_key, redact_secrets, Tee as _Tee, NullStream as _NullStream, _NULL_STREAM
 
 
 # ---------- 配置 ----------
@@ -3664,7 +3439,7 @@ def _save_static_candidates(candidates) -> bool:
     [!] 为什么必须单独一个文件：确认名单参与抑制且跨会话；候选没经过人工确认。
         原来两者是同一个 set，自动学习于是直接写进了用户数据 —— 实测
         data/static_ui.json 的 38 格里有 11 格压在真气泡出现过的地方，
-        等于把这些位置的聊天静默封掉。分离之后，自动学习最多只影响本会话。
+        等于把这些位置的聊天静默封掉。分离之后，自动候选仅供审查，不参与抑制。
     """
     try:
         rows = [{"position": [int(a), int(b)], "text": str(info.get("text", ""))[:64]}
@@ -3684,20 +3459,6 @@ def _live_static_candidates() -> dict:
         return con.learned_static()
     except Exception:
         return {}
-
-
-def _live_screen():
-    """当前运行实例的画面尺寸 (w, h)；拿不到就 None。
-
-    落盘静态名单时用它记录「这份名单属于哪个尺寸」（见 `_load_static_ui`）。
-    """
-    screen = _LIVE.get("screen")
-    if isinstance(screen, (tuple, list)) and len(screen) == 2:
-        try:
-            return (int(screen[0]), int(screen[1]))
-        except (TypeError, ValueError):
-            return None
-    return None
 
 
 def static_ui_cli(action="list", cell=""):
@@ -4070,7 +3831,7 @@ def main() -> int:
         # [!] 这里是本次 UI 重构的核心收敛点。
         #     以前有**三套**并行的窗口体系：--dashboard / --manage / --panel，
         #     再加一个左侧 5 页导航的旧容器，于是「点新入口打开旧页面」。
-        #     现在只有 gui/app.py 一个窗口 + gui/pages.py 五个页面。
+        #     主面板由 gui/app.py 与各页面模块构建。
         #
         # [!] 旧命令行参数**保留成别名**，不删 —— 启动器.bat / 热键 / 托盘
         #     都还在用它们，删了就断链。它们现在只是"打开某一页"的快捷方式：
@@ -4154,17 +3915,14 @@ def main() -> int:
         except Exception as exc:
             print(f"[warn] 首次引导打印失败（不影响使用）：{exc}")
 
-    # [!] 这个调用**必须留着** —— 它做的事是把 GAME_DIR 探成真实路径，
-    #     而 game_font_dir() 就是拿 GAME_DIR 拼字体目录的（见 L161 附近）。
-    #     删了它，字体永远走硬编码兜底路径 D:\Steam\...，别人机器上直接失效。
-    #     （2026-10-07 重构时差点连它一起删 —— 它原来还兼着「找 console.log」。）
+    # 探测结果也供 game_font_dir 定位游戏字体，需在创建浮窗前完成。
     game_dir = resolve_game_dir(config)
     print(f"[info] 游戏目录：{game_dir}（自动探测）")
 
     if not config.get("api_key"):
         if ensure_config_template():
             print(f"[info] 已生成配置模板：{CONFIG_PATH}")
-        print("[warn] 没找到 API Key，只会显示原文。")
+        print("[warn] 没找到 API Key，本地词库仍可翻译；未命中原因在主面板显示。")
         print(f'       把 DeepSeek Key 填进 {CONFIG_PATH} 的 "api_key" 字段，重开即可。')
 
     glossary = load_glossary(builtins_enabled=config.get('builtins_enabled',True))
@@ -4190,12 +3948,8 @@ def main() -> int:
           f"｜本地缓存 {local_cache.count()} 条｜{pending.summary()}"
           f"（文件都在 {APP_DIR}，可直接编辑）")
 
-    # [!] 「翻译不付费」—— 对局里默认**绝不调 API**。
-    #     付费全部推到复盘那一步（一次调用学一整局），学过之后就走本地命中。
-    #     于是同一句话一辈子只花一次钱。
-    #     想在对局里也用 API（反应更快但每句都花钱）：config 里 "translate_api": true
-    # 静态 UI 黑名单：跨会话记住「这个位置是游戏界面」。
-    # 同一个 set 对象交给 OCR 层，它往里加，我们负责落盘。
+    # translate_api 控制本地未命中后的实时单条请求，已付费结果保留恢复记录。
+    # 只有人工确认的静态位置参与抑制；自动观测候选单独记录。
     static_ui, static_ui_screen = _load_static_ui(trusted_only=True)
     if static_ui and static_ui_screen is None:
         # 旧文件没有尺寸信息：无法核对，照旧加载，但明确提示一次 ——
@@ -4529,8 +4283,9 @@ def main() -> int:
                     is_paused=is_paused,
                     state=lambda: "api" if translator.in_local_mode() else "ok",
                 )
-                tray.start()
-                if tray.icon is not None:
+                if not tray.start():
+                    tray = None
+                if tray is not None and tray.icon is not None:
                     # 无窗口启动时，用户没有任何"它起来了"的反馈 ——
                     # 右下角弹出的气泡就是那个反馈。
                     try:
@@ -4766,6 +4521,8 @@ def main() -> int:
         #     写失败绝不影响翻译（write_runtime_status 自己吞异常）。
         if now2 - runtime_watch["at"] >= 3.0:
             runtime_watch["at"] = now2
+            if tray is not None:
+                tray.refresh()
             try:
                 from app.recognition.diagnostics import DIAGNOSTICS
                 write_runtime_status(paused=is_paused(),
@@ -4834,127 +4591,6 @@ def main() -> int:
     return 0
 
 
-class _NullStream:
-    """无控制台时的假 stdout：吃得下任何东西，但什么都不显示。
-
-    [!] **不能**用一个「任何属性都返回同一个空函数」的 `__getattr__` 兜底。
-        第一版就是这么写的，后果和下面 `_Tee.__getattr__` 注释里记的那个坑
-        **一模一样**：
-            `sys.stdout.encoding.lower()` → 拿到的是一个 function
-            → AttributeError → 被 iter_ocr_source 的 try 吞掉
-            → 打印「屏幕 OCR 依赖缺失」并**静默禁用整个抓取层**。
-        在无窗口模式下跑一次就复现了（run.log 里那行 error）。
-
-        所以真会被读的属性必须给对：encoding / errors / isatty / fileno。
-    """
-
-    encoding = "utf-8"
-    errors = "replace"
-    name = "<no-console>"
-    closed = False
-
-    def write(self, text):
-        return len(text) if text else 0
-
-    def writelines(self, lines):
-        return None
-
-    def flush(self):
-        return None
-
-    def isatty(self):
-        return False
-
-    def fileno(self):
-        raise OSError("这个进程没有控制台")
-
-    def reconfigure(self, **_kwargs):
-        return None
-
-
-_NULL_STREAM = _NullStream()
-
-
-class _Tee:
-    """把 stdout 同时写到控制台和日志文件。
-
-    为什么要这个：调试时"控制台里到底刷了什么"是最关键的信息，
-    但控制台窗口随时会被游戏盖住、被拖走、被关掉 —— 实测为了看一行
-    `[ocr ] ...` 截了三次图都没截对（一次抓到了游戏画面）。
-    有了 run.log，出问题直接读文件，不依赖窗口位置。
-    """
-
-    MAX_BYTES = 2 * 1024 * 1024        # 超过 2MB 就轮转，避免长会话把日志堆成几百 MB
-
-    def __init__(self, stream, path):
-        # [!] 无窗口运行时（pythonw.exe / 打包成 exe 双击）**sys.stdout 是 None**。
-        #     这里必须容忍 None，否则日志层一初始化就炸，
-        #     而表现是「双击了完全没反应」—— 连个错误都看不到，最难查。
-        self.stream = stream
-        self._buf = ""                 # 攒半行，攒够一整行再加时间戳
-        try:
-            if os.path.exists(path) and os.path.getsize(path) > self.MAX_BYTES:
-                os.replace(path, path + ".1")
-            self.file = open(path, "a", encoding="utf-8", errors="replace", buffering=1)
-        except Exception:
-            self.file = None
-        # 会话分隔标记 —— 排查「这条是什么时候的」时没有它就没法对齐时间轴
-        self._to_file(
-            "\n" + "=" * 78 + "\n"
-            f"=== 会话开始 {time.strftime('%Y-%m-%d %H:%M:%S')} "
-            f"(pid {os.getpid()}) ===\n" + "=" * 78 + "\n")
-
-    def _to_file(self, text):
-        if self.file:
-            try:
-                self.file.write(text)
-            except Exception:
-                pass
-
-    def write(self, text):
-        try:
-            self.stream.write(text)
-        except Exception:
-            pass
-        if self.file is not None:
-            # [!] 时间戳只加在文件里，控制台保持干净。
-            #     原来日志没有时间戳 —— 排查「这条为什么没翻」时无法关联时序，
-            #     也没法判断两件事是不是同一时刻发生的。
-            # [!] 落盘前必须过 redact_secrets（§十四 API Key 绝不进日志）。
-            #     放在**这一层**而不是各个 print 处：出口只有一个，守得住。
-            self._buf += text
-            while "\n" in self._buf:
-                line, self._buf = self._buf.split("\n", 1)
-                stamp = time.strftime("%H:%M:%S")
-                self._to_file(f"[{stamp}] {redact_secrets(line)}\n")
-        return len(text)
-
-    def flush(self):
-        for handle in (self.stream, self.file):
-            try:
-                handle.flush()
-            except Exception:
-                pass
-
-    def __getattr__(self, name):
-        """把没实现的属性透传给真正的 stdout。
-
-        [!] 这一步是必须的，实测踩过：deadlock_ocr 在模块级会调
-            `sys.stdout.reconfigure(errors=..., line_buffering=True)`。
-            没有这个透传，那个调用会抛 AttributeError → 被 iter_ocr_source
-            的 try 吞掉 → 打印「屏幕 OCR 依赖缺失」并**静默禁用整个抓取层**。
-            表现是：程序看起来在正常跑，其实一条消息都收不到。
-
-        [!] 无窗口时 `self.stream` 是 None，**绝不能**直接 getattr(None, name) ——
-            那会抛 AttributeError，正好触发上面那个静默禁用的坑。
-            走 `_NULL_STREAM`：它把 encoding / isatty 这些真会被读的属性给对，
-            而不是傻乎乎地返回一个函数（第一版就是这么错的，见 _NullStream 的说明）。
-        """
-        if self.stream is None:
-            return getattr(_NULL_STREAM, name)
-        return getattr(self.stream, name)
-
-
 def _configure_input_mode(argv):
     """Run before migration, logging, configuration, or first glossary export."""
     global APP_DIR, _DIAGNOSTIC_ROOT
@@ -5000,11 +4636,8 @@ def run():
     except Exception:
         pass
 
-    # [!] 顺序不能变：**先建 data\ 并搬旧数据，再开 run.log**。
-    #     _Tee 是直接 open(路径, "a") 而不是先建目录，data\ 不存在时
-    #     它会抛异常 —— 而这一行在 try 外面，异常直接终止进程，
-    #     表现是「双击启动器什么都没发生」。全新安装的机器必然踩到。
-    #     migrate 自己吞掉所有异常，搬不动也只会打印一句警告。
+    # 输入沙箱必须先于迁移和日志，防止模拟/回放写入真实用户数据。
+    # 日志在数据迁移之后建立，跨进程轮转由日志模块协调。
     _configure_input_mode(sys.argv[1:])
     _moved = [] if _DIAGNOSTIC_ROOT else store.migrate_root_data(_app_dir())
     if _moved:

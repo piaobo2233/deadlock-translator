@@ -429,7 +429,10 @@ def _coerce_entry(value, defaults, primary) -> dict:
 
 def _load_entries(path, defaults, primary) -> dict:
     """读成 v2 条目表。v1 扁平文件在**内存里**完成升级，不动磁盘。"""
-    raw = read_json(path, None)
+    return _decode_entries(read_json(path, None), defaults, primary)
+
+
+def _decode_entries(raw, defaults, primary) -> dict:
     if not isinstance(raw, dict):
         return {}
     source = (raw.get("entries") or {}) if is_v2(raw) else raw
@@ -459,6 +462,11 @@ def _save_entries(path, entries, comment) -> bool:
 def load_glossary_file(path) -> dict:
     """读 glossary.json → `{词: 条目dict}`。v1 扁平文件自动升级。"""
     return _load_entries(path, GLOSSARY_DEFAULTS, GLOSSARY_PRIMARY)
+
+
+def glossary_entries(raw) -> dict:
+    """Normalize an already validated glossary snapshot without another read."""
+    return _decode_entries(raw, GLOSSARY_DEFAULTS, GLOSSARY_PRIMARY)
 
 
 def save_glossary_file(path, entries) -> bool:

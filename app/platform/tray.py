@@ -10,12 +10,12 @@
     代价是托盘万一崩了可能拖累翻译器 —— 所以整条启动路径都包在 try 里，
     而且托盘线程是 daemon，最坏情况是托盘没了、翻译照跑。
 
-[!] 图标状态（§三）：绿＝正常、黄＝API 异常、灰＝已暂停、红＝错误。
-    图标是**画出来的**，不带图片资源 —— 打包时少一个文件就少一个出错点。
+[!] 图标状态（§三）：品牌图标上加绿＝正常、黄＝API 异常、灰＝暂停、红＝错误。
 """
 
+import os
 import threading
-import time
+import traceback
 
 __all__ = ["Tray", "make_icon_image", "STATE_COLORS", "available"]
 
@@ -80,6 +80,31 @@ def make_icon_image(state: str = "ok", size: int = 64):
     return img
 
 
+def _icon_type():
+    import pystray
+    if os.name != "nt":
+        return pystray.Icon
+    from pystray._win32 import Icon, win32
+
+    class WindowsIcon(Icon):
+        def _create_window(self, atom):
+            hwnd = win32.CreateWindowEx(
+                0, atom, None, win32.WS_POPUP, 0, 0, 0, 0, 0, None,
+                win32.GetModuleHandle(None), None)
+            try:
+                # Explorer 重启消息的可选注册会被部分 Windows 运行身份拒绝。
+                # 保留系统的消息过滤策略，不能让它阻止正常托盘显示。
+                win32.ChangeWindowMessageFilterEx(
+                    hwnd, win32.WM_TASKBARCREATED, win32.MSGFLT_ALLOW, None)
+            except OSError as exc:
+                if getattr(exc, "winerror", None) != 5:
+                    win32.DestroyWindow(hwnd)
+                    raise
+            return hwnd
+
+    return WindowsIcon
+
+
 class Tray:
     """托盘图标 + 菜单。
 
@@ -103,6 +128,10 @@ class Tray:
         self.state_of = state or (lambda: "ok")
         self.icon = None
         self._thread = None
+        self._started = threading.Event()
+        self._stopping = threading.Event()
+        self._ready = False
+        self._last_state = None
 
     # ---- 菜单 ----
     def _build_menu(self):
@@ -151,9 +180,12 @@ class Tray:
             return
         try:
             state = "paused" if self.is_paused() else self.state_of()
+            if state == self._last_state:
+                return
             self.icon.icon = make_icon_image(state)
             self.icon.title = f"{_product()} —— {STATE_TEXT.get(state, state)}"
             self.icon.menu = self._build_menu()
+            self._last_state = state
         except Exception:
             pass
 
@@ -161,7 +193,7 @@ class Tray:
     def start(self) -> bool:
         """起托盘。**失败只打一行提示，绝不影响翻译。**"""
         if self.icon is not None:
-            return True
+            return self._ready
         try:
             import pystray
         except Exception:
@@ -169,15 +201,24 @@ class Tray:
                   "想要托盘就 pip install pystray")
             return False
         try:
-            self.icon = pystray.Icon("deadlock-translator",
-                                     make_icon_image("ok"),
-                                     _product(),
+            self._started.clear()
+            self._stopping.clear()
+            self._ready = False
+            self._last_state = None
+            state = "paused" if self.is_paused() else self.state_of()
+            self.icon = _icon_type()("deadlock-translator",
+                                     make_icon_image(state),
+                                     f"{_product()} —— {STATE_TEXT.get(state, state)}",
                                      menu=self._build_menu())
             # run_detached 在某些后端上不灵；用后台线程跑 run() 更稳，
             # 而且它是 daemon —— 最坏情况也不会拖住退出。
-            self._thread = threading.Thread(target=self._run, daemon=True,
+            self._thread = threading.Thread(target=self._run, args=(self.icon,), daemon=True,
                                             name="tray")
             self._thread.start()
+            if not self._started.wait(3) or not self._ready:
+                print("[warn] 托盘未就绪，保留主面板作为操作入口。")
+                self.stop()
+                return False
             print("[info] 系统托盘已就绪（右下角图标）")
             return True
         except Exception as exc:
@@ -185,20 +226,41 @@ class Tray:
             self.icon = None
             return False
 
-    def _run(self):
+    def _setup(self, icon):
         try:
-            self.icon.run()
+            if self._stopping.is_set():
+                icon.stop()
+                return
+            icon.visible = True
+            self._ready = True
+        except Exception:
+            traceback.print_exc()
+            icon.stop()
+        finally:
+            self._started.set()
+
+    def _run(self, icon):
+        try:
+            icon.run(self._setup)
         except Exception as exc:
             print(f"[warn] 托盘线程退出：{exc}")
+            traceback.print_exc()
         finally:
-            self.icon = None
+            self._ready = False
+            if self.icon is icon:
+                self.icon = None
+            self._started.set()
 
     def stop(self):
+        self._stopping.set()
         try:
             if self.icon is not None:
                 self.icon.stop()
         except Exception:
             pass
+        if self._thread and self._thread is not threading.current_thread():
+            self._thread.join(timeout=2)
+        self._ready = False
         self.icon = None
 
 

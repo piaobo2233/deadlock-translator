@@ -14,7 +14,7 @@ DEFAULT_CONFIG = {
     "receive_target": "zh-Hans",
     "send_hotkey": "Ctrl+Alt+T",
     "recognize_hotkey": "Ctrl+Alt+R",
-    "auto_send": False,
+    "auto_send": True,
     "recognition_mode": "realtime",
     "capture_region": {},
     "capture_preset": "auto",

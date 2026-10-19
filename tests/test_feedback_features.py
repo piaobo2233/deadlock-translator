@@ -65,16 +65,16 @@ class InputSafetyTests(unittest.TestCase):
         self.transaction = InputTransaction(self.native, self.service, lambda: self.config,
             self.events.append, clock=lambda: self.elapsed)
 
-    def test_default_refill_and_explicit_auto_send(self):
+    def test_default_auto_send_and_explicit_refill_only(self):
         self.transaction.run()
         self.assertEqual(self.native.writes, ['Wait for me'])
-        self.assertEqual(self.native.sends, 0)
+        self.assertEqual(self.native.sends, 1)
         self.assertEqual(self.events[0]['original'], '等我一下')
         self.native.text = '等我一下'
-        self.config['auto_send'] = True
+        self.config['auto_send'] = False
         self.transaction.run()
         self.assertEqual(self.native.sends, 1)
-        self.assertTrue(self.events[-1]['sent'])
+        self.assertFalse(self.events[-1]['sent'])
 
     def test_edit_focus_switch_and_return_timeout_settings_and_shutdown_cancel(self):
         mutations = (
@@ -266,7 +266,7 @@ class RegionAndLanguageTests(unittest.TestCase):
             self.assertFalse(test_connection(dict(self.config,api_key='********'),root=self.root)[0])
             request.assert_not_called()
         normalized,invalid=normalize_config(dict(self.config,auto_send='wrong',send_target='unknown',capture_region={'bad':1}))
-        self.assertFalse(normalized['auto_send'])
+        self.assertTrue(normalized['auto_send'])
         self.assertEqual(normalized['send_target'],'en')
         self.assertEqual(set(invalid),{'auto_send','send_target','capture_region'})
 

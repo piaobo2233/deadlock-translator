@@ -1,16 +1,7 @@
-"""One-message translation policy; owns no threads, Tk or global application state.
+"""One-message policy without threads, Tk or desktop globals.
 
-[!] 2026-10-10 需求更正：翻译对象是**聊天面板内出现的英文发言（双方）**，
-    不是"队友的发言"。因此这里**不再有任何来源判定** —— 原来那套
-    `SourceEvidence` / `SourceKind` / `source_disposition` 判定层整体删除。
-
-    为什么必须删而不是"降级"：它要求先证明"这是队友"，而全仓没有任何代码
-    能产出这个证明（`SourceMethod` 定义了却无人读），实机一律 UNKNOWN。
-    结果是"要求存在、实现不可能" → 100% 阻断。实测：2026-10-10 一局
-    54 分钟 0 条翻译，唯一输出是「未翻译：无法确认聊天来源」。
-
-    保留的是**"是不是聊天"**这一关（像素几何 + 文本过滤），那才是真正要防的
-    误报（图标似 ff、中文似 ty、血条数字、击杀提示）。
+Both teams' chat may be translated. Admission still requires chat geometry,
+text checks and original-image body evidence; these do not infer team identity.
 """
 
 from collections import OrderedDict
@@ -22,7 +13,7 @@ from app.runtime.events import PipelineStage
 from app.runtime.messages import ChatCandidate, DisplayMessage
 from app.translation.results import TranslationResult, TranslationStatus
 from app.translation.query import QueryKey
-from app.recognition.languages import contains_han
+from app.recognition.languages import native_chinese
 
 SOURCE_TAGS = {"glossary": "词汇库", "memory": "记忆", "api": "API",
                "learning_cache": "学习缓存",
@@ -77,9 +68,9 @@ class TranslationProcessor:
                 self.capture_evidence(candidate)
                 self.trace(candidate, 'admission', reason='native_chinese', api_allowed=False)
                 self._increment('native_chinese_skipped')
-                self.log('[ocr ] 原图含中文，已跳过，不调用 API')
+                self.log('[ocr ] 原图为纯中文正文，已跳过，不调用 API')
                 return None
-            if contains_han(candidate.text) or self.is_chinese(candidate.text):
+            if native_chinese(candidate.text) or self.is_chinese(candidate.text):
                 self._record(self.chatlog, candidate.text, "chinese", box=candidate.position)
                 self._increment("chinese_skipped")
                 return None
@@ -97,9 +88,9 @@ class TranslationProcessor:
             if (source is not None and not source.verified) or (self.require_evidence and source is None):
                 self._increment('source_unverified')
                 self.trace(candidate, 'admission', reason=source.reason if source else 'source_missing', api_allowed=False)
-                self.log('[ocr ] 原图英文证据不足，未发起 API 请求')
+                self.log('[ocr ] 原图正文复核不足，未发起 API 请求')
                 return self._finish(candidate, TranslationResult('', 'none', TranslationStatus.UNAVAILABLE,
-                    reason='原图英文证据不足，未发起 API 请求', reason_code='source_unverified'))
+                    reason='原图正文复核不足，未发起 API 请求', reason_code='source_unverified'))
             self.trace(candidate, 'admission', api_allowed=True)
             return NEEDS_API
         except Exception:

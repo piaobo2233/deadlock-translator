@@ -114,12 +114,16 @@ class UiDecisionTests(unittest.TestCase):
         self.assertTrue(all('中文'+str(i) in texts for i in range(3)))
         self.assertEqual(report['font_size']['state'],'applied')
 
-    def test_shared_tray_and_q_shutdown_destroys_window_even_when_callback_fails(self):
+    def test_shared_tray_and_q_shutdown_preserves_window_when_save_fails(self):
         view=dt.Overlay.__new__(dt.Overlay)
         view.root=Mock();view.on_exit=Mock(side_effect=OSError('save failed'))
         with self.assertRaises(OSError):
             view.close_assistant()
         view.on_exit.assert_called_once_with()
+        view.root.destroy.assert_not_called()
+        view.on_exit.side_effect=None
+        view.on_exit.return_value=True
+        self.assertTrue(view.close_assistant())
         view.root.destroy.assert_called_once_with()
 
     def test_lifetime_changes_do_not_redraw_or_rewrite_existing_expiry(self):

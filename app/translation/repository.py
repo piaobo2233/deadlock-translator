@@ -79,7 +79,9 @@ class AuthorityView:
         for path in (*self.paths.values(), self.review_path, self.pending_path, Path(self.learning_cache.path)):
             try:
                 stat = path.stat()
-                stamps.append((stat.st_mtime_ns, stat.st_size))
+                # Atomic replacement may retain both length and timestamp;
+                # its file identity still changes, including on Windows.
+                stamps.append((stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size, stat.st_ino))
             except FileNotFoundError:
                 stamps.append(None)
             except OSError:

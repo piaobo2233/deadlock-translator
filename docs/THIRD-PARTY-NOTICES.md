@@ -41,7 +41,7 @@ ttkbootstrap 版本常量为 `unknown`，包内未保留其发行版 METADATA，
 
 **OCR 模型**：来自 [tessdata_fast 固定提交](https://github.com/tesseract-ocr/tessdata_fast/tree/87416418657359cb625c412a48b6e1d6d41c29bd)，Apache-2.0。同时用于随包 OCR 运行时的 `tessdata/eng.traineddata`（同一份字节，构建时校验与 `provenance.json` 一致）。
 
-公开源码保留六个模型文件、[完整许可](../app/recognition/models/LICENSE) 和 [provenance.json](../app/recognition/models/provenance.json)，包含固定提交、逐文件大小与 SHA-256；模型未修改。冻结包对应路径为 `_internal/app/recognition/models/`。模型范围属于实现记录，不构成其他语言已实测的声明。
+公开源码保留九个模型文件（简体中文及英、西、葡、法、德、日、韩、俄）、[完整许可](../app/recognition/models/LICENSE) 和 [provenance.json](../app/recognition/models/provenance.json)，包含固定提交、逐文件大小与 SHA-256；模型未修改。冻结包对应路径为 `_internal/app/recognition/models/`。模型范围属于实现记录，合成素材验证不代表真实对局效果。
 
 **品牌图形**：用户选定的 C 版「圆眼徽章 + 双气泡」图标，由项目内置 imagegen 生成并做确定性尺寸/格式导出，未重绘；总览见[品牌素材包](assets/locklingo/README.md)。品牌图形不改变 Tesseract 或游戏素材的权利归属。
 
@@ -60,7 +60,8 @@ test.4 构建实际版本（2026-10-17 本机构建环境，随 `licenses/` 收�
 | ttkbootstrap / Bootstrap Icons | 2.2.3 / 图标版本未确认 | MIT；`licenses/ttkbootstrap/` |
 | packaging | 26.3 | Apache-2.0 或 BSD；`licenses/packaging/` |
 | PyInstaller | 6.22.3（构建工具） | GPL-2.0-or-later + Bootloader Exception；`licenses/pyinstaller/` |
-| pystray | 0.19.5（源码可选依赖，构建排除） | LGPL-3.0；**不随分发包** |
+| pystray | 0.19.5（源码可选依赖；2026-10-18 起构建包含 Windows 托盘） | LGPL-3.0；新构建以可替换的 `.py` 模块置于 `_internal/pystray/`，保留上游声明及 `licenses/pystray/` 中的 COPYING、COPYING.LGPL；已生成的 test.4 旧包仍不含此组件 |
+| six | 构建时以实际包元数据为准 | MIT；随 pystray 使用，原许可全文放入 `licenses/six/` |
 
 以上版本来自本轮构建环境的包元数据；安装包内的实际文件以包内 `manifest.json` 与 `licenses/` 为准。旧版 test.1/test.2/test.3 的版本记录见历史交付报告，不能与本表混写。
 

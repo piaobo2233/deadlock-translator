@@ -241,11 +241,11 @@ def configure_receive_languages(enabled=True, *, resident=True):
     global _RECEIVE_MODEL, _RESIDENT, _RESIDENT_SETTINGS
     from app.recognition.languages import RECEIVE_LANGUAGES
     model_dir = Path(__file__).resolve().parent / 'models'
-    required = RECEIVE_LANGUAGES if enabled else ('eng',)
+    required = RECEIVE_LANGUAGES + ('chi_sim',) if enabled else ('eng',)
     missing = [name for name in required if not (model_dir / (name + '.traineddata')).is_file()]
     if missing:
         raise RuntimeError('缺少接收语言模型：' + ', '.join(missing))
-    _RECEIVE_MODEL = '+'.join(required)
+    _RECEIVE_MODEL = '+'.join(('chi_sim', *RECEIVE_LANGUAGES)) if enabled else 'eng'
     close_receive_backend()
     _RESIDENT_SETTINGS = None
     _DIAGNOSTICS.reset()
@@ -827,9 +827,21 @@ def ocr_variants(img, box, *, screen=None, region=None, deadline=None, max_worke
     mode = 6 if body.line_count > 1 else 7
     if deadline is not None and time.monotonic() >= deadline:
         return
-    yield (f"body{mode}", _preferred_read(_enlarge(gray, 3), mode, deadline=deadline))
+    preferred = _preferred_read(_enlarge(gray, 3), mode, deadline=deadline)
+    yield (f"body{mode}", preferred)
     if deadline is not None and time.monotonic() >= deadline:
         return
+    if _RECEIVE_MODEL != 'eng':
+        # Combined models can turn kana/Hangul into Latin or digits. Script-first
+        # reads remain lazy: a verified common-language body never starts them.
+        from app.recognition.languages import script_model
+        hint = script_model(preferred)
+        languages = tuple(dict.fromkeys(filter(None, (hint, 'jpn', 'kor', 'rus'))))
+        for language in languages:
+            if deadline is not None and time.monotonic() >= deadline:
+                return
+            text = _read_script(_enlarge(gray, 3), mode, language, deadline=deadline)
+            yield ('body_' + language, text if script_model(text) == language else '')
     jobs = _fallback_jobs(gray, multiline=body.line_count > 1,
                           short=body.line_count == 1 and body.glyph_count <= 3)
     def read(im, config):
@@ -860,6 +872,19 @@ def ocr_variants(img, box, *, screen=None, region=None, deadline=None, max_worke
 def _mode_config(mode):
     cfg = _language_config(mode)
     return cfg + (f' --user-words "{_USER_WORDS}"' if _USER_WORDS else "")
+
+
+def _read_script(image, mode, language, *, deadline=None):
+    timeout = OCR_TIMEOUT if deadline is None else max(.001, min(OCR_TIMEOUT, deadline-time.monotonic()))
+    if _RESIDENT is not None:
+        try:
+            return _RESIDENT.read(image, mode, language=language, timeout=timeout).strip()
+        except Exception as exc:
+            _degrade_receive_backend(exc)
+            return ''
+    model_dir = Path(__file__).resolve().parent / 'models'
+    config = f'--psm {mode} --oem 1 -l {language}+eng+chi_sim --tessdata-dir "{model_dir}"'
+    return _read_ocr(image, config, timeout=timeout)
 
 
 def _read_fallback(image, config, *, deadline=None, resident=False):
@@ -903,8 +928,10 @@ def _read_source_evidence(img, body, expected, *, scale, deadline=None):
         return SourceEvidence(False,'source_ocr_timeout')
     timeout = OCR_TIMEOUT if deadline is None else max(.001, min(OCR_TIMEOUT, deadline-started))
     png = b""
-    from app.recognition.languages import foreign_chat
-    source_model = 'chi_sim+' + _RECEIVE_MODEL if foreign_chat(expected) else 'chi_sim+eng'
+    from app.recognition.languages import script_model
+    language = script_model(expected) if _RECEIVE_MODEL != 'eng' else ''
+    source_model = (language + '+eng+chi_sim' if language else
+                    '+'.join(dict.fromkeys(('chi_sim', *_RECEIVE_MODEL.split('+')))))
     try:
         if not body.accepted:
             return SourceEvidence(False, 'source_no_body')
@@ -914,13 +941,14 @@ def _read_source_evidence(img, body, expected, *, scale, deadline=None):
             return SourceEvidence(False, 'source_image_failed')
         png = encoded.tobytes()
         model_dir = Path(__file__).resolve().parent / 'models'
-        if any(not (model_dir / name).is_file() for name in ('chi_sim.traineddata', 'eng.traineddata')):
+        if any(not (model_dir / (name + '.traineddata')).is_file() for name in source_model.split('+')):
             return SourceEvidence(False, 'source_model_missing', png=png)
         gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
         if _RESIDENT is not None:
             try:
+                options = dict(language=language) if language else {}
                 tsv = _RESIDENT.read(_enlarge(gray, 3), 6 if body.line_count > 1 else 7,
-                                     source=True if foreign_chat(expected) else 'english', timeout=timeout)
+                                     source=True, timeout=timeout, **options)
                 header = 'level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n'
                 if not tsv.startswith('level\t'):
                     tsv = header + tsv

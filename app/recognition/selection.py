@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Callable
 
-BODY_VARIANTS = {"body7", "body6"}
+BODY_VARIANTS = {"body7", "body6", "body_jpn", "body_kor", "body_rus"}
 SHORT_FALLBACK_MAX = 3
 
 
@@ -74,6 +74,7 @@ def select_candidate(variants, glossary, rules: RecognitionRules, *, early_known
             if evidence.verified:
                 # A separate unrestricted source model agrees on these pixels.
                 # More preprocessing cannot provide another temporal vote.
+                best = score, text, kind
                 break
         if early_known is not None and score[0] >= early_known:
             break

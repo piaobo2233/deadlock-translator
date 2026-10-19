@@ -115,7 +115,7 @@ class DictionaryControlTests(unittest.TestCase):
         labels = [widget.cget('text') for widget in visit(self.app.page)
                   if widget.winfo_class() in {'Button', 'TButton'}]
         self.assertNotIn('设置与预算', labels)
-        self.assertIn('刷新用量', labels)
+        self.assertIn('刷新', labels)
         config = store.read_json(self.config)
         self.assertEqual((config['budget_session'], config['budget_daily']), (3.5, 8.0))
 

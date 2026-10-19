@@ -58,6 +58,7 @@ class TranslationPipeline:
     def register_capture_owner(self, owner):
         """Capture restarts retain every auxiliary owner until it actually exits."""
         with self._capture_owner_lock:
+            self._capture_owners[:] = [item for item in self._capture_owners if not item.finished]
             if self.stop_event.is_set():
                 return False
             owner.start()
@@ -66,6 +67,7 @@ class TranslationPipeline:
 
     def _owned_captures(self):
         with self._capture_owner_lock:
+            self._capture_owners[:] = [owner for owner in self._capture_owners if not owner.finished]
             return tuple(self._capture_owners)
 
     def start(self):

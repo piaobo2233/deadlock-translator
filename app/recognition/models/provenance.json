@@ -30,6 +30,18 @@
     "deu.traineddata": {
       "sha256": "19d219bbb6672c869d20a9636c6816a81eb9a71796cb93ebe0cb1530e2cdb22d",
       "bytes": 1525436
+    },
+    "jpn.traineddata": {
+      "sha256": "1f5de9236d2e85f5fdf4b3c500f2d4926f8d9449f28f5394472d9e8d83b91b4d",
+      "bytes": 2471260
+    },
+    "kor.traineddata": {
+      "sha256": "6b85e11d9bbf07863b97b3523b1b112844c43e713df8b66418a081fd1060b3b2",
+      "bytes": 1677415
+    },
+    "rus.traineddata": {
+      "sha256": "e16e5e036cce1d9ec2b00063cf8b54472625b9e14d893a169e2b0dedeb4df225",
+      "bytes": 3861738
     }
   }
 }

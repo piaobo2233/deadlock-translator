@@ -27,6 +27,7 @@ _GATE_MARKERS.update(learning_storage='[学习缓存记录异常，已停止请�
                      learning_incompatible='[学习规则已变更，已停止请求]',
                      learning_capacity='[学习缓存已满，已停止请求]')
 _GATE_MARKERS['review_storage']='[审核记录未保存，已停止新请求]'
+_GATE_MARKERS['review_capacity']='[审核记录不可写或已满，已停止新请求]'
 _REQUEST_MARKERS = {"request_storage": '[请求日志失败，已停止发送]',
                     "request_capacity": '[请求日志容量已满，已停止发送]',
                     "outcome_unknown": '[接口结果未知，已阻止自动重发]',
@@ -46,13 +47,9 @@ class TranslationEngine:
         self.model = model
         self.offline = offline
         self.hard_offline = bool(offline) if hard_offline is None else bool(hard_offline)
-        self.realtime_learn = False  # Retired: one explicit online switch.
+        # realtime_learn is accepted for old callers; translate_api owns online requests.
         self.builtins_enabled = bool(builtins_enabled)
         self.learning_cache = PersistentLearningCache(os.path.join(os.path.dirname(learning.path), 'learning_cache.json')) if learning else None
-        self._learning_unsaved = {}
-        self._learn_fail_streak = 0
-        self.learning_storage_error = False
-        self.learn_local_until = 0.0
         self.glossary = glossary or {}
         self.memory = memory
         self.local_cache = cache
@@ -201,7 +198,7 @@ class TranslationEngine:
     def request_context(self):
         # Only the digest travels through the runtime queue; never credentials.
         with self._state_lock:
-            fields = (self.api_key, self.endpoint, self.model, self.offline, self.hard_offline, self.realtime_learn, self.system_prompt,
+            fields = (self.api_key, self.endpoint, self.model, self.offline, self.hard_offline, self.system_prompt,
                       request_parameters(self.endpoint, self.model).snapshot())
             return hashlib.sha256(repr(fields).encode()).hexdigest()
 
@@ -281,19 +278,6 @@ class TranslationEngine:
         except JournalError as exc:
             return (("", exc.reason), False, 0)
         gate = self.journal.gate(record)
-        if gate == 'learning_recovery_required' and self.query_key(text) in self._learning_unsaved:
-            value, metadata = self._learning_unsaved[self.query_key(text)]
-            receipt = self.learning_cache.save(text, value, **metadata)
-            if receipt.saved:
-                try:
-                    self.journal.learning_completed(text, record['request_id'], receipt)
-                except JournalError as exc:
-                    self._record_journal_error(exc)
-                self._learning_unsaved.pop(self.query_key(text), None)
-                self.learning_storage_error = bool(self._learning_unsaved)
-                self._refresh_state()
-                return ((value, 'learning_cache'), False, 0, record['request_id'], receipt)
-            return ((value, 'learning_unsaved'), False, 0, record['request_id'], receipt)
         if gate:
             return (("", gate), False, 0, record["request_id"])
         if record and record["state"] in {RequestState.VALIDATED.value, RequestState.SAVED.value}:
@@ -443,6 +427,9 @@ class TranslationEngine:
         return result
 
     def _cache_put(self, text: str, result):
+        # Durable replies must revisit the throttled save-recovery path.
+        if result[1] == 'api_unsaved' and self.journal is not None:
+            return result
         if result[1] not in {'glossary', 'memory', 'cache', 'learning_cache', 'api', 'api_unsaved', 'api_disabled', 'api_recovery_failed'} or not result[0]:
             return result
         text = self.query_key(text)
@@ -630,10 +617,6 @@ class TranslationEngine:
         return None, False
 
     def _unavailable(self, text, *, check_costs=True):
-        if check_costs and self._purpose() == 'realtime_learn':
-            learning_gate = ('learning_storage' if self.learning_storage_error else self.learning_cache.gate_new(text))
-            if learning_gate:
-                return '',learning_gate
         if not self._purpose():
             result, source = (text, 'pending')
             self.stats['pending'] = self.stats.get('pending', 0) + 1
@@ -643,15 +626,11 @@ class TranslationEngine:
                 print('[warn] 未配置 API Key，本地未命中原因只在主面板显示。请在设置中填写自己的密钥或设置 DEEPSEEK_API_KEY。')
                 self.warned = True
             result, source = ('', 'none')
-        elif self.review_queue and self.review_queue.gate_new():
-            result, source = ('', 'review_capacity')
-        elif self.review_error:
-            result, source = ('', 'review_storage')
-        elif self.learning_cache and self.learning_cache.gate_new(text):
-            result, source = ('', self.learning_cache.gate_new(text))
+        elif check_costs and (storage_gate := self._storage_gate(text)):
+            result, source = ('', storage_gate)
         elif check_costs and self._accounting_problem():
             result, source = ('', 'accounting')
-        elif (time.time() < self.learn_local_until if self._purpose() == 'realtime_learn' else self.in_local_mode()):
+        elif self.in_local_mode():
             result, source = (text, 'local_mode')
             self.stats['local_mode'] = self.stats.get('local_mode', 0) + 1
             self._note('pending')
@@ -673,6 +652,14 @@ class TranslationEngine:
             else:
                 return None
         return result, source
+
+    def _storage_gate(self, text):
+        """Full scans belong to the API worker, including the final send gate."""
+        if self.review_queue and self.review_queue.gate_new():
+            return 'review_capacity'
+        if self.review_error:
+            return 'review_storage'
+        return self.learning_cache.gate_new(text) if self.learning_cache else ''
 
     def _budget_blocked(self):
         if not self.budget_session and (not self.budget_daily):
@@ -765,8 +752,6 @@ class TranslationEngine:
         if not cleaned:
             if self.rules.quality_report:
                 self._request.quality = self.rules.quality_report(text,'',self.glossary)
-            if getattr(self._request,'purpose','translate') == 'realtime_learn':
-                self._note_failure('empty')
             self._journal_failure(text, 'empty')
             self.stats['api_fail'] = self.stats.get('api_fail', 0) + 1
             self._note('api_failed', tokens=tokens, elapsed_ms=elapsed_ms,
@@ -779,8 +764,6 @@ class TranslationEngine:
         self._request.quality = quality
         self._record_candidate(text, cleaned, quality)
         if reason:
-            if getattr(self._request,'purpose','translate') == 'realtime_learn':
-                self._note_failure(reason)
             self._journal_failure(text, reason)
             self.gate_rejects[reason] = self.gate_rejects.get(reason, 0) + 1
             self.stats['api_fail'] += 1
@@ -788,8 +771,6 @@ class TranslationEngine:
                        token_src='api' if tokens else 'none')
             return (f'[译文质量检查未通过：{reason}]', 'api_failed')
         self.stats['api_ok'] = self.stats.get('api_ok', 0) + 1
-        if getattr(self._request,'purpose','translate') == 'realtime_learn':
-            self._note_success()
         self._note('api', tokens=tokens, elapsed_ms=elapsed_ms, token_src='api' if tokens else 'none')
         stored = False
         reason = ''
@@ -834,19 +815,10 @@ class TranslationEngine:
         return time.time() < self.local_until
 
     def _note_success(self) -> None:
-        if getattr(self._request, 'purpose', '') == 'realtime_learn':
-            self._learn_fail_streak = 0
-            self.learn_local_until = 0.0
-            return
         self._fail_streak = 0
         self.local_until = 0.0
 
     def _note_failure(self, marker: str) -> None:
-        if getattr(self._request, 'purpose', '') == 'realtime_learn':
-            self._learn_fail_streak += 1
-            if self._learn_fail_streak >= self.LOCAL_MODE_AFTER:
-                self.learn_local_until = time.time() + self.LOCAL_MODE_SECONDS
-            return
         self._fail_streak += 1
         if self._fail_streak >= self.LOCAL_MODE_AFTER and (not self.in_local_mode()):
             self.local_until = time.time() + self.LOCAL_MODE_SECONDS
@@ -894,12 +866,9 @@ class TranslationEngine:
             self._request.prices = {'input':self.price_in,'output':self.price_out}
         if self._accounting_problem():
             return None, '[消费台账异常，已停止新请求]', False
-        if self.review_error:
-            return None,'[审核记录未保存，已停止新请求]',False
-        if getattr(self._request,'purpose','translate') == 'realtime_learn':
-            gate = self.learning_cache.gate_new(text)
-            if gate:
-                return None,_GATE_MARKERS[gate],False
+        gate = self._storage_gate(text)
+        if gate:
+            return None, _GATE_MARKERS[gate], False
         if self.journal is not None:
             try:
                 self._request.request_id = self.journal.prepare(text, {
@@ -984,8 +953,7 @@ class TranslationEngine:
             content, marker, retryable = self._call_once(text)
             if content is not None:
                 with self._state_lock:
-                    if getattr(self._request,'purpose','translate') != 'realtime_learn':
-                        self._note_success()
+                    self._note_success()
                 return content
             if not retryable:
                 break
@@ -1003,8 +971,7 @@ class TranslationEngine:
 
     def _request_current(self):
         context = getattr(self._request, 'context', None)
-        purpose = getattr(self._request, 'purpose', self._purpose())
-        allowed = not self.hard_offline and (not self.offline if purpose == 'translate' else self.realtime_learn)
+        allowed = not self.hard_offline and not self.offline
         return allowed and (context is None or (context == (self.api_key, self.endpoint, self.model, self.offline)
                                    and getattr(self._request, 'prompt', self.system_prompt) == self.system_prompt))
 

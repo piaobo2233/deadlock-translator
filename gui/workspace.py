@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 import app.translation.glossary_ops as glossary_ops
-import app.translation.memory_ops as memory_ops
 from app.storage import store
 from app.storage.review_queue import ReviewQueue
 from gui.theme import COLORS as C
@@ -355,11 +354,15 @@ class Dictionary:
         self.app, self.th, self.parent = app, app.th, parent
         th = self.th
         self.gpath = store.data_path(app.root_dir, 'glossary.json')
-        self.mpath = store.data_path(app.root_dir, 'translations.json')
+        self.config_path = store.data_path(app.root_dir, 'config.json')
         self.service = ReviewQueue(store.data_path(app.root_dir,'pending.json'),self.gpath)
         self.state = getattr(app, '_dictionary_state', None) or dict(tab='formal', selected=None, drafts={}, snapshots={})
         app._dictionary_state = self.state
         self.rows, self.selected, self.blocked = [], None, False
+        self._snapshot_stamp = None
+        self._snapshot = None
+        if self.state['tab'] not in {'formal', 'review', 'processed'}:
+            self.state.update(tab='formal', selected=None)
         head=heading(parent,th,'词库','修改常用译文，或停用当前选中的词条。')
         self.subtitle=head.subtitle
         self.add_button=th.button(head,'＋ 添加词条',self.add,kind='primary')
@@ -436,17 +439,44 @@ class Dictionary:
             if 'entries' in raw and not isinstance(raw['entries'],dict):raise ValueError(f'{Path(path).name} 条目结构异常')
             if 'version' in raw and raw['version'] != store.SCHEMA_VERSION:
                 raise ValueError(f'{Path(path).name} 版本不支持：{raw["version"]}')
-            if path == self.service.path:
-                entries = raw.get('entries', raw)
-                if any(not isinstance(v, dict) for k,v in entries.items() if not k.startswith('_')):
-                    raise ValueError('pending.json 含无效审核条目')
+            return raw
+        return {}
+
+    def file_stamps(self):
+        stamps = []
+        for path in (self.gpath, self.service.path, self.config_path):
+            try:
+                stat = Path(path).stat()
+                stamps.append((stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size, stat.st_ino))
+            except FileNotFoundError:
+                stamps.append(None)
+        return tuple(stamps)
+
+    def snapshot(self):
+        stamp = self.file_stamps()
+        if self._snapshot is None or stamp != self._snapshot_stamp:
+            entries = store.glossary_entries(self.read(self.gpath))
+            try:
+                queue = self.service.items(formal=entries)
+            except (OSError, ValueError, TypeError, KeyError) as exc:
+                raise ValueError(f'pending.json 读取异常：{exc}') from exc
+            config = self.read(self.config_path)
+            formal = [dict(row, key=row['word'], original=row['word'],
+                quarantine_reason=entries.get(row['word'], {}).get('quarantine_reason', ''),
+                can_restore=not entries.get(row['word'], {}).get('quarantine_reason') and bool(
+                    entries.get(row['word'], {}).get('deleted') or entries.get(row['word'], {}).get('enabled') is False))
+                for row in glossary_ops.rows(self.gpath, entries=entries, config=config)]
+            if self.file_stamps() != stamp:
+                raise ValueError('数据正在更新，请重新读取')
+            self._snapshot = (formal, queue)
+            self._snapshot_stamp = stamp
+        return self._snapshot
 
     def refresh(self,*_):
         self.remember()
         self.paint_tabs()
         try:
-            for path in (self.gpath,self.service.path, self.mpath if self.state['tab']=='memory' else self.gpath):self.read(path)
-            queue=self.service.items()
+            formal, queue = self.snapshot()
             review=[r for r in queue if self.service.reviewable(r)]
             self.processed_records=[r for r in queue if r.get('status') in {'accepted','edited','rejected'} and not r.get('hidden_at')]
             self.clear_processed_button.configure(state='normal' if self.processed_records else 'disabled')
@@ -454,12 +484,7 @@ class Dictionary:
             self.tabs['processed'].configure(text=f"已处理 {len(self.processed_records)}")
             tab=self.state['tab']
             if tab=='formal':
-                entries=store.load_glossary_file(self.gpath)
-                rows=[dict(r,key=r['word'],original=r['word'],quarantine_reason=entries.get(r['word'],{}).get('quarantine_reason',''),
-                    can_restore=not entries.get(r['word'],{}).get('quarantine_reason') and bool(entries.get(r['word'],{}).get('deleted') or entries.get(r['word'],{}).get('enabled') is False)) for r in glossary_ops.rows(self.gpath)
-                      if self.filter.get()=='全部' or r['status']==self.filter.get()]
-            elif tab=='memory':
-                rows=[dict(r,key=r['normalized'],original=r['normalized'],source='历史记忆') for r in memory_ops.rows(self.mpath)]
+                rows=[row for row in formal if self.filter.get()=='全部' or row['status']==self.filter.get()]
             else:
                 rows=review if tab=='review' else self.processed_records
             kw=self.keyword.get().strip().lower()
@@ -524,7 +549,7 @@ class Dictionary:
             self.tab_rails[name].configure(bg=C['accent'] if name==tab else C['bg'])
         if tab=='processed':self.processed_tools.pack(fill='x',pady=(10,0))
         else:self.processed_tools.pack_forget()
-        self.subtitle.configure(text={'review':'只列尚未处理的内容，在同一页核对、修改和保存。','processed':'可删除处理记录；已经加入词库的译文会保留。','memory':'历史记忆是低频排查入口，与正式词库分开操作。'}.get(tab,'修改常用译文，或停用当前选中的词条。'))
+        self.subtitle.configure(text={'review':'只列尚未处理的内容，在同一页核对、修改和保存。','processed':'可删除处理记录；已经加入词库的译文会保留。'}.get(tab,'修改常用译文，或停用当前选中的词条。'))
 
     def show(self,row):
         for child in self.editor.winfo_children():child.destroy()
@@ -534,7 +559,7 @@ class Dictionary:
             text(self.editor,self.th,'先从左侧选择一条\n操作根据条目状态显示',small=True,muted=True,justify='center').pack(pady=45)
             return
         th=self.th
-        tab=self.state['tab'];readonly=tab in {'processed','memory'}
+        tab=self.state['tab'];readonly=tab=='processed'
         self.editor_title.configure(text='核对这条译文' if tab=='review' else '查看记录' if readonly else '编辑词条')
         self.editor_state.configure(text='只读' if readonly else STATUS_NAMES.get(row.get('status'),row.get('status','')))
         text(self.editor,th,'原文',small=True,muted=True).pack(anchor='w')
@@ -560,9 +585,9 @@ class Dictionary:
         self.selected=dict(snapshot if self.state['tab']=='review' else row)
         tab=self.state['tab']
         self.actions=frame(self.editor,th);self.actions.pack(fill='x')
-        if tab in {'processed','memory'}:
+        if tab=='processed':
             self.draft.configure(state='disabled')
-            th.label(self.actions,'译文只读' if tab=='processed' else '只读记录',font=th.font_small).pack(anchor='w')
+            th.label(self.actions,'译文只读',font=th.font_small).pack(anchor='w')
             if tab=='processed':
                 th.button(self.actions,'删除记录',self.delete_processed).pack(fill='x',pady=(8,0))
                 th.button(self.actions,'返回待审核',lambda:self.pick('review')).pack(anchor='w',pady=(8,0))
@@ -614,6 +639,7 @@ class Dictionary:
     def reload(self):
         self.remember()
         identity=self.identity(self.selected) if self.selected else None
+        self._snapshot = None  # An explicit reread also revalidates unchanged files.
         self.refresh()
         if self.blocked:return
         row=next((r for r in self.rows if self.identity(r)==identity),None)

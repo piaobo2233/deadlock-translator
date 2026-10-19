@@ -67,10 +67,10 @@ class TranslationResult:
         if not text:
             return cls("", source, TranslationStatus.FAILED, "翻译结果为空")
         warnings = {
-            "api_unsaved": "词库保存失败，本次译文可用，重启后可能需要再次付费",
+            "api_unsaved": "候选缓存保存失败，本次译文可用；合格译文已有请求恢复副本，仅重试保存，不自动重新请求",
             "api_disabled": "该词条已停用或删除，本次译文未自动保存",
             "api_blocked": "词条状态已变更或记录异常，本次译文未自动保存",
-            "recovery_unsaved": "词库保存失败，合格译文已保留恢复副本；仅重试保存，不自动重新请求",
+            "recovery_unsaved": "候选缓存保存失败，合格译文已保留请求恢复副本；仅重试保存，不自动重新请求",
             "api_recovery_failed": "恢复记录保存失败，本次译文可用；请求结果保守保留未决，重启不自动重发",
             "learning_unsaved": "学习缓存保存失败；仅重试本次保存，重启需显式恢复，不自动重发",
         }

@@ -140,9 +140,19 @@ class ReviewQueue:
         key = normalize_query(original)
         return {k:v for k,v in entries.items() if normalize_query(k) == key}
 
-    def items(self):
+    def items(self, *, formal=None):
         entries = self._read()
-        formal = store.load_glossary_file(self.glossary_path)
+        if formal is None:
+            formal = store.load_glossary_file(self.glossary_path)
+        aliases = {}
+        for key, value in formal.items():
+            aliases.setdefault(normalize_query(key), {})[key] = value
+        tokens = {}
+        def formal_token(original):
+            key = normalize_query(original)
+            if key not in tokens:
+                tokens[key] = fingerprint(aliases.get(key, {}))
+            return tokens[key]
         def evidence_text(row):
             evidence=row.get('quality_checks')
             if not evidence: return '历史证据缺失'
@@ -150,7 +160,7 @@ class ReviewQueue:
             if isinstance(evidence,dict) and evidence.get('reason'): return '未通过：'+str(evidence['reason'])
             return '质量证据不完整'
         return [dict(row,key=key,token=fingerprint(row),evidence_text=evidence_text(row),
-                     formal_token=fingerprint(self._aliases(formal,row.get('original') or key)),
+                     formal_token=formal_token(row.get('original') or key),
                      evidence='历史证据缺失' if not row.get('quality_checks') else row['quality_checks'])
                 for key,row in entries.items()]
 

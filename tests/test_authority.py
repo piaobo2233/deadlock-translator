@@ -272,7 +272,7 @@ class AuthorityTests(unittest.TestCase):
         candidate = ChatCandidate("player", "wait me", "team", (10, 20, 100, 40), 7)
         result = processor.prepare(candidate)
         self.assertFalse(result.successful)
-        self.assertIn("未自动付费", result.translated)
+        self.assertIn("已隔离", result.translated)
         self.assertEqual((result.bubble_id, result.position), (7, candidate.position))
         self.engine.client.request.assert_not_called()
 

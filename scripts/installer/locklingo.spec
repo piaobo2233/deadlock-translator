@@ -15,8 +15,9 @@ analysis = Analysis(
            (str(source / 'app/recognition/quick_chat.json'), 'app/recognition'),
            (str(source / 'app/recognition/models'), 'app/recognition/models'),
            *collect_data_files('ttkbootstrap')],
-    hiddenimports=[], hookspath=[], hooksconfig={}, runtime_hooks=[],
-    excludes=['pystray', 'pandas', 'scipy', 'matplotlib', 'IPython', 'pytest'],
+    hiddenimports=['pystray._win32'], hookspath=[str(source.parent / 'hooks')],
+    hooksconfig={}, runtime_hooks=[],
+    excludes=['pandas', 'scipy', 'matplotlib', 'IPython', 'pytest'],
     noarchive=False, optimize=0,
 )
 pyz = PYZ(analysis.pure)

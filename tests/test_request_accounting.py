@@ -341,7 +341,12 @@ class RequestAccountingTests(unittest.TestCase):
                 self.assertFalse(self.usage.health()["ok"])
                 glossary_ops.upsert(self.glossary, "gg", "打得好")
                 restarted = self.engine()
-                self.assertEqual(restarted.translate_result("wait me").source, "accounting")
+                # Review recovery observes the same damaged journal before the
+                # accounting gate; both must stop HTTP and preserve evidence.
+                blocked = restarted.translate_result("wait me")
+                self.assertEqual(blocked.source, "review_storage")
+                self.assertFalse(blocked.successful)
+                self.assertEqual(blocked.api_attempts, 0)
                 self.assertEqual(restarted.translate_result("gg").api_attempts, 0)
                 restarted.client.request.assert_not_called()
                 self.assertEqual(path.read_bytes(), raw)
