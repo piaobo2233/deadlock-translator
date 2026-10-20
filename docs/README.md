@@ -5,6 +5,7 @@
 - [软件更新](guides/软件更新.md)：版本概述、可选更新、安装备份与失败恢复。
 - [当前 Beta](releases/v1.0.0-beta.1.md)、[更新日志](CHANGELOG.md)、[测试状态](TESTING.md)。
 - [本机游戏资料](guides/本机游戏资料.md)：从自己的安装生成、升级失效与失败保留。
+- [显示适配实施方案](guides/显示适配实施方案.md)：16:10、超宽屏、窗口及副屏的改造步骤与验收清单；尚未实现。
 - [开发与构建](DEVELOPMENT.md)、[贡献说明](CONTRIBUTING.md)。
 - [第三方清单](THIRD-PARTY-NOTICES.md)、[技术致谢](ACKNOWLEDGEMENTS.md)、[项目与素材](PROJECT-NOTICE.md)。
 - [C 版品牌素材](assets/locklingo/README.md)。
