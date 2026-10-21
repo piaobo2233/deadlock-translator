@@ -439,8 +439,8 @@ class Dictionary:
         self.clear_processed_button=th.button(self.processed_tools,'清空已处理',lambda:self.delete_processed(all_records=True))
         self.clear_processed_button.pack(anchor='w')
         self.processed_records=[]
-        th.hairline(parent,pady=(20,12))
-        tools=panel(parent,th);tools.pack(fill='x')
+        # Keep import/export visible when Windows caps the window height.
+        tools=panel(tabs,th);tools.pack(side='right')
         holder=panel(tools,th);holder.pack(side='left')
         self.builtins=p._switch(app,holder,'builtins_enabled',p._load_config(app.root_dir))
         text(tools,th,'内置词表',small=True).pack(side='left',padx=(8,0))

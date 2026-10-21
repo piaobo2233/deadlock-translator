@@ -277,10 +277,11 @@ def main():
                 wait_for(lambda: state().get('status') == 'ready' and state().get('translator_token'))
                 panel_info = state()['process']
                 wait_for(lambda: '已启用常驻 OCR' in (bundle / 'data/run.log').read_text(encoding='utf-8', errors='replace'))
-                from app.runtime.diagnostics import history
-                wait_for(lambda:any(event['stage']=='input' and event['state']=='ready'
-                    for session in history(bundle) for event in session['events']))
-                report['native_input_monitor']='pass'
+                from app.runtime.config_application import application_state
+                # The clipboard listener defaults off and has no hotkey-ready
+                # event. Its acknowledgement proves the IO thread observed off.
+                wait_for(lambda: application_state(bundle,'input_translate_enabled',False,running=True)=='applied')
+                report['clipboard_monitor_disabled_default']='pass'
                 if desktop_probe:
                     assert desktop_ctrl_available(), 'Assistant occupies desktop Ctrl+T/Ctrl+R'
                     report['desktop_ctrl_shortcuts']='pass'
