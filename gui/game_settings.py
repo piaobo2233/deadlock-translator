@@ -12,6 +12,7 @@ def connection_button(parent, app, config, *, status_parent=None):
     from app.config import providers
     results = queue.Queue()
     tested = [None]
+    tested_revision = [0]
     status = text(status_parent or parent, app.th, '', small=True, muted=True, wraplength=700,justify='left')
     def effective_config():
         snapshot = config()
@@ -26,6 +27,7 @@ def connection_button(parent, app, config, *, status_parent=None):
     def run():
         snapshot = effective_config()
         tested[0] = signature(snapshot)
+        tested_revision[0] = getattr(app,'_api_revision',0)
         button.configure(state='disabled')
         status.configure(text='正在测试…')
         def worker():
@@ -47,33 +49,31 @@ def connection_button(parent, app, config, *, status_parent=None):
             app.after_page(100,poll)
         else:
             button.configure(state='normal')
-            if tested[0] != signature(effective_config()):
+            if tested[0] != signature(effective_config()) or tested_revision[0] != getattr(app,'_api_revision',0):
                 status.configure(text='接口已改变，测试结果已过期',fg=C['warn'])
             else:
-                status.configure(text=why,fg=C['ok'] if ok else C['err'])
+                from gui.api_help import failure_help
+                from gui.pages import _load_config
+                current = _load_config(app.root_dir)
+                kind = '已保存配置测试' if tested[0] == signature(current) else '草稿测试（尚未应用）'
+                stamp = time.strftime('%H:%M:%S')
+                message = f'{stamp} {kind}：{why}' + ('' if ok else '\n'+failure_help(why))
+                app._api_last_test = dict(signature=tested[0],text=message,ok=ok)
+                status.configure(text=message,fg=C['ok'] if ok else C['err'])
+    previous = getattr(app,'_api_last_test',None)
+    if previous and previous['signature'] == signature(effective_config()):
+        status.configure(text=previous['text'],fg=C['ok'] if previous['ok'] else C['err'])
     app.connection_controls = dict(button=button,status=status)
 
 
 
 def hotkey_control(parent,app,key,label,config):
     from gui import pages as p
+    from gui.hotkeys import HotkeyControl
     row,holder=p._row(parent,app.th,label+'（重开生效）')
-    drafts=getattr(app,'_hotkey_drafts',None)
-    if drafts is None:drafts=app._hotkey_drafts={}
-    var=app.th.tk.StringVar(value=drafts.get(key,config[key]))
-    var.trace_add('write',lambda *_:drafts.update({key:var.get()}))
-    border,entry=app.th.entry(holder,var);border.pack()
-    def save(_event=None):
-        from app.platform.game_input import parse_hotkey
-        try:
-            parsed=parse_hotkey(var.get())
-            other='recognize_hotkey' if key=='send_hotkey' else 'send_hotkey'
-            if parsed==parse_hotkey(p._load_config(app.root_dir)[other]):
-                raise ValueError('两个快捷键不能相同')
-        except ValueError as exc:
-            app.set_status(str(exc),C['err']);return
-        p._save(key,var.get(),app)
-    entry.bind('<Return>',save);entry.bind('<FocusOut>',save)
+    controls=getattr(app,'hotkey_controls',None)
+    if controls is None:controls=app.hotkey_controls={}
+    controls[key]=HotkeyControl(holder,app,key,config[key])
     return row
 
 
@@ -94,52 +94,42 @@ def language_control(parent,app,key,label,config):
 def build_language_settings(parent,app):
     from gui import pages as p
     config=p._load_config(app.root_dir);th=app.th
-    app.send_language=language_control(parent,app,'send_target','发言目标语言',config)
-    hotkey_control(parent,app,'send_hotkey','发言快捷键',config)
-    row,holder=p._row(parent,th,'自动发送')
-    var=p._switch(app,holder,'auto_send',config)
-    label=text(holder,th,'',small=True,muted=True);label.pack(side='left',padx=(8,0))
-    def state(*_):label.configure(text='已开启' if var.get() else '已关闭')
-    var.trace_add('write',state);state()
-    app.auto_send_control=dict(value=var,label=label)
+    text(parent,th,'开启后，在游戏聊天框提交中文输入法候选，再自行 Ctrl+A/C 复制。'
+         '助手确认游戏来源后固定译英并覆盖剪贴板；提示成功后自行 Ctrl+V 粘贴、回车发送。'
+         '切出游戏会取消旧输出，返回后请重新复制。私有请求台账可保留原文和译文。',
+         small=True,muted=True,wraplength=720,justify='left').pack(anchor='w',pady=(0,8))
+    row,holder=p._row(parent,th,'游戏复制中文自动译英')
+    var=p._switch(app,holder,'input_translate_enabled',config)
+    app.input_translate_control=dict(value=var,holder=holder)
+    app.send_language=language_control(parent,app,'send_target','面板发言目标语言',config)
 
 
 def build_recognition(parent,app):
-    from gui import pages as p
-    config=p._load_config(app.root_dir);th=app.th
-    row,holder=p._row(parent,th,'识别方式（重开生效）')
-    modes={'realtime':'实时识别','manual':'仅按快捷键识别'}
-    mode=th.tk.StringVar(value=modes[config['recognition_mode']])
-    chooser=th.ttk.Combobox(holder,textvariable=mode,values=tuple(modes.values()),state='readonly',width=20)
-    chooser.pack()
-    hotkey=hotkey_control(parent,app,'recognize_hotkey','识别快捷键',config)
-    def changed(event=None):
-        selected=next(k for k,v in modes.items() if v==mode.get())
-        if event is not None and not p._save('recognition_mode',selected,app):
-            mode.set(modes[p._load_config(app.root_dir)['recognition_mode']]);selected=p._load_config(app.root_dir)['recognition_mode']
-        if selected=='manual':hotkey.pack(fill='x',pady=(0,th.t['sp_s']))
-        else:hotkey.pack_forget()
-    chooser.bind('<<ComboboxSelected>>',changed);changed()
-    app.recognition_controls=dict(mode=mode,chooser=chooser,hotkey=hotkey)
+    label=text(parent,app.th,'持续实时识别游戏聊天。设置聊天可能出现的范围，覆盖两队位置与多条消息。',
+               small=True,muted=True,wraplength=720,justify='left')
+    label.pack(anchor='w',pady=(0,8))
+    app.recognition_controls=dict(status=label)
 
 
-def diagnostic_read(image,config):
+def diagnostic_read(image,config, *, rect=None):
     """Search the same area, OCR accepted body crops only; no HTTP or saved chat."""
     import numpy as np
     from app.recognition import ocr
-    from app.recognition.region import resolve_region
+    from app.recognition.region import resolve_region, validate_region
     from app.recognition.chat_area import candidate_inside, chat_body_sized, typing_indicator
     from app.recognition.reuse import QuickChatTemplates
     from app.recognition.quick_chat import QuickChat
     from pathlib import Path
-    rect=resolve_region(config,image.size)
+    rect=(resolve_region(config,image.size) if rect is None else
+          tuple(validate_region(dict(rect=list(rect),screen=list(image.size)))['rect']))
     crop=image.crop(rect)
     if not ocr.set_tesseract(config.get('tesseract','')):raise RuntimeError('未找到 Tesseract')
     pixels=np.asarray(crop.convert('RGB'))[:,:,::-1].copy()
     scale=image.height/ocr.REF_H
-    lines=[];deadline=time.monotonic()+4
+    lines=[];deadline=time.monotonic()+4; candidates=0; read_count=0
     templates=QuickChatTemplates(Path(store.data_path(config.get('_root','.'),'quick_chat_visual.json')),QuickChat())
     for box in ocr.find_bubbles(pixels,offset=rect[:2],screen=image.size,capture_rect=rect):
+        candidates+=1
         if time.monotonic()>=deadline:
             lines.append('测试时间已到，余下候选未读取。');break
         if not candidate_inside(box,pixels.shape,scale=scale) or typing_indicator(pixels,box,scale=scale):continue
@@ -149,53 +139,104 @@ def diagnostic_read(image,config):
         try:
             raw=next(variants,('', ''))[1]
         finally:variants.close()
+        if raw:read_count+=1
         lines.append(f'正文 {body.text_rect}：{raw or "未读到文字"}')
-    return crop,'只读单帧诊断（不等于多帧确认或整局准确率）\n'+'\n'.join(lines or ['未找到可靠正文；不会回退整块区域 OCR。'])
+    state=('已读到文字' if read_count else '有候选，未读到可靠文字' if candidates else '当前截图未找到可靠聊天，不影响保存范围')
+    return crop,f'{state}；候选 {candidates} 个。聊天覆盖仍需人工核对。\n只读单帧诊断\n'+'\n'.join(lines)
 
 
 def build_region_tools(parent,app):
     from gui import pages as p
     from gui import region as r
-    from app.recognition.region import resolve_region, PRESETS
+    from gui.region_editor import RegionEditor
+    from app.recognition.region import region_details, experimental_aspect
+    from app.runtime.config_application import application_state
+    import app.main as dt
     th=app.th
-    config=p._load_config(app.root_dir)
-    names=('自动检测主屏像素','1920 × 1080','2560 × 1440','3840 × 2160')
-    row,holder=p._row(parent,th,'画面分辨率')
-    selected=th.tk.StringVar(value=names[PRESETS.index(config['capture_preset'])])
-    chooser=th.ttk.Combobox(holder,textvariable=selected,values=names,state='readonly',width=23);chooser.pack()
-    status=text(parent,th,'',small=True,muted=True,wraplength=820,justify='left');status.pack(anchor='w',pady=8)
-    text(parent,th,'主屏 16:9；测试将在 3 秒后截图并打开预览。',
-         small=True,muted=True,wraplength=820,justify='left').pack(anchor='w',pady=(0,8))
-    state=dict(alive=True,busy=False,hidden=False,generation=0);results=queue.Queue();preview={}
-    def refresh():
-        screen=r.screen_size()
+    status=text(parent,th,'',small=True,muted=True,wraplength=820,justify='left')
+    status.pack(anchor='w',fill='x',pady=8)
+    actions=th.tk.Frame(parent,bg=C['bg']);actions.pack(fill='x')
+    state=dict(alive=True,busy=False,hidden=False,generation=0)
+    results=queue.Queue();preview={};editor=[None];buttons=[]
+    schematic=th.tk.Canvas(parent,height=145,bg=C['soft'],highlightthickness=1,highlightbackground=C['border'])
+    schematic.pack(fill='x',pady=8)
+    source=text(parent,th,'',small=True,muted=True,wraplength=820,justify='left');source.pack(anchor='w',fill='x')
+    details=text(parent,th,'',small=True,muted=True,wraplength=820,justify='left')
+    def toggle_details():
+        if details.winfo_manager():details.pack_forget()
+        else:details.pack(fill='x',pady=8)
+    detail_button=th.link(parent,'▸ 画面与区域详情',toggle_details)
+    detail_button.pack(anchor='w',pady=4)
+    text(parent,th,'换过 HUD/UI 设置？请重新导入或截取。仅支持主屏全屏/无边框；字号变化仍可能影响识别。',
+         small=True,muted=True,wraplength=820,justify='left').pack(anchor='w',pady=4)
+    def draw(event=None):
+        cfg=p._load_config(app.root_dir);saved=cfg.get('capture_calibration',{})
+        screen=tuple(saved.get('screen') or r.screen_size())
         try:
-            rect=resolve_region(p._load_config(app.root_dir),screen)
-            status.configure(text=f'主屏 {screen[0]} × {screen[1]} 像素；搜索范围 {rect}。仅对可靠正文识别。',fg=C['muted'])
+            rect=saved['rect'] if saved else region_details(cfg,screen)['region']
+        except ValueError:
+            rect=None
+        w=max(1,schematic.winfo_width());h=schematic.winfo_height()
+        k=min(max(1,w-20)/screen[0],max(1,h-40)/screen[1]);ox=(w-screen[0]*k)/2;oy=8
+        schematic.delete('all')
+        schematic.create_rectangle(ox,oy,ox+screen[0]*k,oy+screen[1]*k,outline=C['border'])
+        if rect:
+            schematic.create_rectangle(ox+rect[0]*k,oy+rect[1]*k,ox+rect[2]*k,oy+rect[3]*k,
+                                       outline=C['accent'],width=2,dash=(4,2))
+        schematic.create_text(w/2,h-14,text='布局示意，非当前截图 · '+('个人区域' if saved else '参考范围'),fill=C['muted'],font=th.font_small)
+    schematic.bind('<Configure>',draw)
+    def refresh():
+        if not state['alive']:return
+        cfg=p._load_config(app.root_dir);saved=cfg.get('capture_calibration',{});screen=r.screen_size()
+        try:
+            info=region_details(cfg,screen)
+            active=application_state(app.root_dir,'capture_calibration',saved,running=dt.translator_is_running())
+            if info['fallback_reason']:message=info['fallback_reason']
+            elif saved:
+                if active=='applied':
+                    message=('当前采集正在使用此区域' if dt.game_in_foreground() else
+                             '区域已收到采集确认；游戏不在前台时暂停采集')
+                elif active=='failed':message='区域已保存，采集切换失败；请查看诊断'
+                else:message='区域已保存，等待同尺寸游戏画面及采集确认'
+            else:
+                message=('参考范围已收到采集确认，可导入截图调整' if active=='applied' else
+                         '使用参考范围；等待游戏采集确认，可导入截图调整')
+            status.configure(text=message,fg=C['accent'] if info['fallback'] else C['fg'])
+            basis=('截图 %d × %d；' % tuple(saved['screen'])) if saved else ''
+            source_name={'imported_screenshot':'导入截图后确认/调整','game_capture':'当前游戏截图后确认/调整'}
+            source.configure(text=basis+f'当前主屏 {screen[0]} × {screen[1]}\n区域来源：'+
+                (source_name.get(saved.get('source'),'参考范围'))+' · '+info['verification'])
+            note='；此比例为实验适配，尚未完成真实设备验收' if experimental_aspect(screen) else ''
+            details.configure(text=f"物理尺寸 {screen}；当前采集搜索范围 {tuple(info['region'])}；{info['source']}{note}")
         except ValueError as exc:status.configure(text=str(exc),fg=C['warn'])
-    def save(event=None):
-        if not p._save('capture_preset',PRESETS[names.index(selected.get())],app):
-            selected.set(names[PRESETS.index(p._load_config(app.root_dir)['capture_preset'])])
-        refresh()
-    chooser.bind('<<ComboboxSelected>>',save)
+        draw()
+    def periodic():
+        if state['alive']:
+            refresh();app.after_page(1000,periodic)
+    def close_editor():
+        if editor[0] is not None:
+            editor[0].close();editor[0]=None
     def finish():
         if state['hidden']:
             state['hidden']=False;app.root.deiconify()
         state['busy']=False
-        button.configure(state='normal');chooser.configure(state='readonly')
+        for button in buttons:button.configure(state='normal')
     def cleanup(event):
         if event.widget is not status:return
         state['alive']=False;state['generation']+=1
         if state['hidden']:state['hidden']=False;app.root.deiconify()
+        close_editor()
         win=preview.get('window')
         if win and win.winfo_exists():win.destroy()
-    # App reuses its page container; its children own navigation cleanup.
+        preview.clear()
     status.bind('<Destroy>',cleanup,add='+')
     def show(crop,note):
         from PIL import ImageTk
-        win=th.tk.Toplevel(parent);win.title('识别测试 · 只读');win.geometry('880x560')
+        win=th.tk.Toplevel(parent);win.title('识别测试 · 只读')
+        win.geometry(f'{min(880,win.winfo_screenwidth()-60)}x{min(560,win.winfo_screenheight()-80)}')
         preview['window']=win
-        shown=crop.copy();shown.thumbnail((850,340))
+        win.bind('<Destroy>',lambda event:preview.clear() if event.widget is win else None,add='+')
+        shown=crop.copy();shown.thumbnail((800,300))
         preview['photo']=ImageTk.PhotoImage(shown,master=win)
         label=th.tk.Label(win,image=preview['photo']);label.pack(fill='both',expand=True)
         raw=th.tk.Text(win,height=8,wrap='word',font=th.font);raw.pack(fill='x')
@@ -204,37 +245,64 @@ def build_region_tools(parent,app):
     def poll():
         if not state['alive'] or not state['busy']:return
         try:
-            generation,result=results.get_nowait()
+            generation,mode,result=results.get_nowait()
             if generation==state['generation']:
                 finish()
                 if isinstance(result,Exception):app.set_status(str(result),C['err'])
-                else:show(*result)
+                elif mode=='test':show(*result)
+                else:
+                    image,rotated,small=result
+                    close_editor()
+                    editor[0]=RegionEditor(parent,app,image,'imported_screenshot' if mode=='import' else 'game_capture',
+                                          rotated=rotated,preview=small,on_saved=refresh)
                 return
         except queue.Empty:pass
         if time.monotonic()>state['deadline']:
-            state['generation']+=1;finish();app.set_status('识别测试超时；没有应用迟到结果',C['warn']);return
+            state['generation']+=1;finish();app.set_status('处理超时；没有应用迟到结果',C['warn']);return
         app.after_page(80,poll)
-    def request():
+    def begin(mode,path=None):
         if state['busy']:return
-        cfg=dict(p._load_config(app.root_dir),_root=app.root_dir)
-        try:resolve_region(cfg,r.screen_size())
-        except ValueError as exc:app.set_status(str(exc),C['warn']);return
+        close_editor()
         win=preview.get('window')
         if win and win.winfo_exists():win.destroy()
-        state.update(busy=True,hidden=True,generation=state['generation']+1,deadline=time.monotonic()+r.CAPTURE_DELAY_MS/1000+8)
-        generation=state['generation'];button.configure(state='disabled');chooser.configure(state='disabled')
-        app.set_status('3秒后截图，请切回游戏',C['muted']);app.root.withdraw()
-        def capture():
+        state.update(busy=True,hidden=mode!='import',generation=state['generation']+1,
+                     deadline=time.monotonic()+r.CAPTURE_DELAY_MS/1000+15)
+        generation=state['generation']
+        cfg=dict(p._load_config(app.root_dir),_root=app.root_dir)
+        for button in buttons:button.configure(state='disabled')
+        if state['hidden']:
+            app.set_status('3秒后截图，请切回游戏',C['muted']);app.root.withdraw()
+        def worker():
             if not state['alive'] or generation!=state['generation']:return
-            try:result=diagnostic_read(r.capture_game_frame(),cfg)
-            except Exception as exc:result=RuntimeError('识别测试未完成：'+str(exc))
-            results.put((generation,result))
-        app.after_page(r.CAPTURE_DELAY_MS,lambda:threading.Thread(target=capture,name='dl-region-test',daemon=True).start())
+            try:
+                if mode=='import':image,rotated=r.import_game_image(path)
+                else:image,rotated=r.capture_game_frame(),False
+                if mode=='test':result=diagnostic_read(image,cfg)
+                else:
+                    small=image.copy();small.thumbnail((1600,900))
+                    result=(image,rotated,small)
+            except Exception as exc:result=RuntimeError('未完成：'+str(exc))
+            if state['alive'] and generation==state['generation']:
+                results.put((generation,mode,result))
+        delay=r.CAPTURE_DELAY_MS if state['hidden'] else 0
+        app.after_page(delay,lambda:threading.Thread(target=worker,name='dl-region-image',daemon=True).start())
         app.after_page(80,poll)
-    button=th.button(parent,'测试识别',request);button.pack(anchor='w',pady=8)
-    refresh()
-    app.game_settings=dict(region_status=status,state=state,preset=selected,chooser=chooser,save=save)
-    app.region_test=dict(button=button,preview=preview)
+    def import_image():
+        from tkinter import filedialog
+        path=filedialog.askopenfilename(parent=app.root,title='选择完整原始局内截图',
+                                       filetypes=[('PNG / JPEG','*.png *.jpg *.jpeg')])
+        if path:begin('import',path)
+    def reset():
+        if p._save('capture_calibration',{},app):refresh()
+    for label,command in (('导入局内截图',import_image),('截取当前画面',lambda:begin('capture')),('恢复默认区域',reset)):
+        button=th.button(actions,label,command);button.pack(side='left',padx=(0,6));buttons.append(button)
+    secondary=th.tk.Frame(parent,bg=C['bg']);secondary.pack(fill='x',pady=4)
+    edit=th.button(secondary,'编辑范围（重新选择截图）',import_image);edit.pack(side='left');buttons.append(edit)
+    test=th.button(secondary,'测试当前游戏画面',lambda:begin('test'));test.pack(side='left',padx=6);buttons.append(test)
+    app.game_settings=dict(region_status=status,state=state,editor=editor,import_image=import_image,begin=begin,
+                           reset=reset,refresh=refresh,schematic=schematic)
+    app.region_test=dict(button=test,preview=preview)
+    periodic()
 
 
 def build_input_recovery(parent,app):

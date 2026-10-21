@@ -28,6 +28,37 @@ from app.translation.query import QueryKey
 from app.translation.results import TranslationResult, TranslationStatus
 
 
+class ForegroundHotkeyTests(unittest.TestCase):
+    def native(self):
+        from app.platform.win_input import WindowsInput
+        native=object.__new__(WindowsInput)
+        native.hotkeys=dict(send='Ctrl+T',recognize='Ctrl+R')
+        native.user=Mock()
+        native.user.RegisterHotKey.return_value=True
+        return native
+
+    def test_desktop_keeps_ctrl_combinations_and_game_reentry_registers_once(self):
+        native=self.native();registered=[]
+        native._sync_hotkeys(False,registered)
+        native.user.RegisterHotKey.assert_not_called()
+        native._sync_hotkeys(True,registered)
+        self.assertEqual(native.user.RegisterHotKey.call_count,2)
+        native._sync_hotkeys(True,registered)
+        self.assertEqual(native.user.RegisterHotKey.call_count,2)
+        native._sync_hotkeys(False,registered)
+        self.assertEqual(native.user.UnregisterHotKey.call_count,2)
+        self.assertEqual(registered,[])
+        native._sync_hotkeys(True,registered)
+        self.assertEqual(native.user.RegisterHotKey.call_count,4)
+
+    def test_partial_registration_conflict_releases_first_binding(self):
+        native=self.native();registered=[]
+        native.user.RegisterHotKey.side_effect=[True,False]
+        with self.assertRaises(OSError):native._sync_hotkeys(True,registered)
+        native.user.UnregisterHotKey.assert_called_once_with(None,1)
+        self.assertEqual(registered,[])
+
+
 class ReceiveTests(unittest.TestCase):
     def test_receive_languages_and_mixed_bodies(self):
         for value in ('hola equipo', 'precisamos de ajuda', 'attendez moi', 'Wir brauchen Hilfe',

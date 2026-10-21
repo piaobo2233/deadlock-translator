@@ -39,6 +39,8 @@ RUNNING_MESSAGE = (
     "再关闭主窗口；有托盘时也可右键退出。退出后点击「确定」继续，或「取消」退出安装。"
 )
 UNINSTALL_RUNNING_MESSAGE = RUNNING_MESSAGE
+DIRECTORY_MESSAGE = ('请使用英文安装路径。每次安装均可修改目录；更换目录不会自动迁移个人数据。'
+                     '请先备份旧目录中的整个 data 文件夹，退出助手后手动迁移。已有数据位置（如有）：')
 KEEP_DATA_MESSAGE = (
     "是否保留个人数据（设置、API Key、词库、翻译记忆）？"
     "选择「是」保留（推荐）；选择「否」会删除这些数据，且无法恢复。"
@@ -114,6 +116,21 @@ def prepare_source(archive, work):
     return source
 
 
+def launcher_text(setup_name):
+    """Interactive fallback sets TEMP only for this process tree and keeps logs."""
+    if not re.fullmatch(r'LockLingo-[a-zA-Z0-9.-]+-setup\.exe', setup_name):
+        raise ValueError('Invalid setup filename')
+    return '\r\n'.join([
+        '@echo off', 'setlocal DisableDelayedExpansion',
+        f'if not exist "%~dp0{setup_name}" exit /b 2',
+        'set "TEMP=%~dp0.installer-temp\\%RANDOM%-%RANDOM%"', 'set "TMP=%TEMP%"',
+        'mkdir "%TEMP%"', 'if errorlevel 1 exit /b 3',
+        'echo Installer log: "%TEMP%\\setup.log"',
+        f'start "" /wait "%~dp0{setup_name}" /LOG="%TEMP%\\setup.log"',
+        'set "INSTALL_RESULT=%ERRORLEVEL%"',
+        'if not "%INSTALL_RESULT%"=="0" pause', 'exit /b %INSTALL_RESULT%', ''])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -164,6 +181,7 @@ def main():
             "UninstallRunningMessage": UNINSTALL_RUNNING_MESSAGE,
             "KeepDataMessage": KEEP_DATA_MESSAGE,
             "LauncherFile": GUI_NAME,
+            "DirectoryMessage": DIRECTORY_MESSAGE,
         }
         command = [iscc, "/Q"]
         # ISCC parses /DName=Value; keep Chinese text inside one argument.
@@ -185,6 +203,9 @@ def main():
             checksum + "  " + setup_path.name + "\n", encoding="ascii")
         report.update(setup=str(setup_path.resolve()), setup_bytes=setup_path.stat().st_size,
                       setup_sha256=checksum, compile_log=str(log))
+        launcher = args.output / f'Install-LockLingo-{args.version}.cmd'
+        launcher.write_bytes(launcher_text(setup_path.name).encode('ascii'))
+        report.update(interactive_temp_launcher=str(launcher), launcher_sha256=digest(launcher))
         evidence = log.parent / "installer.json"
         evidence.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         print(json.dumps(report, ensure_ascii=False))

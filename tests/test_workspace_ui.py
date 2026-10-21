@@ -3,6 +3,7 @@ import gc
 import json
 import tempfile
 import time
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -58,6 +59,122 @@ class WorkspaceTests(unittest.TestCase):
 
     def draft(self,d,value):
         d.draft.delete('1.0','end');d.draft.insert('1.0',value)
+
+    def wait_resources(self):
+        deadline = time.monotonic() + 5
+        while self.app.game_resources.busy and time.monotonic() < deadline:
+            self.app.root.update()
+            time.sleep(.01)
+        self.assertFalse(self.app.game_resources.busy)
+
+    def inline_resource_inspection(self, root):
+        from app.game_data import service
+        bundle = service.validate(store.read_json(service.cache_path(root)))
+        return bundle, '游戏资料已准备。'
+
+    def test_dictionary_first_screen_does_not_wait_for_validation_and_keeps_draft(self):
+        from app.game_data import service
+        from tests.test_game_resources import fake_game
+        self.seed()
+        config = store.read_json(self.config)
+        config['builtins_enabled'] = True
+        store.atomic_write_json(self.config, config)
+        service.prepare(self.root, fake_game(self.root / 'installation'))
+        entered, release = threading.Event(), threading.Event()
+        original = service.validate
+        owner = threading.get_ident()
+        def delayed(bundle):
+            self.assertNotEqual(threading.get_ident(), owner)
+            entered.set()
+            if not release.wait(5): raise TimeoutError('fixture release missing')
+            return original(bundle)
+        with patch.object(service, '_inspect_process', side_effect=self.inline_resource_inspection), \
+                patch.object(service, 'validate', side_effect=delayed) as validate:
+            try:
+                self.app.open_page('dictionary')
+                d = self.app.dictionary
+                self.assertTrue(entered.wait(2))
+                self.assertTrue(any(r['key'] == 'first' for r in d.rows))
+                self.assertTrue(any(r['key'] == 'rejuv' for r in d.rows))
+                self.assertFalse(any(r['key'] == 'fixture beacon' for r in d.rows))
+                self.assertIn('校验中', d.resource_status.cget('text'))
+                self.choose(d, 'first'); self.draft(d, '补齐时保留草稿')
+                d.keyword.set('first'); d.filter.set('全部'); d.refresh()
+                editor = str(d.draft)
+                pulse = []
+                self.app.root.after(0, lambda: pulse.append(True))
+                self.app.root.update()
+                self.assertTrue(pulse)
+                for _ in range(3):
+                    self.app.open_page('settings'); self.app.open_page('dictionary')
+                d = self.app.dictionary
+                self.choose(d, 'first'); d.keyword.set('first'); d.refresh()
+                editor = str(d.draft)
+            finally:
+                release.set()
+            self.wait_resources()
+            self.assertEqual(validate.call_count, 1)
+        self.assertEqual(d.keyword.get(), 'first')
+        self.assertEqual(str(d.draft), editor)
+        self.assertEqual(d.draft.get('1.0','end-1c'), '补齐时保留草稿')
+        d.keyword.set(''); d.refresh()
+        self.assertTrue(any(r['key'] == 'fixture beacon' for r in d.rows))
+        archive = self.root / 'installation/steamapps/common/Deadlock/game/citadel/pak01_000.vpk'
+        archive.write_bytes(archive.read_bytes() + b'changed')
+        d.refresh()
+        self.assertFalse(any(r['key'] == 'fixture beacon' for r in d.rows))
+        self.wait_resources()
+        self.assertIn('暂不可用', d.resources.message)
+
+    def test_settings_reentry_reuses_validation_and_completion_ignores_destroyed_dictionary(self):
+        from app.game_data import service
+        from tests.test_game_resources import fake_game
+        service.prepare(self.root, fake_game(self.root / 'installation'))
+        with patch.object(service, '_inspect_process', side_effect=self.inline_resource_inspection), \
+                patch.object(service, 'validate', wraps=service.validate) as validate:
+            self.app.open_page('dictionary')
+            old = self.app.dictionary
+            self.app.open_page('api')
+            self.wait_resources()
+            self.assertFalse(old.resource_status.winfo_exists())
+            for _ in range(20):
+                self.app.open_page('settings'); self.app.root.update()
+                self.app.open_page('api'); self.app.root.update()
+            self.assertEqual(validate.call_count, 1)
+            self.assertFalse(self.errors)
+
+    def test_resource_result_changed_after_completion_is_discarded(self):
+        from app.game_data import service
+        from tests.test_game_resources import fake_game
+        service.prepare(self.root, fake_game(self.root / 'installation'))
+        self.app.open_page('dictionary')
+        resources = self.app.game_resources
+        deadline = time.monotonic() + 5
+        while resources.events.empty() and time.monotonic() < deadline:
+            time.sleep(.01)
+        self.assertFalse(resources.events.empty())
+        archive = self.root / 'installation/steamapps/common/Deadlock/game/citadel/pak01_000.vpk'
+        archive.write_bytes(archive.read_bytes() + b'changed after worker completed')
+        resources.poll()
+        self.assertEqual(resources.terms, {})
+        self.wait_resources()
+        self.assertEqual(resources.terms, {})
+        self.assertFalse(any(row['key'] == 'fixture beacon' for row in self.app.dictionary.rows))
+
+    def test_background_preparation_keeps_restart_activation_rule(self):
+        from app.game_data import service
+        from tests.test_game_resources import fake_game
+        game = fake_game(self.root / 'installation')
+        resources = self.app.game_resources
+        resources.prepare(game)
+        self.wait_resources()
+        self.assertIn('请重启', resources.message)
+        self.assertEqual(service.catalogue('terms', self.root), {})
+        self.app.open_page('dictionary')
+        self.assertEqual(resources.terms, {})
+        self.assertFalse(any(row['key'] == 'fixture beacon' for row in self.app.dictionary.rows))
+        service._activated.cache_clear()
+        self.assertTrue(service.catalogue('terms', self.root))
 
     def test_dictionary_snapshot_reuses_reads_and_tracks_external_changes(self):
         self.seed();d=self.dictionary('formal');self.choose(d,'first');self.draft(d,'快照草稿')
@@ -184,7 +301,7 @@ class WorkspaceTests(unittest.TestCase):
             while time.monotonic()<end and self.app.connection_controls['status'].cget('text')!='连接成功':
                 self.app.root.update();time.sleep(.01)
             request.assert_called_once()
-            self.assertEqual(self.app.connection_controls['status'].cget('text'),'连接成功')
+            self.assertIn('已保存配置测试：连接成功',self.app.connection_controls['status'].cget('text'))
 
     def test_connection_result_is_stale_after_draft_change_without_navigation(self):
         import threading
@@ -207,12 +324,15 @@ class WorkspaceTests(unittest.TestCase):
             self.app.root.update();time.sleep(.01)
         self.assertFalse(self.app.game_settings['state']['busy'],self.app.status.cget('text'))
 
-    def test_region_presets_keep_legacy_data_and_actual_pixels(self):
+    def test_region_reset_keeps_legacy_data_and_actual_pixels(self):
+        from tests.test_region_calibration import calibration
+        ConfigRepository(self.config).save(dict(capture_preset='1920x1080',capture_calibration=calibration()))
         self.app.open_page('ingame')
         with patch('gui.region.screen_size',return_value=(1920,1080)):
-            self.app.game_settings['preset'].set('1920 × 1080');self.app.game_settings['save']()
+            self.app.game_settings['reset']()
             self.assertEqual(store.read_json(self.config)['capture_preset'],'1920x1080')
-            self.assertIn('1920 × 1080',self.app.game_settings['region_status'].cget('text'))
+            self.assertEqual(store.read_json(self.config)['capture_calibration'],{})
+            self.assertIn('参考范围',self.app.game_settings['region_status'].cget('text'))
 
     def test_region_diagnostic_shows_exact_crop_and_cleans_on_navigation(self):
         from PIL import Image
@@ -307,7 +427,7 @@ class WorkspaceTests(unittest.TestCase):
         self.seed();d=self.dictionary();self.choose(d,'first')
         row=d.selected;self.assertTrue(d.service.decide(row['key'],'reject',token=row['token'],formal_token=row['formal_token']).saved)
         self.button('确认并加入词库').invoke();self.assertIn('已处理',self.app.status.cget('text'))
-        self.button('返回待审核').invoke();self.assertEqual([r['key'] for r in d.rows],['second'])
+        self.button('查看待审核').invoke();self.assertEqual([r['key'] for r in d.rows],['second'])
 
     def test_formal_failure_preserves_pending_and_draft_then_retry(self):
         self.seed();d=self.dictionary();self.choose(d,'second');self.draft(d,'保留草稿')

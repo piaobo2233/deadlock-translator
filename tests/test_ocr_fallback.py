@@ -111,6 +111,24 @@ class FallbackTests(unittest.TestCase):
 
 
 class NativeCompatibilityTests(unittest.TestCase):
+    def test_initialization_failure_keeps_original_retry_delay_then_recovers(self):
+        reader = Mock()
+        with patch.multiple(ocr, _RESIDENT=None, _RESIDENT_SETTINGS=None, _RESIDENT_RECOVERY_AT=None), \
+                patch('app.recognition.resident.ResidentReader', side_effect=[OSError('controlled startup failure'), reader]) as start, \
+                patch.object(ocr.time, 'monotonic', return_value=10) as clock:
+            try:
+                ocr.configure_receive_languages(True)
+                self.assertIsNone(ocr._RESIDENT)
+                self.assertEqual(ocr._RESIDENT_RECOVERY_AT, 40)
+                clock.return_value = 39.999
+                self.assertIsNone(ocr.recover_receive_backend())
+                self.assertEqual(start.call_count, 1)
+                clock.return_value = 40
+                self.assertIs(ocr.recover_receive_backend(), reader)
+                self.assertEqual(ocr.diagnostics_snapshot()['counts']['backend_recovered'], 1)
+            finally:
+                ocr.close_receive_backend()
+
     def test_actual_fallbacks_and_source_models_survive_mode_switches(self):
         executable = ocr.find_tesseract()
         if not executable or not any((Path(executable).parent / name).is_file()

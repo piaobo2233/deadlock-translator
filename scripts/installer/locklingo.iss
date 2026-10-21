@@ -47,6 +47,9 @@
 #ifndef LauncherFile
   #error LauncherFile define is required
 #endif
+#ifndef DirectoryMessage
+  #define DirectoryMessage "Use an English installation path. Changing folders does not move personal data. Back up the old data folder and move the complete folder manually after installation."
+#endif
 
 [Setup]
 AppId={{8D9E4B3A-2F6C-4E1B-9A7D-2C5F7B1E4A90}
@@ -104,6 +107,24 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#LauncherFile}"; WorkingDir:
 Filename: "{app}\{#LauncherFile}"; Description: "{cm:LaunchProgram,{#AppName}}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
 
 [Code]
+var
+  DirectoryNote: TNewStaticText;
+
+procedure InitializeWizard();
+begin
+  DirectoryNote := TNewStaticText.Create(WizardForm);
+  DirectoryNote.Parent := WizardForm.SelectDirPage;
+  DirectoryNote.Left := WizardForm.DirEdit.Left;
+  DirectoryNote.Top := WizardForm.DirEdit.Top + WizardForm.DirEdit.Height + ScaleY(12);
+  DirectoryNote.Width := WizardForm.SelectDirBrowseLabel.Width;
+  DirectoryNote.AutoSize := False;
+  DirectoryNote.Height := ScaleY(100);
+  DirectoryNote.WordWrap := True;
+  DirectoryNote.Caption := '{#DirectoryMessage}';
+  if DirExists(WizardDirValue() + '\data') then
+    DirectoryNote.Caption := DirectoryNote.Caption + #13#10 + WizardDirValue() + '\data';
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';

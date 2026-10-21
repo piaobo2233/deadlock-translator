@@ -251,15 +251,14 @@ def configure_receive_languages(enabled=True, *, resident=True):
     _DIAGNOSTICS.reset()
     _DIAGNOSTICS.backend('cli')
     if enabled and resident:
+        _RESIDENT_SETTINGS = (pytesseract.pytesseract.tesseract_cmd,model_dir,_RECEIVE_MODEL,_USER_WORDS)
         try:
             from app.recognition.resident import ResidentReader
-            _RESIDENT = ResidentReader(pytesseract.pytesseract.tesseract_cmd,
-                model_dir, _RECEIVE_MODEL, _USER_WORDS)
-            _RESIDENT_SETTINGS = (pytesseract.pytesseract.tesseract_cmd,model_dir,_RECEIVE_MODEL,_USER_WORDS)
+            _RESIDENT = ResidentReader(*_RESIDENT_SETTINGS)
             _DIAGNOSTICS.backend('resident')
             print('[info] 已启用常驻 OCR；原图中文复核独立保留')
         except Exception as exc:
-            _DIAGNOSTICS.backend('cli', type(exc).__name__)
+            _degrade_receive_backend(exc)
             print(f'[warn] 常驻 OCR 不可用（{type(exc).__name__}），使用有超时保护的 OCR 进程')
 
 

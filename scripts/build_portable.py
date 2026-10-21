@@ -65,7 +65,7 @@ def copy_licenses(destination):
     shutil.copy2(license_path, destination / 'Python-Tcl-Tk' / license_path.name)
 
 
-def copy_ocr_licenses(bundle, distribution='local_test_only'):
+def copy_ocr_licenses(bundle, distribution='local_test_only', *, version=None):
     """随包 OCR 运行时的来源、摘要与许可：不只放一句「来自 Tesseract」。"""
     target = bundle / 'licenses' / 'tesseract'
     target.mkdir(parents=True, exist_ok=True)
@@ -86,6 +86,7 @@ def copy_ocr_licenses(bundle, distribution='local_test_only'):
     manifest = ocr_runtime.load_manifest()
     shutil.copy2(ocr_runtime.MANIFEST_PATH, target / 'runtime-manifest.json')
     identity = ocr_runtime.source_identity(manifest)
+    version = version or (ROOT / 'VERSION').read_text().strip()
     lines = [
         f"随包 OCR 运行时：{manifest['runtime']}",
         f"来源：{identity['url']}",
@@ -97,8 +98,8 @@ def copy_ocr_licenses(bundle, distribution='local_test_only'):
         "MSYS2 二进制包原样提取，未修改；Tesseract 原始许可 Apache-2.0 不覆盖其余 DLL。",
         "GPL 适用的 OCR 组合按 GPL-3.0-or-later 条款提供，原创 MIT 声明保留。",
         "完整对应源码、配方和补丁与本版本二进制一同免费提供：",
-        f"https://github.com/piaobo2233/deadlock-translator/releases/tag/v{(ROOT / 'VERSION').read_text().strip()}",
-        "附件名：LockLingo-1.0.0-beta.1-ocr-sources.zip；精确逐包目录见包内 source evidence。",
+        f"https://github.com/piaobo2233/deadlock-translator/releases/tag/v{version}",
+        f"附件名：LockLingo-{version}-ocr-sources.zip；精确逐包目录见包内 source evidence。",
         ("本候选包只作本地验收；公开分发前必须补齐传递组件的许可与再分发依据。"
          if distribution == 'local_test_only' else "本构建材料核对记录见 licenses/tesseract/distribution-audit.json。"),
         "",
@@ -180,7 +181,7 @@ def main():
             dict(version=args.version, python=sys.version.split()[0], files=source_manifest),
             ensure_ascii=False, indent=2), encoding='utf-8')
         ocr_runtime.copy_into(bundle, args.ocr_runtime, manifest)
-        copy_ocr_licenses(bundle, distribution['distribution'])
+        copy_ocr_licenses(bundle, distribution['distribution'], version=args.version)
         copy_licenses(bundle / 'licenses')
         check_contents(bundle)
         files = sorted(path for path in bundle.rglob('*') if path.is_file())

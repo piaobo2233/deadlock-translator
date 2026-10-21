@@ -20,10 +20,11 @@ from gui.theme import COLORS, GAP, PAD
 # 键 → 归到哪一页。**每个 spec 键都必须出现在这里**（有用例守着）。
 INGAME_KEYS = ("translate_api", "font_size")
 SETTINGS_KEYS = ("api_key", "model", "close_action", "endpoint", "provider", "send_target", "receive_target",
-                 "send_hotkey", "recognize_hotkey", "auto_send", "recognition_mode", "capture_preset")
+                 "input_translate_enabled", "capture_preset")
 HIDDEN_KEYS = ("price_in", "price_out", "only_in_game", "budget_session", "budget_daily",
                "ocr_interval", "ocr_votes", "tesseract", "chatlog_path", "dump_dir", "schema_version", "region_reselect",
-               "capture_region", "width", "max_messages", "fade_seconds", "fade_extension")
+               "capture_region", "capture_calibration", "width", "max_messages", "fade_seconds", "fade_extension",
+               "send_hotkey", "recognize_hotkey", "auto_send", "recognition_mode")
 DICTIONARY_KEYS = ("builtins_enabled",)
 _CORE = set(INGAME_KEYS) | set(SETTINGS_KEYS) | set(DICTIONARY_KEYS) | set(HIDDEN_KEYS)
 
@@ -169,7 +170,7 @@ def _row(parent, th, label, hint="", app=None):
     return row, holder
 
 
-def _switch(app, holder, key, config):
+def _switch(app, holder, key, config, *, show_state=True):
     """开 / 关。**一个勾选框，没有「确认」「应用」。**
 
     [!] 必须用 `ttk.Checkbutton`，**不能用 plain `tk.Checkbutton`**。
@@ -185,7 +186,13 @@ def _switch(app, holder, key, config):
     def toggle():
         if not _save(key, bool(var.get()), app):
             var.set(bool(_load_config(app.root_dir).get(key)))
-    th.ttk.Checkbutton(holder, variable=var, command=toggle, style="GoldSwitch.TCheckbutton").pack()
+    button=th.ttk.Checkbutton(holder, variable=var, command=toggle, style="GoldSwitch.TCheckbutton")
+    button.pack()
+    if show_state:
+        def state(*_):button.configure(text='开' if var.get() else '关')
+        token=var.trace_add('write',state)
+        button.bind('<Destroy>',lambda event:var.trace_remove('write',token) if event.widget is button else None,add='+')
+        state()
     return var
 
 

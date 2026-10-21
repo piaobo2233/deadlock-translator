@@ -239,16 +239,25 @@ class OnboardingUiTests(unittest.TestCase):
 
     def test_reopening_settings_reports_game_update_instead_of_stale_ready_status(self):
         from app.game_data import service
-        with patch.object(service, 'inspect', side_effect=[(None, '旧版本资料可用'),
-                                                          (None, '游戏已更新，请重新准备')]):
+        from tests.test_game_resources import fake_game
+        game = fake_game(self.root / 'installation')
+        service.prepare(self.root, game)
+        with patch.object(service, '_inspect_process', wraps=service._inspect_process) as checks:
             self.open_guide()
             manager = self.app.game_resources
             self.wait_until(lambda: not manager.busy)
-            self.assertIn('旧版本资料可用', manager.controls['status'].cget('text'))
+            self.assertIn('已准备', manager.controls['status'].cget('text'))
+            self.app.open_page('home')
+            self.app.open_page('settings')
+            self.wait_until(lambda: not manager.busy)
+            self.assertEqual(checks.call_count, 1)
+            archive = game / 'pak01_000.vpk'
+            archive.write_bytes(archive.read_bytes() + b'game update')
             self.app.open_page('home')
             self.app.open_page('settings')
             self.wait_until(lambda: not manager.busy)
             self.assertIn('请重新准备', manager.controls['status'].cget('text'))
+            self.assertEqual(checks.call_count, 2)
             self.assertFalse(self.errors)
 
 

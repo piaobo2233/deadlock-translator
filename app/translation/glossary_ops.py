@@ -58,7 +58,7 @@ def _aliases(entries, name):
     return [key for key in entries if _norm(key) == name] or [name]
 
 
-def rows(path: str = "", hits=None, *, entries=None, config=None) -> list:
+def rows(path: str = "", hits=None, *, entries=None, config=None, official_terms=None) -> list:
     """合并视图 → 界面用的行。
 
     [!] 必须用**合并后**的视图（内置表 + 文件），不能只列文件条目：
@@ -74,7 +74,7 @@ def rows(path: str = "", hits=None, *, entries=None, config=None) -> list:
     config_path = os.path.join(os.path.dirname(_path(path)), 'config.json')
     raw = store.read_json(config_path,{}) if config is None else config
     config,_ = normalize_config(raw if isinstance(raw,dict) else {})
-    merged = merge_glossary(entries, builtins_enabled=config['builtins_enabled'])
+    merged = merge_glossary(entries, builtins_enabled=config['builtins_enabled'], official_terms=official_terms)
     out = []
     for word in sorted(set(merged) | set(entries)):
         entry = entries.get(word) or {}

@@ -44,7 +44,11 @@ def typing_indicator(image, box, *, scale=1.):
     if not crop.size:
         return False
     low,high=crop.min(axis=2),crop.max(axis=2)
-    grey=((low>=75)&(high<=190)&(high.astype(np.int16)-low<35)).astype(np.uint8)
+    # Recorded animation phases include a dark active square and tinted faint
+    # squares. Keep their solid cores; thin glyph edges/shadows must not join
+    # those cores into irregular components.
+    grey=((low>=35)&(high<=210)&(high.astype(np.int16)-low<60)).astype(np.uint8)
+    grey=cv2.erode(grey,np.ones((max(2,round(3*scale)),)*2,np.uint8))
     _,_,components,_=cv2.connectedComponentsWithStats(grey,connectivity=8)
     squares=[]
     for sx,sy,sw,sh,area in components[1:]:
@@ -54,7 +58,7 @@ def typing_indicator(image, box, *, scale=1.):
         return False
     squares.sort()
     gaps=[b[0]-a[0]-a[2] for a,b in zip(squares,squares[1:])]
-    return (max(s[1] for s in squares)-min(s[1] for s in squares)<=3*scale
+    return (max(s[1] for s in squares)-min(s[1] for s in squares)<=6*scale
             and max(s[3] for s in squares)-min(s[3] for s in squares)<=3*scale
             and all(1*scale<=gap<=12*scale for gap in gaps)
             and abs(gaps[0]-gaps[1])<=4*scale)

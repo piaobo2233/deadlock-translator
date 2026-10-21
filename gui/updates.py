@@ -35,7 +35,7 @@ class Updater:
         cached = self.state.get('release')
         if isinstance(cached, dict):
             try:
-                self.release = updates.parse_release(cached)
+                self.release = updates.parse_release(cached, allow_beta=updates.beta_channel(self.version))
                 if updates.version_key(self.release.version) <= updates.version_key(self.version):
                     self.release = None
             except updates.UpdateError:
@@ -66,6 +66,8 @@ class Updater:
 
     def automatic(self):
         checked = self.state.get('checked_at', 0)
+        if self.state.get('current_version') != self.version:
+            checked = 0
         if type(checked) not in (int, float):
             checked = 0
         if not self.offline() and not self.busy and not 0 <= time.time() - checked < updates.CHECK_INTERVAL:
@@ -81,7 +83,7 @@ class Updater:
                 self.events.put((done, operation()))
             except Exception as exc:
                 message = str(exc) if isinstance(exc, updates.UpdateError) else '更新操作失败，请重试或打开官方下载页'
-                self.events.put(('error', message))
+                self.events.put(('error', dict(message=message, code='download' if done == 'prepared' else 'release')))
         threading.Thread(target=worker, name='release-update', daemon=True).start()
 
     def check(self, manual=False):
@@ -93,6 +95,8 @@ class Updater:
                 self.repaint()
             return
         self.message = '正在检查更新…' if manual else self.message
+        from app.runtime.diagnostics import record
+        record(self.root, 'update', 'started', code='release')
         self.work(lambda: updates.fetch_cached(self.root, force=manual), 'checked')
 
     def defer(self, skip=False):
@@ -174,15 +178,19 @@ class Updater:
                     self.message = f'发现新版本 {value.version}，可查看概述并自行选择是否更新'
                 else:
                     self.release = None
-                    self.message = '当前没有更新的正式版本' if value else '尚未发布正式版本，可打开官方下载页查看测试版'
-                self.save(checked_at=time.time(), release=updates.release_record(self.release))
+                    self.message = '当前通道没有更高的公开版本，可打开官方下载页查看发行说明'
+                self.save(checked_at=time.time(), current_version=self.version, release=updates.release_record(self.release))
+                from app.runtime.diagnostics import record
+                record(self.root, 'update', 'completed', code='release')
             elif kind == 'prepared':
                 if self.begin_install(value):
                     return
             elif kind == 'error':
-                self.message = value
+                self.message = value.get('message', '') if isinstance(value, dict) else value
+                from app.runtime.diagnostics import record
+                record(self.root, 'update', 'failed', code=value.get('code', 'unknown') if isinstance(value, dict) else 'unknown')
                 # Failed automatic checks remain silent and retry on the next day.
-                self.save(checked_at=time.time())
+                self.save(checked_at=time.time(), current_version=self.version)
         if latest_progress:
             self.message = latest_progress
         if self.job and (self.job.parent / 'result.json').is_file():
@@ -208,7 +216,7 @@ class Updater:
         if not self.controls or not self.controls['frame'].winfo_exists():
             return
         c = self.controls
-        c['status'].configure(text=self.message or '启动后检查稳定版；持续运行时每天检查。更新由你选择。')
+        c['status'].configure(text=self.message or '启动后检查当前通道；持续运行时每天检查。更新由你选择。')
         c['check'].configure(state='disabled' if self.busy else 'normal')
         release = self.release
         if release:
@@ -235,7 +243,8 @@ class Updater:
         from gui.workspace import section, text, panel
         th = self.app.th
         area = section(parent, th, '软件更新')
-        text(area, th, f'当前版本 {self.version} · 仅提示稳定版，修复版也由你选择是否更新。',
+        channel = 'Beta 修复版及更高稳定版' if updates.beta_channel(self.version) else '稳定版'
+        text(area, th, f'当前版本 {self.version} · 跟随{channel}，由你选择是否更新。',
              small=True, muted=True, wraplength=780, justify='left').pack(anchor='w')
         status = text(area, th, '', small=True, wraplength=780, justify='left')
         status.pack(anchor='w', pady=(8, 8))

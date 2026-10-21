@@ -9,7 +9,8 @@ from unittest.mock import patch,Mock
 
 import app.main as dt
 from app.config.repository import ConfigRepository
-from app.recognition.region import resolve_region,preset,RegionCapture,require_primary_client
+from app.recognition.region import (resolve_region,preset,RegionCapture,require_primary_client,
+                                    six_nine,experimental_aspect)
 from app.runtime.messages import DisplayMessage
 from app.storage import store
 from app.storage.review_queue import ReviewQueue
@@ -96,8 +97,23 @@ class CostAndRegionTests(unittest.TestCase):
             self.assertEqual(resolve_region(cfg,size),tuple(preset(size)['rect']))
             cfg['capture_preset']='x'.join(map(str,size));self.assertEqual(resolve_region(cfg,size),tuple(preset(size)['rect']))
         self.assertEqual(resolve_region(dict(capture_preset='auto'),(2560,1440)),(339,190,2220,766))
-        for cfg,size in ((dict(capture_preset='auto'),(3440,1440)),(dict(capture_preset='2560x1440'),(1920,1080))):
-            with self.assertRaises(ValueError):resolve_region(cfg,size)
+        # Non-16:9 shapes are admitted as experimental adaptation: the region is
+        # derived from actual pixels, not from a ratio whitelist.
+        for size in ((2560,1600),(3440,1440),(1920,1200)):
+            self.assertEqual(resolve_region(dict(capture_preset='auto'),size),tuple(preset(size)['rect']))
+        # Stale fixed choices now fall back to actual physical geometry.
+        self.assertEqual(resolve_region(dict(capture_preset='2560x1440'),(1920,1080)),
+                         resolve_region(dict(capture_preset='auto'),(1920,1080)))
+        # Below-minimum and portrait geometry remain rejected.
+        for size in ((1024,768),(1080,1920)):
+            with self.assertRaises(ValueError):resolve_region(dict(capture_preset='auto'),size)
+
+    def test_experimental_aspect_marks_unverified_shapes(self):
+        self.assertTrue(six_nine((1920,1080)))
+        self.assertTrue(six_nine((2560,1440)))
+        self.assertFalse(six_nine((2560,1600)))
+        self.assertTrue(experimental_aspect((3440,1440)))
+        self.assertFalse(experimental_aspect((1920,1080)))
 
     def test_windowed_secondary_or_unknown_client_is_rejected(self):
         for size in ((1920,1080),(2560,1440),(3840,2160)):
@@ -179,7 +195,7 @@ class SimplifiedTkTests(unittest.TestCase):
         self.app.open_page('send');self.assertIn('复制上次输入原文',self.labels())
         self.assertTrue(self.app.open_page('ingame'));self.app.root.update()
         self.assertEqual(self.app.current,'recognition')
-        labels=self.labels();self.assertIn('测试识别',labels);self.assertNotIn('调整区域',labels)
+        labels=self.labels();self.assertIn('测试当前游戏画面',labels);self.assertIn('导入局内截图',labels)
         self.assertNotIn('服务商',labels)
         for page in ('send','api','settings'):
             self.app.open_page(page);self.app.root.update();self.assertFalse(self.app._page_failed)
@@ -189,15 +205,29 @@ class SimplifiedTkTests(unittest.TestCase):
         self.assertTrue(self.app.cost_controls['table'].winfo_manager())
         self.assertIn('日期 / 已知估算费用 / 完整性',self.app.cost_controls['table'].get('1.0','end'))
 
-    def test_mode_hides_inactive_hotkey_and_preset_saves_only_one_field(self):
+    def test_realtime_has_no_manual_hotkey_or_resolution_chooser(self):
         self.app.open_page('ingame');self.app.root.update()
         controls=self.app.recognition_controls
-        self.assertFalse(controls['hotkey'].winfo_manager())
-        controls['mode'].set('仅按快捷键识别');controls['chooser'].event_generate('<<ComboboxSelected>>');self.app.root.update()
-        self.assertTrue(controls['hotkey'].winfo_manager())
-        with patch('gui.region.screen_size',return_value=(1920,1080)):
-            self.app.game_settings['preset'].set('1920 × 1080');self.app.game_settings['save']()
-        self.assertEqual(ConfigRepository(store.data_path(self.root,'config.json')).load()['capture_preset'],'1920x1080')
+        self.assertEqual(set(controls), {'status'})
+        self.assertIn('实时识别', controls['status'].cget('text'))
+        self.assertNotIn('识别快捷键', self.labels())
+        self.assertNotIn('画面分辨率',self.labels())
+        self.assertNotIn('chooser',self.app.game_settings)
+
+    def test_clipboard_switch_saves_one_field_and_retired_controls_are_absent(self):
+        self.app.open_page('send');self.app.root.update()
+        repo=ConfigRepository(store.data_path(self.root,'config.json'))
+        before=dict(repo.load())
+        holder=self.app.input_translate_control['holder']
+        button=next(w for w in holder.winfo_children() if w.winfo_class()=='TCheckbutton')
+        button.invoke();self.app.root.update()
+        after=dict(repo.load())
+        self.assertEqual(after['input_translate_enabled'],not before['input_translate_enabled'])
+        self.assertEqual({k:v for k,v in after.items() if k!='input_translate_enabled'},
+                         {k:v for k,v in before.items() if k!='input_translate_enabled'})
+        self.assertFalse(hasattr(self.app,'auto_send_control'))
+        self.assertFalse(hasattr(self.app,'hotkey_controls'))
+        self.assertNotIn('自动发送',self.labels())
 
     def test_original_recovery_includes_pending_failed_and_successful_input(self):
         from app.runtime.panel_instance import begin_translator

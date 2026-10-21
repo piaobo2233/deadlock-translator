@@ -10,6 +10,9 @@ MONEY_KEYS = frozenset(("price_in", "price_out", "budget_session", "budget_daily
 
 def _value(key, value, spec):
     kind = spec["type"]
+    if key == 'capture_calibration':
+        from app.recognition.region import validate_calibration
+        return validate_calibration(value)
     if key == 'capture_region':
         from app.recognition.region import validate_region
         return validate_region(value)
@@ -39,6 +42,8 @@ def _value(key, value, spec):
         raise ValueError("Expected text")
     if key in {'send_target','receive_target','provider','recognition_mode','capture_preset'} and value not in spec['options']:
         raise ValueError('Invalid choice')
+    if key == 'recognition_mode':
+        return 'realtime'
     if key in {'send_hotkey', 'recognize_hotkey'}:
         from app.platform.game_input import parse_hotkey
         parse_hotkey(value)
@@ -66,12 +71,20 @@ def normalize_config(raw):
         except (ValueError, TypeError, OverflowError):
             result[key] = default_config()[key]
             invalid.append(key)
+    if 'capture_calibration' in invalid:
+        result['_capture_calibration_error'] = True
     from app.platform.game_input import parse_hotkey
     if parse_hotkey(result['send_hotkey']) == parse_hotkey(result['recognize_hotkey']):
-        for key in ('send_hotkey','recognize_hotkey'):
-            result[key] = default_config()[key]
-            if key not in invalid:
-                invalid.append(key)
+        supplied = [key for key in ('send_hotkey','recognize_hotkey') if key in raw and key not in invalid]
+        if len(supplied) == 1:
+            # A new default must not replace the user's older, valid binding.
+            missing = 'recognize_hotkey' if supplied[0] == 'send_hotkey' else 'send_hotkey'
+            result[missing] = 'Ctrl+Shift+R' if missing == 'recognize_hotkey' else 'Ctrl+Shift+T'
+        else:
+            for key in ('send_hotkey','recognize_hotkey'):
+                result[key] = default_config()[key]
+                if key not in invalid:
+                    invalid.append(key)
     if MONEY_KEYS.intersection(invalid):
         # An invalid budget must not silently turn into unlimited paid API calls.
         result["translate_api"] = False

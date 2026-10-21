@@ -3,6 +3,7 @@ import copy
 from pathlib import Path
 import struct
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 import zlib
@@ -144,6 +145,104 @@ class GameResourcesTests(unittest.TestCase):
         with patch('app.platform.steam.steam_libraries', return_value=[]):
             self.assertIsNone(service.discover({}))
         self.assertEqual(service.game_directory(self.game.parent.parent), self.game)
+
+    def test_inspection_reuses_result_and_rechecks_all_changed_inputs(self):
+        service.prepare(self.app, self.game)
+        with patch.object(service, 'validate', wraps=service.validate) as validate:
+            for _ in range(20):
+                self.assertIsNotNone(service.inspect(self.app)[0])
+            self.assertEqual(validate.call_count, 1)
+            archive = self.game / 'pak01_000.vpk'
+            archive.write_bytes(archive.read_bytes() + b'changed')
+            for _ in range(3):
+                self.assertIsNone(service.inspect(self.app)[0])
+            self.assertEqual(validate.call_count, 2)
+            service.cache_path(self.app).write_text('{}', encoding='utf-8')
+            self.assertIsNone(service.inspect(self.app)[0])
+            self.assertEqual(validate.call_count, 3)
+
+    def test_concurrent_inspection_and_activation_share_validation(self):
+        service.prepare(self.app, self.game)
+        entered, release = threading.Event(), threading.Event()
+        original = service.validate
+        def slow(bundle):
+            entered.set()
+            if not release.wait(5):
+                raise TimeoutError('fixture release missing')
+            return original(bundle)
+        results = []
+        def check():
+            results.append(service.inspect(self.app)[0])
+        threads = [threading.Thread(target=check) for _ in range(3)]
+        with patch.object(service, 'validate', side_effect=slow) as validate:
+            try:
+                for thread in threads: thread.start()
+                self.assertTrue(entered.wait(5))
+                # A UI change probe must not take the validation lock.
+                self.assertIsNotNone(service.inspection_stamp(self.app))
+            finally:
+                release.set()
+                for thread in threads: thread.join(5)
+            self.assertEqual(validate.call_count, 1)
+            self.assertTrue(service.catalogue('terms', self.app))
+            self.assertEqual(validate.call_count, 1)
+        self.assertEqual(len(results), 3)
+        self.assertTrue(all(results))
+
+    def test_missing_corrupt_and_relocated_cache_recover_on_change(self):
+        self.assertIsNone(service.inspect(self.app)[0])
+        service.prepare(self.app, self.game)
+        self.assertIsNotNone(service.inspect(self.app)[0])
+        bundle = store.read_json(service.cache_path(self.app))
+        for snapshot in ({'files': 42, 'archives': False}, None):
+            broken = dict(bundle, snapshot=snapshot)
+            store.atomic_write_json(service.cache_path(self.app), broken)
+            self.assertIsNone(service.inspect(self.app)[0])
+        relocated = dict(bundle, game_dir=str(self.game / 'missing'))
+        store.atomic_write_json(service.cache_path(self.app), relocated)
+        self.assertIsNone(service.inspect(self.app)[0])
+        store.atomic_write_json(service.cache_path(self.app), bundle)
+        self.assertIsNotNone(service.inspect(self.app)[0])
+
+    def test_replaced_cache_disables_process_catalogue_until_restart(self):
+        service.prepare(self.app, self.game)
+        self.assertTrue(service.catalogue('terms', self.app))
+        service.cache_path(self.app).write_text('{}', encoding='utf-8')
+        self.assertEqual(service.catalogue('terms', self.app), {})
+
+    def test_background_inspection_runs_real_source_helper_and_reuses_result(self):
+        service.prepare(self.app, self.game)
+        with patch.object(service, 'validate', side_effect=AssertionError('validation reached caller')), \
+                patch.object(service, '_inspect_process', wraps=service._inspect_process) as worker:
+            bundle, message = service.inspect(self.app, background=True)
+            self.assertTrue(bundle)
+            self.assertIn('已准备', message)
+            self.assertTrue(service.catalogue('terms', self.app))
+            self.assertTrue(service.inspect(self.app, background=True)[0])
+            self.assertEqual(worker.call_count, 1)
+
+    def test_background_helper_failure_fails_closed_and_preserves_cache(self):
+        import subprocess
+        service.prepare(self.app, self.game)
+        before = service.cache_path(self.app).read_bytes()
+        with patch.object(service.subprocess, 'run', side_effect=subprocess.TimeoutExpired('fixture', 60)):
+            bundle, message = service.inspect(self.app, background=True)
+        self.assertIsNone(bundle)
+        self.assertIn('暂不可用', message)
+        self.assertEqual(service.cache_path(self.app).read_bytes(), before)
+
+    def test_background_helper_uses_pipe_capable_executable(self):
+        import subprocess
+        completed = subprocess.CompletedProcess([], 0, '[null, "fixture"]', '')
+        for frozen, executable, expected in ((False, 'C:/fixture/pythonw.exe', 'python.exe'),
+                                              (True, 'C:/fixture/LockLingo.exe', 'DeadlockTranslate.exe')):
+            with patch.object(service.sys, 'frozen', frozen, create=True), \
+                    patch.object(service.sys, 'executable', executable), \
+                    patch.object(service.subprocess, 'run', return_value=completed) as run:
+                self.assertEqual(service._inspect_process(self.app), (None, 'fixture'))
+                self.assertEqual(Path(run.call_args.args[0][0]).name, expected)
+                self.assertIn('--inspect-game-resources', run.call_args.args[0])
+                self.assertEqual(run.call_args.kwargs['timeout'], 60)
 
 
 if __name__ == '__main__':

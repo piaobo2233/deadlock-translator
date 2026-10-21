@@ -48,7 +48,27 @@ def apply_config(config, overlay=None, translator=None, *, api_toggle=True, repo
         print(f'[warn] {label or labels.get(key,key)}热更失败：{type(exc).__name__}（设置已存进文件，但本次运行没生效）')
 
     if overlay is not None:
+        check_input = vars(overlay).get('_input_translate_applied')
+        if 'input_translate_enabled' in config and callable(check_input):
+            key = 'input_translate_enabled'
+            try:
+                state = 'applied' if check_input(config[key]) else 'pending'
+                evidence[key] = result(key, config[key], state)
+                if state == 'applied':
+                    applied.append(key)
+            except Exception as exc:
+                failed(key, exc, '游戏剪贴板翻译')
         check_region = vars(overlay).get('_capture_region_applied')
+        check_calibration = vars(overlay).get('_capture_calibration_applied')
+        if 'capture_calibration' in config and callable(check_calibration):
+            key = 'capture_calibration'
+            try:
+                state = 'applied' if check_calibration(config[key]) else 'pending'
+                evidence[key] = result(key, config[key], state)
+                if state == 'applied':
+                    applied.append(key)
+            except Exception as exc:
+                failed(key, exc, '个人识别区域')
         if 'capture_preset' in config and callable(check_region):
             try:
                 state = 'applied' if check_region(config['capture_preset']) else 'pending'

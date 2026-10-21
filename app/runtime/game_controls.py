@@ -1,38 +1,63 @@
-"""Assembly of native hotkeys and existing translation services."""
+"""Opt-in clipboard translation; the retired input/hotkey path is never started."""
 import threading
 
-from app.platform.game_input import InputTransaction
-from app.platform.win_input import WindowsInput
-from app.translation.manual import ManualTranslator
+from app.platform.clipboard import WindowsClipboard
+from app.runtime.clipboard_translation import ClipboardTranslation
+from app.translation.clipboard import ClipboardTranslator
 
 
 class GameControls:
     def __init__(self, root, load_config, gate, session, report, *, paused=lambda: False):
-        self.load_config, self.gate, self.session, self.report, self.paused = load_config, gate, session, report, paused
-        config = load_config()
-        self.native = WindowsInput(dict(send=config['send_hotkey'], recognize=config['recognize_hotkey']),
-                                   self.dispatch, report)
-        def publish(value):
-            saved = session.input(value)
-            if not saved:
-                report('本次输入恢复记录未保存；请勿关闭助手，可在剪贴板核对原文')
-            if value['status'] != '正在翻译':
-                report(value['status'])
-            return saved
-        self.transaction = InputTransaction(self.native, ManualTranslator(root, load_config),
-                                            load_config, publish, allowed=lambda: not self.paused())
+        self.root, self.load_config, self.report, self.paused = root, load_config, report, paused
+        self.closed = threading.Event()
+        self.started = threading.Event()
+        self.ready = False
+        self.controller = None
 
-    def dispatch(self, action):
-        if self.paused() or not self.native.target():
-            return
-        if action == 'recognize':
-            self.gate.request()
-        elif action == 'send':
-            threading.Thread(target=self.transaction.run, name='dl-game-input', daemon=True).start()
+    @staticmethod
+    def diagnose(root, state, **fields):
+        from app.runtime.diagnostics import record
+        record(root, 'input', state, **fields)
+
+    def _run(self):
+        native = None
+        try:
+            native = WindowsClipboard()
+            self.controller = ClipboardTranslation(native, ClipboardTranslator(self.root, self.load_config),
+                self.load_config, self.report, paused=self.paused,
+                diagnose=lambda state, **fields: self.diagnose(self.root, state, **fields))
+            self.ready = True
+            self.started.set()
+            while not self.closed.is_set():
+                self.controller.poll()
+                self.closed.wait(.025)
+        except Exception as exc:
+            self.report('剪贴板翻译未启用（' + type(exc).__name__ + '）；请重新开启助手或导出诊断')
+            self.diagnose(self.root, 'failed', code='clipboard')
+        finally:
+            self.ready = False
+            self.started.set()
+            if self.controller:
+                self.controller.close()
+            if native:
+                native.close()
 
     def start(self):
-        return self.native.start()
+        self.thread = threading.Thread(target=self._run, name='dl-clipboard', daemon=True)
+        self.thread.start()
+        self.started.wait(2)
+        return self.ready
 
     def close(self):
-        self.transaction.close()
-        self.native.close()
+        self.closed.set()
+        if self.controller:
+            # HWND operations remain on the IO thread; cancellation is immediate.
+            with self.controller.lock:
+                self.controller.closed = True
+                self.controller.generation += 1
+                self.controller.pending = self.controller.candidate = None
+        if hasattr(self, 'thread'):
+            self.thread.join(timeout=1)
+
+    def applied(self, value):
+        return bool(self.ready and self.controller and self.controller.enabled is value)

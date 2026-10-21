@@ -179,7 +179,7 @@ class Theme:
 
         # 字体层级：正文 / 小字 / 区块标签 / 页面标题 / 大数字 / 工业标签
         self.font = pick_font(self.root, 10)
-        self.font_small = pick_font(self.root, 8)
+        self.font_small = pick_font(self.root, 9)
         self.font_title = self.display_font(25)
         self.font_heading = self.display_font(13)
         self.font_big = ("Cambria", 22, "bold")
@@ -190,6 +190,15 @@ class Theme:
             self.root.resizable(False, False)
         self._install_ttk()
         self._install_switch()
+        # Tk's native theme-change idle callback can outlive `destroy .` while
+        # Python still holds the Tcl interpreter. Drain it before destroying
+        # the root, without forcing native redraws on every page navigation.
+        original_destroy = self.root.destroy
+        def destroy():
+            if self.root.winfo_exists():
+                self.root.update_idletasks()
+            original_destroy()
+        self.root.destroy = destroy
 
     def display_font(self, size):
         from tkinter import font as tkfont
@@ -345,6 +354,7 @@ class Theme:
             bg, fg, hover = c["surface"], c["text"], c["surface_hover"]
         btn = tk.Button(parent, text=text, command=command, bg=bg, fg=fg,
                         activebackground=hover, activeforeground=fg,
+                        disabledforeground=c['text_ghost'],
                         font=self.font, relief="flat", bd=0,
                         padx=11, pady=6, cursor="hand2", highlightthickness=1,
                         highlightbackground=(c["accent"] if kind == "primary" else c["border"]),
@@ -361,13 +371,15 @@ class Theme:
         return btn
 
     def link(self, parent, text, command, fg=None):
-        """文字按钮（返回 / 次要动作）。没有边框，只有字。"""
+        """Visible secondary action with a persistent border and keyboard focus."""
         btn = tk.Button(parent, text=text, command=command,
                         bg=TOKENS["bg"], fg=fg or TOKENS["text_dim"],
                         activebackground=TOKENS["bg"],
                         activeforeground=TOKENS["accent"],
-                        font=self.font_small, relief="flat", bd=0,
-                        padx=0, pady=0, cursor="hand2", highlightthickness=0)
+                        font=(self.font_small[0], self.font_small[1], 'underline'), relief="flat", bd=0,
+                        disabledforeground=TOKENS['text_ghost'],
+                        padx=3, pady=3, cursor="hand2", highlightthickness=1,
+                        highlightbackground=TOKENS['border'], highlightcolor=TOKENS['accent'])
         return btn
 
     # ------------------------------------------------------------ 复合结构

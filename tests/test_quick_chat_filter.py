@@ -63,6 +63,19 @@ class QuickChatFilterTests(unittest.TestCase):
         evidence.assert_called_once()
         self.assertEqual(stats['native_chinese_filtered'],1)
 
+    def test_tinted_bouncing_typing_animation_survives_recording_colors(self):
+        import cv2
+        import numpy as np
+        colors = ((85,92,113),(40,48,60),(120,130,160))
+        for phase in range(3):
+            image = np.full((44,130,3),(170,180,218),np.uint8)
+            for i,(left,top) in enumerate(((45,16),(62,14),(79,20))):
+                image[top:top+10,left:left+12] = colors[(i+phase)%3]
+            for scale in (.75,1.,1.5):
+                scaled = cv2.resize(image,None,fx=scale,fy=scale,interpolation=cv2.INTER_NEAREST)
+                with self.subTest(phase=phase,scale=scale):
+                    self.assertTrue(typing_indicator(scaled,(0,0,*scaled.shape[1::-1]),scale=scale))
+
     def test_typing_squares_are_filtered_but_ordinary_text_and_ellipsis_are_not(self):
         import numpy as np
         image=np.full((44,130,3),(210,214,220),np.uint8)
@@ -130,6 +143,50 @@ class QuickChatFilterTests(unittest.TestCase):
             with patch.object(ocr.time,'monotonic',return_value=31.):
                 self.assertIs(ocr.recover_receive_backend(),reader)
                 self.assertIsNone(ocr.recover_receive_backend())
+            factory.assert_called_once()
+
+    def test_failed_initial_start_retries_at_most_once_per_interval(self):
+        from app.recognition.diagnostics import OcrDiagnostics
+        reader = Mock()
+        diagnostics = OcrDiagnostics()
+        with patch.object(ocr, '_RESIDENT', None), \
+                patch.object(ocr, '_RESIDENT_SETTINGS', None), \
+                patch.object(ocr, '_RESIDENT_RECOVERY_AT', None), \
+                patch.object(ocr, '_RECEIVE_MODEL', 'eng'), \
+                patch.object(ocr, '_DIAGNOSTICS', diagnostics), \
+                patch.object(ocr, 'diagnostics_snapshot', diagnostics.snapshot), \
+                patch.object(ocr.time, 'monotonic', return_value=10.) as clock, \
+                patch('app.recognition.resident.ResidentReader',
+                      side_effect=[OSError('initial failure'), OSError('retry failure'), reader]) as factory:
+            ocr.configure_receive_languages()
+            self.assertEqual(ocr.diagnostics_snapshot()['backend'], 'cli')
+            clock.return_value = 39.9
+            self.assertIsNone(ocr.recover_receive_backend())
+            self.assertEqual(factory.call_count, 1)
+            clock.return_value = 40.
+            self.assertIsNone(ocr.recover_receive_backend())
+            self.assertEqual(factory.call_count, 2)
+            clock.return_value = 69.9
+            self.assertIsNone(ocr.recover_receive_backend())
+            self.assertEqual(factory.call_count, 2)
+            clock.return_value = 70.
+            self.assertIs(ocr.recover_receive_backend(), reader)
+            self.assertIsNone(ocr.recover_receive_backend())
+            self.assertEqual(factory.call_count, 3)
+            self.assertEqual(ocr.diagnostics_snapshot()['backend'], 'resident')
+            self.assertEqual(ocr.diagnostics_snapshot()['counts']['backend_recovered'], 1)
+
+    def test_disabling_resident_cancels_failed_startup_retry(self):
+        with patch.object(ocr, '_RESIDENT', None), \
+                patch.object(ocr, '_RESIDENT_SETTINGS', None), \
+                patch.object(ocr, '_RESIDENT_RECOVERY_AT', None), \
+                patch.object(ocr, '_RECEIVE_MODEL', 'eng'), \
+                patch.object(ocr.time, 'monotonic', return_value=10.) as clock, \
+                patch('app.recognition.resident.ResidentReader', side_effect=OSError('startup')) as factory:
+            ocr.configure_receive_languages()
+            ocr.configure_receive_languages(False, resident=False)
+            clock.return_value = 100.
+            self.assertIsNone(ocr.recover_receive_backend())
             factory.assert_called_once()
 
 

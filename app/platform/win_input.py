@@ -105,8 +105,29 @@ class WindowsInput:
         self.started.wait(2)
         return self.ready
 
+    def _sync_hotkeys(self, active, registered):
+        """Run on the hook thread; desktop Ctrl shortcuts must remain available."""
+        if not active:
+            for number, _name in registered:
+                self.user.UnregisterHotKey(None, number)
+            registered.clear()
+            return
+        if registered:
+            return
+        try:
+            for number, (name, value) in enumerate(self.hotkeys.items(), 1):
+                mods, key = parse_hotkey(value)
+                if not self.user.RegisterHotKey(None, number, mods | 0x4000, key):
+                    raise OSError('Hotkey conflict')
+                registered.append((number, name))
+        except Exception:
+            self._sync_hotkeys(False, registered)
+            raise
+
     def _run(self):
         hooks, registered = [], []
+        stage = '初始化输入监测'
+        self.failure_stage = 'verify'
         try:
             self.thread_id = self.kernel.GetCurrentThreadId()
             msg = w.MSG()
@@ -125,8 +146,13 @@ class WindowsInput:
                     if c.cast(lp, c.POINTER(MOUSEHOOK)).contents.dwExtraInfo != MARKER:
                         self.revision += 1
                 return self.user.CallNextHookEx(None, code, wp, lp)
-            def focus(*args):
+            def focus(_hook, event, *_args):
                 self.revision += 1
+                if event == 3 and self.ready:
+                    try:
+                        self._sync_hotkeys(bool(self.target()),registered)
+                    except OSError:
+                        self.report('游戏快捷键注册失败，可能与其它程序冲突；请修改绑定，重新切回游戏后重试。')
             self.callbacks = (self.HOOKPROC(keyboard), self.HOOKPROC(mouse), self.EVENTPROC(focus))
             hooks = [self.user.SetWindowsHookExW(13, self.callbacks[0], None, 0),
                      self.user.SetWindowsHookExW(14, self.callbacks[1], None, 0),
@@ -134,12 +160,12 @@ class WindowsInput:
                      self.user.SetWinEventHook(0x8005,0x8005,None,self.callbacks[2],0,0,0)]
             if not all(hooks):
                 raise OSError('Cannot watch input/focus')
-            for number, (name, value) in enumerate(self.hotkeys.items(), 1):
-                mods, key = parse_hotkey(value)
-                if not self.user.RegisterHotKey(None, number, mods | 0x4000, key):
-                    raise OSError('Hotkey conflict')
-                registered.append((number, name))
+            stage = '注册专用快捷键'
+            self.failure_stage = 'register'
+            self._sync_hotkeys(True,registered)  # Validate conflicts at startup.
+            self._sync_hotkeys(bool(self.target()),registered)
             self.ready = True
+            stage = '监听快捷键事件'
             self.started.set()
             while not self.closed.is_set():
                 outcome = self.user.GetMessageW(c.byref(msg), None, 0, 0)
@@ -152,7 +178,8 @@ class WindowsInput:
                 else:
                     self.user.DispatchMessageW(c.byref(msg))
         except Exception as exc:
-            self.report('快捷键未启用（' + type(exc).__name__ + '）；请检查快捷键冲突后重启助手')
+            self.report('快捷键未启用（' + type(exc).__name__ + '）；失败阶段：' + stage +
+                        '。局内发言与手动识别快捷键不可用；请检查绑定或导出诊断，实时接收采集可独立运行。')
         finally:
             self.ready = False
             self.started.set()

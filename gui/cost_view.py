@@ -146,6 +146,7 @@ def build_cost(parent, app, load_config=None, money=None, priced=None):
     th.hairline(parent,pady=(0,9))
     toolbar=panel(parent,th);toolbar.pack(fill='x',pady=(0,6))
     th.label(toolbar,'费用走势',font=th.font_heading).pack(side='left')
+    refresh_button=th.link(toolbar,'刷新',lambda:refresh());refresh_button.pack(side='left',padx=(10,0))
     total_label=text(toolbar,th,'',small=True,muted=True);total_label.pack(side='right',padx=(10,0))
     def change(days):
         selected.set(days)
@@ -172,7 +173,6 @@ def build_cost(parent, app, load_config=None, money=None, priced=None):
     details_button=th.button(bottom,'查看明细',lambda:show_details())
     details_button.pack(side='right',padx=(12,0))
     stampbar=panel(parent,th);stampbar.pack(fill='x',pady=(6,0))
-    refresh_button=th.link(stampbar,'刷新',lambda:refresh());refresh_button.pack(side='right')
     stamp=text(stampbar,th,'',small=True,muted=True);stamp.pack(side='left',fill='x',expand=True)
 
     def write_details():

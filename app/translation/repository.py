@@ -169,6 +169,9 @@ class AuthorityView:
                 self.learning_error=True
                 continue
             key = normalize_query(row.get('original') or row.get('normalized', ''))
+            if row.get('rereview_pending') and key not in self.values:
+                self.learning_values.pop(key, None)
+                self.learning_blocked[key] = 'review_pending'
             if row.get('status') == 'rejected' and self.learning_values.get(key) == row.get('translation'):
                 self.learning_values.pop(key, None)
                 self.learning_blocked[key] = 'inactive'

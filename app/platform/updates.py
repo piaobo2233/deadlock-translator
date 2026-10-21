@@ -1,4 +1,4 @@
-"""Optional stable releases from the project's GitHub repository; no Tk or API key."""
+"""Optional public stable/Beta releases; full verified installers, no Tk or API key."""
 from dataclasses import dataclass
 import hashlib
 import json
@@ -13,6 +13,7 @@ from urllib.request import Request, HTTPRedirectHandler, build_opener
 REPOSITORY = 'https://github.com/piaobo2233/deadlock-translator'
 RELEASES_URL = REPOSITORY + '/releases'
 LATEST_URL = 'https://api.github.com/repos/piaobo2233/deadlock-translator/releases/latest'
+LIST_URL = 'https://api.github.com/repos/piaobo2233/deadlock-translator/releases?per_page=100'
 CHECK_INTERVAL = 24 * 60 * 60
 MAX_SETUP_BYTES = 512 * 1024 * 1024
 DOWNLOAD_HOSTS = {'github.com', 'api.github.com', 'release-assets.githubusercontent.com',
@@ -27,7 +28,16 @@ def version_key(value):
     match = re.fullmatch(r'v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?', str(value))
     if not match:
         raise UpdateError('版本号无法识别，请打开官方下载页查看')
-    return (*map(int, match.group(1, 2, 3)), not bool(match[4]))
+    identifiers = (match[4] or '').split('.') if match[4] else []
+    if any(not part or (part.isdigit() and len(part) > 1 and part.startswith('0')) for part in identifiers):
+        raise UpdateError('版本号无法识别，请打开官方下载页查看')
+    prerelease = tuple((0, int(part)) if part.isdigit() else (1, part) for part in identifiers)
+    return (*map(int, match.group(1, 2, 3)), not bool(match[4]), prerelease)
+
+
+def beta_channel(version):
+    version_key(version)
+    return bool(re.fullmatch(r'v?\d+\.\d+\.\d+-beta\.(?:0|[1-9]\d*)', version))
 
 
 def trusted_url(url):
@@ -50,7 +60,7 @@ def open_url(url):
     if not trusted_url(url):
         raise UpdateError('更新地址无效')
     request = Request(url, headers={'User-Agent': 'LockLingo-updater',
-                                   'Accept': 'application/vnd.github+json' if url == LATEST_URL else '*/*'})
+                                   'Accept': 'application/vnd.github+json' if url.startswith('https://api.github.com/') else '*/*'})
     return build_opener(GitHubRedirects()).open(request, timeout=20)
 
 
@@ -66,12 +76,15 @@ class Release:
     checksum_url: str = ''
 
 
-def parse_release(raw):
-    if not isinstance(raw, dict) or raw.get('draft') is not False or raw.get('prerelease') is not False:
-        raise UpdateError('该版本不是公开的稳定版本')
+def parse_release(raw, *, allow_beta=False):
+    if not isinstance(raw, dict) or raw.get('draft') is not False or type(raw.get('prerelease')) is not bool:
+        raise UpdateError('该版本不是公开发行版本')
     tag = raw.get('tag_name', '')
-    if not version_key(tag)[3]:
-        raise UpdateError('不向正式版用户推荐测试版本')
+    stable = version_key(tag)[3]
+    if not stable and not (allow_beta and beta_channel(tag) and raw['prerelease']):
+        raise UpdateError('该版本不属于当前公开更新通道')
+    if stable and raw['prerelease']:
+        raise UpdateError('稳定版本标记异常')
     version = tag.removeprefix('v')
     page = REPOSITORY + '/releases/tag/' + tag
     if raw.get('html_url') != page:
@@ -102,13 +115,33 @@ def parse_release(raw):
                    setup.get('browser_download_url', ''), size, sha.lower(), checksum)
 
 
-def fetch_latest():
+def fetch_latest(current_version='1.0.0'):
     try:
-        with open_url(LATEST_URL) as response:
-            body = response.read(1024 * 1024 + 1)
-        if len(body) > 1024 * 1024:
-            raise UpdateError('版本信息过大')
-        return parse_release(json.loads(body))
+        beta = beta_channel(current_version)
+        candidates = []
+        # Exact public beta.N tags exclude local/fasttrack suffixes. Network
+        # work is capped at five pages and one MiB per response.
+        for page in range(1, 6):
+            url = LIST_URL + f'&page={page}' if beta else LATEST_URL
+            with open_url(url) as response:
+                body = response.read(1024 * 1024 + 1)
+            if len(body) > 1024 * 1024:
+                raise UpdateError('版本信息过大')
+            raw = json.loads(body)
+            if not beta:
+                return parse_release(raw)
+            if not isinstance(raw, list):
+                raise UpdateError('发行列表信息异常')
+            for item in raw:
+                try:
+                    release = parse_release(item, allow_beta=True)
+                except UpdateError:
+                    continue
+                if version_key(release.version) > version_key(current_version):
+                    candidates.append(release)
+            if len(raw) < 100:
+                break
+        return max(candidates, key=lambda release: version_key(release.version), default=None)
     except HTTPError as exc:
         if exc.code == 404:
             return None  # The project has not published a stable release yet.
@@ -132,13 +165,18 @@ def release_record(release):
     if release.checksum_url:
         assets.append(dict(name=name + '.sha256', browser_download_url=release.checksum_url))
     return dict(tag_name=release.page.rsplit('/', 1)[1], body=release.notes, published_at=release.published,
-                html_url=release.page, draft=False, prerelease=False, assets=assets)
+                html_url=release.page, draft=False, prerelease=not version_key(release.version)[3], assets=assets)
 
 
 def fetch_cached(root, *, force=False):
     from app.storage import store
     from app.storage.locking import config_lock
     path = Path(root) / '.temp/updates/check.json'
+    try:
+        current = (Path(root) / 'VERSION').read_text(encoding='utf-8-sig').strip()
+    except FileNotFoundError:
+        current = '1.0.0'
+    beta = beta_channel(current)
     if path.parent.resolve() != path.parent.absolute():
         raise UpdateError('更新缓存目录异常')
     try:
@@ -146,16 +184,17 @@ def fetch_cached(root, *, force=False):
             cached = store.read_json(path, {})
             cached = cached if isinstance(cached, dict) else {}
             checked = cached.get('checked_at', 0)
-            if not force and type(checked) in (int, float) and 0 <= time.time() - checked < CHECK_INTERVAL:
+            if (not force and cached.get('current_version') == current and type(checked) in (int, float)
+                    and 0 <= time.time() - checked < CHECK_INTERVAL):
                 if cached.get('error'):
                     raise UpdateError(str(cached['error']))
-                return parse_release(cached['release']) if cached.get('release') else None
+                return parse_release(cached['release'], allow_beta=beta) if cached.get('release') else None
             try:
-                release = fetch_latest()
+                release = fetch_latest(current)
             except UpdateError as exc:
-                store.atomic_write_json(path, dict(checked_at=time.time(), error=str(exc)))
+                store.atomic_write_json(path, dict(checked_at=time.time(), current_version=current, error=str(exc)))
                 raise
-            if not store.atomic_write_json(path, dict(checked_at=time.time(), release=release_record(release))):
+            if not store.atomic_write_json(path, dict(checked_at=time.time(), current_version=current, release=release_record(release))):
                 raise UpdateError('无法保存更新检查结果，请检查目录权限')
             return release
     except TimeoutError as exc:

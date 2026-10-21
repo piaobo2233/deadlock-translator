@@ -90,6 +90,23 @@ def close_window(pid):
         api.PostMessageW(hwnd, 0x0010, 0, 0)
 
 
+def desktop_ctrl_available():
+    """Probe ownership only; never synthesize a desktop or game key press."""
+    api=ctypes.WinDLL('user32',use_last_error=True)
+    api.RegisterHotKey.argtypes=[wintypes.HWND,ctypes.c_int,wintypes.UINT,wintypes.UINT]
+    api.RegisterHotKey.restype=wintypes.BOOL
+    api.UnregisterHotKey.argtypes=[wintypes.HWND,ctypes.c_int]
+    api.UnregisterHotKey.restype=wintypes.BOOL
+    owned=[]
+    try:
+        for number,key in enumerate(('T','R'),0x6000):
+            if not api.RegisterHotKey(None,number,2|0x4000,ord(key)):return False
+            owned.append(number)
+        return True
+    finally:
+        for number in owned:api.UnregisterHotKey(None,number)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('archive', type=Path)
@@ -218,6 +235,12 @@ def main():
             report['first_run_guide_page'] = 'pass'
             report['branded_window_title'] = 'pass'
             from app.runtime.panel_instance import submit
+            # Loading both callers also proves the frozen shortcut recorder
+            # module was included; page state alone cannot detect a builder error.
+            for page in ('send', 'recognition'):
+                assert submit(bundle, page=page)
+                wait_for(lambda: state().get('page') == page)
+            report['frozen_hotkey_pages'] = 'pass'
             assert submit(bundle, page='settings')
             wait_for(lambda: state().get('page') == 'settings')
             report['frozen_update_settings'] = 'pass'
@@ -238,16 +261,31 @@ def main():
                 report['installer_running_panel_guard'] = 'pass'
             close_window(state()['process']['pid'])
             assert panel.wait(timeout=8) == 0
+            for log in logs:
+                log.flush()
+                output = Path(log.name).read_text(encoding='utf-8', errors='replace')
+                for marker in ('Traceback', '[error] 页面', 'Exception in Tkinter callback', 'invalid command name'):
+                    assert marker not in output, marker + ': ' + str(log.name)
             report['standalone_panel_close'] = 'pass'
             if args.panel_only:
                 report.update(result='partial', real_api_calls=0,
                               assistant_and_panel_close='not_verified_existing_instance',
                               clean_windows='not_verified', browser_download='not_verified')
             else:
+                desktop_probe=desktop_ctrl_available()
                 assistant = launch()
                 wait_for(lambda: state().get('status') == 'ready' and state().get('translator_token'))
                 panel_info = state()['process']
                 wait_for(lambda: '已启用常驻 OCR' in (bundle / 'data/run.log').read_text(encoding='utf-8', errors='replace'))
+                from app.runtime.diagnostics import history
+                wait_for(lambda:any(event['stage']=='input' and event['state']=='ready'
+                    for session in history(bundle) for event in session['events']))
+                report['native_input_monitor']='pass'
+                if desktop_probe:
+                    assert desktop_ctrl_available(), 'Assistant occupies desktop Ctrl+T/Ctrl+R'
+                    report['desktop_ctrl_shortcuts']='pass'
+                else:
+                    report['desktop_ctrl_shortcuts']='not_verified_existing_registration'
                 started = time.monotonic()
                 close_window(panel_info['pid'])
                 assert assistant.wait(timeout=10) == 0

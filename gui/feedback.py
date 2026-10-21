@@ -5,6 +5,9 @@ from pathlib import Path
 from app.config.repository import ConfigRepository
 from app.storage import store
 
+MAX_REPORT_BYTES=2*1024*1024
+MAX_IMAGE_BYTES=50*1024*1024
+
 def secrets(root):
     raw=store.read_json(store.data_path(root,'config.json'),{})
     file_key=raw.get('api_key','') if isinstance(raw,dict) else ''
@@ -23,7 +26,32 @@ def tail(path,limit=1024*1024):
     try:
         with open(path,'rb') as f:
             f.seek(0,2);length=f.tell();f.seek(max(0,length-limit));return f.read().decode('utf-8','replace')
-    except FileNotFoundError:return ''
+    except OSError:return ''
+
+def numeric_fields(value,names):
+    return {k:v for k,v in value.items() if k in names and type(v) in (int,float)} if isinstance(value,dict) else {}
+
+def ocr_diagnostics(value):
+    # Export fixed numeric fields, never arbitrary OCR text, paths or image data.
+    if not isinstance(value,dict):return {}
+    result={}
+    backend=value.get('backend')
+    if isinstance(backend,str) and backend in {'resident','cli','stopped'}:result['backend']=backend
+    failure=value.get('last_failure')
+    if isinstance(failure,str) and failure:
+        result['last_failure']=failure if failure in {
+            'OSError','TimeoutError','Empty','RuntimeError','ValueError','BrokenPipeError',
+            'FileNotFoundError','PermissionError','TesseractError','TesseractNotFoundError'
+        } else 'OtherError'
+    result['counts']=numeric_fields(value.get('counts'),{
+        'backend_failures','backend_recovered','fallback_resident','fallback_cli',
+        'source_verified','source_uncertain','source_disagrees','source_low_confidence',
+        'source_empty','native_chinese','source_ocr_timeout','source_ocr_failed',
+        'source_no_body','source_image_failed','source_model_missing'})
+    stages=value.get('stages')
+    result['stages']={name:numeric_fields(stages[name],{'calls','total_ms','mean_ms','max_ms'})
+        for name in ('preferred','fallback','source') if isinstance(stages,dict) and name in stages}
+    return result
 
 def report(root,*,include_text=False):
     values=secrets(root);cfg=ConfigRepository(store.data_path(root,'config.json'),log=lambda _:None).load()
@@ -33,10 +61,19 @@ def report(root,*,include_text=False):
              '参数':{k:cfg[k] for k in ('model','translate_api','font_size','width','max_messages')},
              '说明':'仅本地生成；文字与截图需使用者主动选择，未包含配置、词库或原始请求库'}
     summary['普通桌面识别参数']={'间隔秒':0.25,'一致帧数':3,'仅游戏前台':True}
+    try:summary['版本']=(Path(root)/'VERSION').read_text(encoding='utf-8-sig').strip()
+    except OSError:summary['版本']='未知'
+    from app.runtime.diagnostics import history
+    summary['近期阶段事件']=history(root)
+    summary['诊断保留']='最多 3 个进程会话，每会话 120 条，7 天；文件上限 256 KiB；缺失证据无法判断'
     if isinstance(runtime,dict):
         summary['诊断']={k:v for k,v in runtime.items() if isinstance(k,str) and
-            (k in {'at','paused','game','game_foreground','ocr_confirmed','ocr_boxes','translated','display_layout_waiting'} or
+            (k in {'at','paused','game','game_foreground','ocr_confirmed','ocr_boxes','translated','display_layout_waiting',
+                   'hard_offline','pipeline_errors','queue_pending','queue_display','queue_replaced'} or
              k.startswith(('capture_','recognize_','translate_','display_'))) and type(v) in (int,float,bool)}
+        summary['诊断']['recognition_ocr']=ocr_diagnostics(runtime.get('recognition_ocr'))
+        from app.presentation.reasons import LABELS
+        summary['诊断']['translation_unavailable']=numeric_fields(runtime.get('translation_unavailable'),LABELS)
     lines=['反馈诊断',json.dumps(summary,ensure_ascii=False,indent=2),'','最近运行的错误与警告分类：']
     log=tail(store.data_path(root,'run.log'))
     position=log.rfind('=== 会话开始')
@@ -50,13 +87,16 @@ def report(root,*,include_text=False):
         stamp=runtime.get('at')
         if type(stamp) not in (int,float) or datetime.now().timestamp()-stamp>10:
             lines.append('运行统计已过期，仅供历史排查。')
+    classified=[]
     for line in log.splitlines():
         severity=next((word for word in ('[error]','[warn]') if word in line),None)
         if not severity:continue
         error=re.search(r'\b[A-Za-z][A-Za-z0-9]*(?:Error|Exception)\b',line)
         clock=re.search(r'\[\d\d:\d\d:\d\d\]',line)
         classes=[label for label in ('OCR','审核','词库','预算','费用','缓存','请求','保存','采集','渲染') if label in line]
-        lines.append((clock.group() if clock else '')+' '+severity+' '+(error.group() if error else ' / '.join(classes) or '未分类；可选择文字记录补充'))
+        classified.append((clock.group() if clock else '')+' '+severity+' '+(error.group() if error else ' / '.join(classes) or '未分类；可选择文字记录补充'))
+    lines.extend(classified[-200:])
+    if len(classified)>200:lines.append('分类记录仅保留最近 200 条；阶段事件单独按会话分组。')
     if include_text:
         lines.extend(['','使用者主动选择附带的文字记录（请预览并删减个人信息）：'])
         # Only text fields; no player names, coordinates, paths or arbitrary JSON.
@@ -70,6 +110,9 @@ def report(root,*,include_text=False):
     return clean('\n'.join(lines),values)
 
 def export(root,path,content,*,images=()):
+    if len(str(content).encode('utf-8'))>MAX_REPORT_BYTES:raise ValueError('反馈文字超过 2 MiB，请预览并删减')
+    if len(images)>5 or sum(Path(p).stat().st_size for p in images)>MAX_IMAGE_BYTES:
+        raise ValueError('最多附带 5 张截图，总大小不超过 50 MiB')
     destination=Path(path)
     if destination.suffix.lower()!='.zip':raise ValueError('请选择 ZIP 文件')
     if destination.resolve().is_relative_to(Path(root).resolve()/'data'):

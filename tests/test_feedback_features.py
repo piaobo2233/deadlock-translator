@@ -181,7 +181,7 @@ class RegionAndLanguageTests(unittest.TestCase):
         self.root=Path(temporary.name)
         self.config=dict(default_config(),api_key='fixture',translate_api=True,model='stub',endpoint='https://test.invalid/chat/completions')
 
-    def test_region_roundtrip_dimensions_and_mode_burst(self):
+    def test_region_roundtrip_dimensions_and_legacy_manual_is_realtime(self):
         value=dict(rect=[10,20,600,300],screen=[1920,1080])
         repo=ConfigRepository(store.data_path(self.root,'config.json'))
         self.assertTrue(repo.save(dict(capture_region=value)))
@@ -194,11 +194,11 @@ class RegionAndLanguageTests(unittest.TestCase):
                 validate_region(invalid)
         now=[0]
         gate=RecognitionGate('manual',clock=lambda:now[0])
-        self.assertFalse(gate.allowed())
+        self.assertTrue(gate.allowed())
         gate.request()
         self.assertTrue(gate.allowed())
         now[0]=3.6
-        self.assertFalse(gate.allowed())
+        self.assertTrue(gate.allowed())
         self.assertTrue(RecognitionGate().allowed())
 
     def test_custom_region_replaces_anchor_search_boundary(self):
@@ -209,7 +209,7 @@ class RegionAndLanguageTests(unittest.TestCase):
             ocr.find_bubbles(image,offset=(1100,800),screen=(1920,1080),capture_rect=(1100,800,1550,980))
         self.assertEqual(find.call_args.args[1],(0,0,450,180))
 
-    def test_manual_capture_generator_does_not_run_ocr_before_request(self):
+    def test_legacy_manual_capture_generator_samples_without_request(self):
         import app.main as dt
         from app.recognition import ocr
         gate=RecognitionGate('manual')
@@ -221,12 +221,12 @@ class RegionAndLanguageTests(unittest.TestCase):
                 patch.object(ocr,'ocr_variants') as read, \
                 patch.object(dt,'is_paused',return_value=False), \
                 patch.dict(dt._LIVE,{},clear=True):
-            frames=Mock()
+            frames=Mock(return_value=None)
             messages=list(dt.iter_ocr_source(glossary={},only_in_game=False,verbose=False,
                 screen_size=(1920,1080),frame_provider=frames,stop_event=stop,recognition_gate=gate,
                 capture_config=dict(capture_region=dict(rect=[10,20,600,300],screen=[1920,1080]))))
             self.assertFalse(messages)
-            frames.assert_not_called()
+            frames.assert_called_once_with()
             find.assert_not_called()
             read.assert_not_called()
 
@@ -270,14 +270,17 @@ class RegionAndLanguageTests(unittest.TestCase):
         self.assertEqual(normalized['send_target'],'en')
         self.assertEqual(set(invalid),{'auto_send','send_target','capture_region'})
 
-    def test_session_only_successes_and_original_recovery(self):
+    def test_session_keeps_real_failure_state_and_original_recovery(self):
         session=SessionView(self.root,'first')
         message=DisplayMessage('player','help','帮忙','team',time.time(),None,None)
         self.assertTrue(session.incoming(message))
         session.incoming(message._replace(successful=False,translated='失败'))
         session.input(dict(original='输入原文',translation='',status='失败',sent=False))
         snapshot=store.read_json(view_path(self.root))
-        self.assertEqual(len(snapshot['rows']),1)
+        self.assertEqual(len(snapshot['rows']),2)
+        self.assertEqual(snapshot['rows'][0]['display'],'waiting')
+        self.assertEqual(snapshot['rows'][1]['display'],'unavailable')
+        self.assertFalse(snapshot['rows'][1]['successful'])
         self.assertEqual(snapshot['last_input']['original'],'输入原文')
         SessionView(self.root,'second')
         snapshot=store.read_json(view_path(self.root))

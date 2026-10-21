@@ -49,4 +49,35 @@ class FeedbackTests(unittest.TestCase):
     def test_export_cannot_overwrite_program_data(self):
         with self.assertRaises(ValueError):feedback.export(self.root,self.root/'data/feedback.zip','report')
 
+    def test_default_report_keeps_numeric_ocr_and_failure_reasons_without_private_fields(self):
+        (self.root/'VERSION').write_text('1.0.0-beta.2\n',encoding='utf-8')
+        store.atomic_write_json(store.data_path(self.root,'runtime.json'),dict(at=time.time(),
+            game=False,pipeline_errors=2,queue_pending=1,hard_offline=False,
+            recognition_ocr=dict(backend='cli',last_failure='OSError',
+                counts={'backend_failures':1,'source_disagrees':4,'private-count-name':7},
+                stages={'preferred':{'calls':3,'mean_ms':1250,'private-reading':'private-stage-text'},
+                        'private-stage':{'calls':1}},private='private-ocr-text'),
+            translation_unavailable={'source_unverified':2,'api_failed':1,'private-reason':4},
+            ui_status='private-ui-text'))
+        content=feedback.report(self.root)
+        summary=json.loads(content.split('\n',1)[1].split('\n\n最近运行',1)[0])
+        self.assertEqual(summary['版本'],'1.0.0-beta.2')
+        diagnostic=summary['诊断']
+        self.assertEqual(diagnostic['recognition_ocr'],dict(backend='cli',last_failure='OSError',
+            counts={'backend_failures':1,'source_disagrees':4},
+            stages={'preferred':{'calls':3,'mean_ms':1250}}))
+        self.assertEqual(diagnostic['translation_unavailable'],{'source_unverified':2,'api_failed':1})
+        self.assertEqual(diagnostic['pipeline_errors'],2)
+        self.assertEqual(diagnostic['queue_pending'],1)
+        self.assertFalse(diagnostic['hard_offline'])
+        for secret in ('private-count-name','private-stage-text','private-stage',
+                       'private-ocr-text','private-reason','private-ui-text'):
+            self.assertNotIn(secret,content)
+
+    def test_malformed_ocr_diagnostics_do_not_export_unrecognized_strings(self):
+        self.assertEqual(feedback.ocr_diagnostics('private-text'),{})
+        self.assertEqual(feedback.ocr_diagnostics(dict(backend=['private-backend'],
+            last_failure='private-message',counts=['private-counts'],stages='private-stages')),
+            dict(last_failure='OtherError',counts={},stages={}))
+
 if __name__=='__main__':unittest.main()

@@ -71,6 +71,20 @@ class VisibilityRecoveryTests(unittest.TestCase):
 
 
 class ShortChatAdmissionTests(unittest.TestCase):
+    def test_single_letter_words_do_not_make_real_two_word_chat_a_lone_word(self):
+        for text in ('i disagree', 'a miracle', 'u scared', 'i panicked',
+                     'i misclicked', 'u lagging'):
+            with self.subTest(text=text):
+                result = select_candidate([('body7', text)], dt.DEFAULT_GLOSSARY,
+                                          dt.recognition_rules())
+                self.assertTrue(result.accepted, result)
+                self.assertEqual(result.text, text)
+        for text in ('disagree', 'miracle', 'scared', 'panicked', 'misclicked', 'lagging',
+                     'Shift', 'thank q', 'ee u', 'q z'):
+            with self.subTest(rejected=text):
+                self.assertFalse(select_candidate([('body7', text)], dt.DEFAULT_GLOSSARY,
+                                                  dt.recognition_rules()).accepted)
+
     def test_known_short_chat_is_accepted_without_rewriting_original(self):
         for text in ('thank u', 'THANK U', 'can u', 'i agree', 'r u ready'):
             with self.subTest(text=text):

@@ -1,6 +1,8 @@
 import gc
 import tempfile
 import unittest
+import subprocess
+import sys
 from unittest.mock import patch
 
 from gui.lifecycle import PageCallbacks
@@ -54,6 +56,28 @@ class PageCallbackTests(unittest.TestCase):
 
 
 class GuiLifecycleTests(unittest.TestCase):
+    def test_rapid_unpumped_navigation_and_destroy_has_no_tcl_background_error(self):
+        code = '''import tempfile,gc
+import gui.pages
+from gui.app import App
+for _ in range(3):
+ with tempfile.TemporaryDirectory() as root:
+  app=App(root)
+  for page in ('home','settings','api','send'):
+   app.open_page(page)
+  app.root.destroy()
+  app=None
+  gc.collect()
+import tkinter as tk
+probe=tk.Tk();probe.update();probe.destroy()
+'''
+        result = subprocess.run([sys.executable, '-X', 'utf8', '-c', code], capture_output=True,
+            text=True, encoding='utf-8', timeout=30)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        for marker in ('application has been destroyed','unknown color name','invalid command name',
+                       'Exception in Tkinter callback'):
+            self.assertNotIn(marker,result.stdout+result.stderr)
+
     def doCleanups(self):
         result = super().doCleanups()
         # Tk/ttkbootstrap image cycles must be finalized on their owner thread,
@@ -78,7 +102,8 @@ class GuiLifecycleTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.addCleanup(patch.stopall)
         patch.object(dt, "CONFIG_PATH", store.data_path(self.temp.name, "config.json")).start()
-        patch.dict("os.environ", {"DEEPSEEK_API_KEY": ""}).start()
+        patch.dict("os.environ", {"DEEPSEEK_API_KEY": "", "DEADLOCK_TEST_NO_NETWORK": "1"}).start()
+        patch('app.game_data.service.application_root', return_value=self.temp.name).start()
         patch.object(dt, "translator_is_running", return_value=False).start()
         self.app = App(self.temp.name)
         def close_root():
@@ -88,6 +113,77 @@ class GuiLifecycleTests(unittest.TestCase):
             except tk.TclError:
                 pass  # A test may already exercise the real X/destroy route.
         self.addCleanup(close_root)
+
+    def test_only_the_current_page_is_mapped_across_navigation(self):
+        for page in ('api','settings','recognition','settings','cost','settings'):
+            self.app.open_page(page);self.app.root.update()
+            active,inactive=(self.app._settings_page,self.app._content_page) if page=='settings' else (
+                self.app._content_page,self.app._settings_page)
+            self.assertTrue(active.winfo_ismapped(),page)
+            self.assertFalse(inactive.winfo_ismapped(),page)
+
+    def test_outgoing_page_is_unmapped_before_its_controls_are_destroyed(self):
+        self.app.open_page('api');self.app.root.update()
+        old_controls=list(self.app._content_page.winfo_children())
+        observed=[]
+        clear=self.app._clear_page
+        def inspect_clear():
+            observed.append((self.app._content_page.winfo_ismapped(),
+                             any(widget.winfo_exists() for widget in old_controls)))
+            clear()
+        with patch.object(self.app,'_clear_page',side_effect=inspect_clear):
+            self.assertTrue(self.app.open_page('settings'))
+        self.assertEqual(observed,[(False,True)])
+        self.assertTrue(all(not widget.winfo_exists() for widget in old_controls))
+        self.app.root.update()
+        self.assertTrue(self.app._settings_page.winfo_ismapped())
+
+    def test_short_pages_cover_the_cached_settings_view(self):
+        self.app.open_page('api');self.app.root.geometry('1210x1000');self.app.root.update()
+        self.assertGreaterEqual(self.app._page_background.winfo_height(),self.app.canvas.winfo_height())
+        self.assertEqual(self.app.canvas.winfo_children()[-2:],[self.app._page_background,self.app._content_page])
+        self.app.open_page('settings');self.app.root.update()
+        self.app.canvas.yview_moveto(1)
+        self.app.open_page('home');self.app.root.update()
+        self.assertEqual(self.app.canvas.yview()[0],0)
+        self.assertGreaterEqual(self.app._page_background.winfo_height(),self.app.canvas.winfo_height())
+
+    def test_dynamic_page_growth_and_collapse_keep_the_bottom_reachable(self):
+        self.app.open_page('settings');self.app.root.update()
+        height=self.app.page.winfo_height()
+        extra=self.app.th.tk.Frame(self.app.page,height=self.app.canvas.winfo_height()*3,width=1)
+        extra.pack();self.app.root.update()
+        self.assertGreater(self.app.page.winfo_height(),height)
+        self.app.canvas.yview_moveto(1);self.app.root.update()
+        self.assertEqual(self.app.canvas.yview()[1],1.)
+        self.app.canvas.yview_moveto(0);self.app.root.update()
+        extra.destroy();self.app.root.update()
+        self.assertEqual(self.app.page.winfo_height(),height)
+        self.app.canvas.yview_moveto(1);self.app.root.update()
+        self.assertEqual(self.app.canvas.yview()[1],1.)
+
+    def test_tab_skips_inactive_cached_settings_and_restores_on_return(self):
+        frame=self.app._settings_page
+        self.app.open_page('api');self.app.root.update()
+        first=self.app.nav_buttons['home']['button'];widget=first;visited=[]
+        for _ in range(150):
+            widget=widget.tk_focusNext()
+            if str(widget)==str(first):break
+            visited.append(str(widget))
+        self.assertTrue(visited)
+        self.assertFalse(any(name.startswith(str(frame)+'.') for name in visited))
+        self.app.open_page('settings');self.app.root.update()
+        widget=first;visited=[]
+        for _ in range(150):
+            widget=widget.tk_focusNext()
+            if str(widget)==str(first):break
+            visited.append(str(widget))
+        self.assertTrue(any(name.startswith(str(frame)+'.') for name in visited))
+        chooser=self.app.close_controls['box']
+        self.app.root.focus_force();chooser.focus_set();self.app.root.update()
+        self.assertIs(self.app.root.focus_get(),chooser)
+        self.app.open_page('api');self.app.root.update()
+        self.assertFalse(str(self.app.root.focus_get()).startswith(str(frame)+'.'))
 
     def test_navigation_back_does_not_ping_pong(self):
         for name in ("home", "settings", "cost"):
@@ -100,7 +196,7 @@ class GuiLifecycleTests(unittest.TestCase):
 
     def test_leaving_home_cancels_heartbeat(self):
         self.app.open_page("home")
-        self.assertEqual(len(self.app.page_callbacks._pending),1)  # Home no longer polls costs.
+        self.assertEqual(len(self.app.page_callbacks._pending),2)  # Status and bounded session reader.
         self.app.open_page("settings")
         self.assertFalse(self.app.page_callbacks._pending)
 

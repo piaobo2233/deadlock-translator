@@ -4,9 +4,9 @@ from app.game_data.service import catalogue
 
 # These names also have ordinary meanings. Let sentence context decide.
 AMBIGUOUS=frozenset(('seven','lash','mirage','warden','grey','ivy','inferno','haze','paradox','pocket','dynamo','vindicta'))
-def records():
+def records(root=None):
     try:
-        rows = catalogue('terms')['terms']
+        rows = (catalogue('terms') if root is None else catalogue('terms', root))['terms']
         if not isinstance(rows, list) or any(
                 not isinstance(row, dict) or not isinstance(row.get('english'), str)
                 or not row['english'].strip() or not isinstance(row.get('chinese'), str)
@@ -25,8 +25,8 @@ def _clear():
 
 records.cache_clear = _clear
 
-def exact_terms():
-    return {row['english'].casefold():row['chinese'] for row in records()
+def exact_terms(root=None):
+    return {row['english'].casefold():row['chinese'] for row in records(root)
             if row['english'].casefold() not in AMBIGUOUS and len(row['english'])>2}
 
 def hint(sentence):

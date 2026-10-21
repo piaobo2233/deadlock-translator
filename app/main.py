@@ -1435,6 +1435,10 @@ def _splittable(tok: str, vocab: set, min_pieces: int = 2) -> bool:
     return False
 
 
+NUMBER_CHAT_WORDS = frozenset('one two three four five six seven eight nine ten '
+                            'first second third fourth fifth sixth seventh eighth ninth tenth'.split())
+
+
 def is_chat_text(text: str, glossary: dict) -> bool:
     """这条文本「是不是值得翻译的聊天」—— 唯一的判定入口。
 
@@ -1449,6 +1453,8 @@ def is_chat_text(text: str, glossary: dict) -> bool:
     if native_chinese(text or ''):
         return False
     if foreign_chat(text):
+        return True
+    if normalize_text(text or '') in NUMBER_CHAT_WORDS:
         return True
     if not text or not looks_like_chat(text, glossary):
         return False
@@ -1485,13 +1491,15 @@ def is_chat_text(text: str, glossary: dict) -> bool:
     #     分词口径跟 looks_like_chat 保持一致：用 _WORDISH（只认字母），
     #     这样 'un_holy' 这种下划线分隔的玩家名算两个词，不会被当成单词语句。
     toks = [w.lower() for w in _WORDISH.findall(text)]
-    if len(toks) == 1 and toks[0] not in (glossary or {}) and not _elongated_lol(toks[0]):
+    if (len(toks) == 1 and toks[0] not in (glossary or {}) and toks[0] not in NUMBER_CHAT_WORDS
+            and not _elongated_lol(toks[0])):
         vocab = set(glossary or {}) | COMMON_WORDS
-        # Keep short chat such as "thank u" without admitting lone UI words.
+        # _WORDISH omits single letters: "i disagree" is still two words.
+        # Longer words already passed looks_like_chat; a word list is not
+        # another admission requirement for these multiword messages.
         words = re.findall(r"[A-Za-z]+", text.lower())
         short_chat = (len(words) > 1 and any(len(w) == 1 for w in words)
-                      and all(w in {'a', 'i', 'u', 'r'} if len(w) == 1 else w in vocab
-                              for w in words))
+                      and all(len(w) > 1 or w in {'a', 'i', 'u', 'r'} for w in words))
         if not short_chat and not _splittable(toks[0], vocab):
             return False
     return True
@@ -1909,6 +1917,10 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
         x0, y0, x1, y1 = box
         selected_rect = box
     print(f"[info] 屏幕抓取区域 {box}  ({x1 - x0}x{y1 - y0})，每 {interval:g} 秒一帧")
+    from app.recognition.region import experimental_aspect
+    if experimental_aspect((sw, sh)):
+        print(f"[warn] 当前画面 {sw}×{sh} 为非 16:9 比例：实验适配（未实机验证），"
+              f"搜索区域按比例推算，识别位置可能偏差；请反馈识别截图")
     if frame_provider is not None:
         print(f"[info] 帧来源：调用方提供（回放），屏幕基准 {sw}x{sh}")
 
@@ -2108,7 +2120,7 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
         last_report = time.time()
         paused = False
         stop_event = stop_event if stop_event is not None else threading.Event()
-        capture_ready()
+        region_ready = False
         while not stop_event.is_set():
             if capture_changed():
                 return
@@ -2163,6 +2175,11 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
 
             if capture_changed():
                 return
+            if only_in_game and not game_in_foreground():
+                continue
+            if not region_ready and img.shape[:2] == (y1-y0, x1-x0) and img.size and img.max() > 1:
+                capture_ready()
+                region_ready = True
             if cadence is not None:
                 due = cadence.ocr_due(force=manual_mode)
                 if stats is not None:
@@ -4239,6 +4256,7 @@ def main() -> int:
     overlay = Overlay(config)
     if region_capture is not None:
         overlay._capture_region_applied = region_capture.applied
+        overlay._capture_calibration_applied = lambda value: region_capture.applied(value, key='capture_calibration')
     if not (args.simulate or args.replay or _DIAGNOSTIC_ROOT):
         from app.runtime.game_controls import GameControls
         def input_config():
@@ -4249,6 +4267,7 @@ def main() -> int:
         game_controls = GameControls(APP_DIR, input_config, recognition_gate, session_view,
             lambda message: overlay.status_queue.put(FailureNotice('game_input', message)), paused=is_paused)
         game_controls.start()
+        overlay._input_translate_applied = game_controls.applied
     last_save = {"at": time.time()}
 
     # ---- 系统托盘（阶段 5 · §三）----
@@ -4388,7 +4407,11 @@ def main() -> int:
                 overlay.status_queue.put('字幕审核回执保存失败；本条暂不进入待审核')
     display_monitor = DisplayMonitor(runtime_health, notify=display_notice, record=evidence_log.display,
                                      on_drawn=translation_drawn)
-    overlay._display_observer = display_monitor.observe
+    def observe_display(messages, frame):
+        display_monitor.observe(messages, frame)
+        if not session_view.observe_display(messages, frame):
+            overlay.status_queue.put(FailureNotice('session_view', '本次会话显示状态未保存，请导出诊断'))
+    overlay._display_observer = observe_display
     overlay._display_enabled = lambda: (not is_paused() and
         (region_capture is None or region_capture.current()) and
         (bool(args.simulate) or not config.get("only_in_game", True) or game_in_foreground()))
@@ -4397,6 +4420,8 @@ def main() -> int:
 
     def pump_body() -> None:
         if region_capture is not None:
+            config_application['capture_calibration'] = application_result('capture_calibration', config.get('capture_calibration', {}),
+                'applied' if region_capture.applied(config.get('capture_calibration', {}), key='capture_calibration') else 'pending')
             config_application['capture_preset'] = application_result('capture_preset', config['capture_preset'],
                 'applied' if region_capture.applied(config['capture_preset']) else 'pending')
         from app.runtime.panel_instance import consume_action
@@ -4423,7 +4448,7 @@ def main() -> int:
             except (queue.Empty, ChannelClosed):
                 break
             from app.presentation.reasons import add_visible
-            if not session_view.incoming(msg) and msg.successful and msg.translated:
+            if not session_view.incoming(msg):
                 overlay.status_queue.put(FailureNotice('session_view', '本次会话记录未保存，请检查目录写入权限'))
             add_visible(history,VisibleMessage(msg, now + lifetime(msg)))
             changed = True
@@ -4433,7 +4458,10 @@ def main() -> int:
                 status = overlay.status_queue.get_nowait()
             except queue.Empty:
                 break
-            overlay.panel_status = status.detail if isinstance(status, FailureNotice) else str(status)
+            if isinstance(status, FailureNotice) and status.code == 'game_input':
+                overlay.input_status = status.detail
+            else:
+                overlay.panel_status = status.detail if isinstance(status, FailureNotice) else str(status)
         # A stale visual sample can recover; the renderer hides it meanwhile.
         fresh = [m for m in history if now < m.expires_at]
         if len(fresh) != len(history):
@@ -4533,9 +4561,24 @@ def main() -> int:
                 tray.refresh()
             try:
                 from app.recognition.diagnostics import DIAGNOSTICS
+                from app.runtime.diagnostics import record
+                if region_capture is not None:
+                    from app.recognition.region import primary_geometry
+                    current = region_capture.current()
+                    geometry = dict(primary_geometry(), **region_capture.geometry)
+                    record(APP_DIR, 'capture', 'ready' if current else 'blocked',
+                           code=geometry.pop('code', 'geometry'), **geometry)
+                running, foreground = process_running(GAME_EXE), game_in_foreground()
+                record(APP_DIR, 'capture', 'snapshot', game=running, foreground=foreground, paused=is_paused())
+                ocr_state = DIAGNOSTICS.snapshot()
+                record(APP_DIR, 'ocr', 'snapshot', confirmed=int(stats.get('confirmed', 0) or 0),
+                       backend=ocr_state.get('backend'))
+                record(APP_DIR, 'translation', 'snapshot', translated=int(stats.get('translated_bubble', 0) or 0),
+                       pending=pipeline.pending_depth)
+                record(APP_DIR, 'display', 'snapshot', waiting=display_monitor.layout_waiting)
                 write_runtime_status(paused=is_paused(),
-                                     game_running=process_running(GAME_EXE),
-                                     game_foreground=game_in_foreground(),
+                                     game_running=running,
+                                     game_foreground=foreground,
                                      # 控制面板只显示累计的轻量诊断数；不写 OCR 原文、
                                      # 坐标或玩家信息。这样用户能看出是「没候选」还是
                                      # 「候选很多但尚未确认」，而不必翻 run.log。
@@ -4548,11 +4591,12 @@ def main() -> int:
                                      hard_offline=translator.hard_offline,
                                      request_session_id=usage_stats.request_session_id,
                                      latency_drawn_ms=latency_samples,
-                                     recognition_ocr=DIAGNOSTICS.snapshot(),
+                                     recognition_ocr=ocr_state,
                                      translation_unavailable=display_monitor.unavailable_reasons,
                                      config_application=config_application,
                                      config_session=(panel_owner or {}).get('token', ''),
                                      ui_status=overlay.panel_status,
+                                     input_status=getattr(overlay, 'input_status', ''),
                                      consumption=dict(usage_stats.presentation_snapshot(),accounting_error=translator.accounting_error),
                                      **{key: value for key, value in stats.copy().items()
                                         if key.startswith('capture_adaptive_')},

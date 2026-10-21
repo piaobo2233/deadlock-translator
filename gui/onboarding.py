@@ -70,6 +70,8 @@ def build_onboarding(parent, app):
     initial_provider = (PROVIDERS[draft["provider"]] if draft["endpoint"] == DEEPSEEK["endpoint"]
                         else PROVIDERS["custom"])
     provider = th.tk.StringVar(value=initial_provider)
+    from gui.api_help import build_help
+    build_help(area,app,config,provider)
     provider_box = th.ttk.Combobox(area, textvariable=provider, values=tuple(PROVIDERS.values()),
                                    state="readonly", font=th.font)
     provider_box.pack(fill="x", ipady=5)
@@ -111,6 +113,7 @@ def build_onboarding(parent, app):
     provider_box.bind("<<ComboboxSelected>>", select_provider)
 
     def sync_draft(*_event):
+        app._api_revision = getattr(app, '_api_revision', 0) + 1
         provider_key = next(k for k, v in PROVIDERS.items() if v == provider.get())
         draft.update(provider=provider_key, model=model.get(), endpoint=endpoint.get(),
                      key=key.get(), dirty=True)

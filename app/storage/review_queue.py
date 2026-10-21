@@ -185,6 +185,64 @@ class ReviewQueue:
         except (OSError, ValueError, TypeError, KeyError):
             return ReviewOutcome(False, 'review_storage')
 
+    def reopen(self, key, *, token, formal_token):
+        """Suspend only the exact formal commit owned by this review; retry safely."""
+        try:
+            with config_lock(self.path):
+                rows = self._read()
+                row = rows.get(key)
+                if (row is None or fingerprint(row) != token
+                        or row.get('status') not in {'accepted', 'edited', 'rejected'}):
+                    return ReviewOutcome(False, 'review_conflict')
+                original = row.get('original') or key
+                candidate = dict(row, status='pending', translation=row.get('api_translation', row['translation']))
+                if not self.reviewable(candidate):
+                    return ReviewOutcome(False, 'evidence_missing')
+                suspension = fingerprint(dict(key=key, token=token, action='reopen'))
+                receipt = row.get('formal_receipt', {})
+                if row.get('promoted'):
+                    conflict = False
+                    suspended = False
+                    def update(entries):
+                        nonlocal conflict, suspended
+                        aliases = self._aliases(entries, original)
+                        def is_suspended(entry):
+                            marker = entry.get('review_suspension', {})
+                            content = {k: v for k, v in entry.items() if k != 'review_suspension'}
+                            return (marker.get('id') == suspension and marker.get('after') == fingerprint(content)
+                                    and marker.get('before') == receipt.get('revision'))
+                        if aliases and all(is_suspended(entry) for entry in aliases.values()):
+                            suspended = True
+                            return False  # Formal suspension committed; retry only the queue write.
+                        if (fingerprint(aliases) != formal_token or fingerprint(aliases) != receipt.get('revision')
+                                or not aliases or any(entry.get('review_decision_id') != row.get('decision_id')
+                                                     for entry in aliases.values())):
+                            conflict = True
+                            return False
+                        for alias, entry in aliases.items():
+                            content = dict(entry, enabled=False)
+                            content.pop('review_suspension', None)
+                            entries[alias] = dict(content, review_suspension=dict(id=suspension,
+                                before=receipt['revision'], after=fingerprint(content)))
+                        suspended = True
+                    if not store.update_glossary_file(self.glossary_path, update):
+                        return ReviewOutcome(False, 'formal_write_failed')
+                    if conflict or not suspended:
+                        return ReviewOutcome(False, 'review_conflict')
+                history = list(row.get('decision_history', []))
+                history.append({k: row[k] for k in ('status', 'translation', 'decided_at', 'decision_id',
+                    'formal_receipt') if k in row})
+                row.update(status='pending', translation=candidate['translation'],
+                    api_translation=candidate['translation'], previous_translation=row['translation'],
+                    decision_history=history, reopened_at=store.now_iso(), suspension_id=suspension,
+                    rereview_pending=True, promoted=False, decided_at='')
+                row.pop('hidden_at', None)
+                if not store.save_collection(self.path, rows):
+                    return ReviewOutcome(False, 'reopen_queue_write_failed')
+                return ReviewOutcome(True)
+        except (OSError, ValueError, TypeError, KeyError):
+            return ReviewOutcome(False, 'review_storage')
+
     def decide(self,key,action,*,token,formal_token,translation=''):
         receipt = SaveReceipt(False)
         if action not in {'accept','edit','reject'}:
@@ -229,6 +287,8 @@ class ReviewQueue:
                     translation=value,decided_at=store.now_iso(),promoted=receipt.saved,
                     decision_id=decision_id,reviewer_kind='human',
                     formal_receipt=dict(saved=receipt.saved,entry_id=receipt.entry_id,revision=receipt.revision))
+                if row.get('suspension_id'):
+                    row['rereview_pending'] = action == 'reject'
                 if not store.save_collection(self.path,rows):
                     return ReviewOutcome(False,'queue_write_failed_retry_same_decision',receipt)
                 if action != 'reject':

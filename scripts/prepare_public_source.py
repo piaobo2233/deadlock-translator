@@ -67,6 +67,8 @@ def public_files(base):
         'verify/game_resources_smoke.py',
         'docs/guides/首版测试与分享.md', 'docs/guides/接收与中文转英文.md',
         'docs/guides/软件更新.md', 'docs/releases/v1.0.0-test.4-rc.4.md',
+        'docs/guides/个人识别区域.md', 'verify/calibration_coverage.py',
+        'docs/releases/v1.0.0.md', 'docs/releases/v1.0.0-features.md',
         'docs/releases/v1.0.0-test.4-rc.1.md', 'docs/releases/v1.0.0-test.4-rc.2.md',
         'docs/releases/v1.0.0-test.4-rc.3.md',
         'verify/portable_smoke.py',

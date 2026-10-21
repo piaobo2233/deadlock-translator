@@ -7,7 +7,7 @@ def parse_hotkey(value):
     parts = value.upper().replace(' ', '').split('+')
     modifiers = {'ALT': 1, 'CTRL': 2, 'SHIFT': 4}
     if len(parts) < 2 or len(set(parts)) != len(parts) or any(p not in modifiers for p in parts[:-1]):
-        raise ValueError('快捷键格式示例：Ctrl+Alt+T')
+        raise ValueError('快捷键格式示例：Ctrl+T（也可自选其他修饰键）')
     key = parts[-1]
     if len(key) == 1 and key.isascii() and key.isalnum():
         vk = ord(key)
@@ -19,10 +19,12 @@ def parse_hotkey(value):
 
 
 class InputTransaction:
-    def __init__(self, native, service, config, publish, *, clock=time.monotonic, allowed=lambda: True):
+    def __init__(self, native, service, config, publish, *, clock=time.monotonic, allowed=lambda: True,
+                 diagnose=lambda *args, **kw: None):
         self.native, self.service, self.config, self.publish = native, service, config, publish
         self.clock = clock
         self.allowed = allowed
+        self.diagnose = diagnose
         self._lock = threading.Lock()
         self.closed = False
 
@@ -31,6 +33,7 @@ class InputTransaction:
             return
         original, translated, sent, token = '', '', False, None
         status = '未回填'
+        stage, started, completed, failed = 'verify', self.clock(), False, False
         try:
             if self.closed or not self.allowed():
                 return
@@ -47,43 +50,59 @@ class InputTransaction:
             if not current():
                 status = '输入状态已改变，已取消'
                 return
+            stage = 'read'
             original = self.native.read_input(token)
             if not original or not current():
+                failed = not original
                 status = '未读到有效输入或焦点/输入已改变'
                 return
             if self.publish(dict(original=original, translation='', status='正在翻译', sent=False)) is False:
                 status = '原文恢复记录未保存，已停止自动输入'
                 return
+            stage = 'translate'
             result = self.service.translate(original, is_current=current)
             if not result.successful:
+                failed = True
                 status = result.reason or '翻译未完成，原文保留'
                 return
             translated = result.text
             # Recopy immediately before replacement; edits, including undo, invalidate the token.
+            stage = 'verify'
             if not current() or self.native.read_input(token) != original or not current():
                 status = '焦点或输入已改变，已取消回填；原文可在面板恢复'
                 return
+            stage = 'replace'
             if not self.native.replace(token, translated, current):
+                failed = True
                 status = '回填未确认，未发送；请检查游戏输入，原文可在面板恢复'
                 return
             status = '已回填，请在游戏中手动发送'
+            completed = True
             if not current():
+                completed = False
                 status = '回填后状态已改变，未自动发送；请核对游戏输入'
             elif config.get('auto_send', True):
                 # Require a confirmed readback before sending, not just SendInput's return count.
+                stage, completed = 'readback', False
                 if self.native.read_input(token) == translated and current() and self.native.send(token, current):
                     sent = True
+                    stage, completed = 'send', True
                     status = '已回填并按 Enter，请以游戏内消息为准'
                 else:
+                    failed = True
                     status = '回填后状态已改变或无法确认，未自动发送'
         except Exception as exc:
+            failed = True
             status = '自动输入已停止（' + type(exc).__name__ + '）；原文可在面板恢复'
         finally:
             try:
+                self.diagnose('failed' if failed else 'completed' if completed else 'cancelled', code=stage,
+                              elapsed_ms=(self.clock() - started) * 1000)
                 try:
                     self.native.finish()
                 except Exception:
                     status += '；剪贴板恢复未完成'
+                    self.diagnose('failed', code='clipboard')
                 if original or token is not None:
                     self.publish(dict(original=original, translation=translated, status=status, sent=sent))
             finally:

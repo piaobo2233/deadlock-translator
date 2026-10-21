@@ -133,6 +133,8 @@ class MultilingualTests(unittest.TestCase):
         for number in range(1, 12):
             hotkey = f'Ctrl+Alt+Shift+F{number}'
             first = WindowsInput({'send': hotkey}, lambda action: None, errors.append)
+            # Model game foreground so the first instance keeps its registration.
+            first.target = Mock(return_value=(1,1,1,1))
             if first.start():
                 break
             first.close()
@@ -147,6 +149,24 @@ class MultilingualTests(unittest.TestCase):
         finally:
             first.close()
             second.close()
+
+    def test_native_desktop_releases_shortcut_without_keyboard_injection(self):
+        from app.platform.win_input import WindowsInput
+        errors=[]
+        for number in range(1,12):
+            hotkey=f'Ctrl+Alt+Shift+F{number}'
+            first=WindowsInput({'send':hotkey},lambda action:None,errors.append)
+            first.target=Mock(return_value=None)
+            if first.start():break
+            first.close()
+        else:self.fail(f'No free fixture combination: {errors}')
+        second=WindowsInput({'send':hotkey},lambda action:None,errors.append)
+        second.target=Mock(return_value=None)
+        try:
+            # A desktop instance must not prevent another owner from acquiring it.
+            self.assertTrue(second.start(),errors)
+        finally:
+            first.close();second.close()
 
 
 if __name__ == '__main__':

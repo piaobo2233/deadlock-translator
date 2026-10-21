@@ -81,7 +81,7 @@ def build_translation(parent, app):
     from gui import pages as p
     import time
     th=app.th
-    heading(parent,th,'接收翻译')
+    heading(parent,th,'接收翻译',compact=True)
     hero=panel(parent,th,bg=C['soft']);hero.pack(fill='x',pady=(0,22))
     inner=panel(hero,th,bg=C['soft']);inner.pack(fill='both',padx=20,pady=17)
     status=th.label(inner,'',bg=C['soft'],fg=C['ok'],font=th.font_heading);status.pack(anchor='w')
@@ -97,6 +97,10 @@ def build_translation(parent, app):
     def update_diagnostics():
         data=store.read_json(store.data_path(app.root_dir,'runtime.json'),None)
         word,_,_=p.status_of(app.root_dir)
+        if word not in {'未运行','没有响应'} and isinstance(data,dict) and type(data.get('at')) in (int,float) and 0<=time.time()-data['at']<10:
+            input_status=data.get('input_status')
+            if isinstance(input_status,str) and input_status:
+                note.configure(text=note.cget('text')+'\n游戏剪贴板翻译：'+input_status)
         counts,feedback=display_feedback(data,running=word!='未运行',now=time.time())
         if diagnostic:
             diagnostic['counts'].configure(text=counts)
@@ -128,7 +132,11 @@ def build_translation(parent, app):
             app.set_status('已请求启动，等待后台心跳确认',C['muted'])
         except OSError as exc:app.set_status('启动失败：'+str(exc),C['err'])
     run_button=th.button(runbar,'启动',run_action,kind='primary');run_button.pack(side='left')
+    for label, page in (('测试识别','recognition'),('配置接口','api'),('诊断与反馈','settings')):
+        th.link(runbar,label,lambda page=page:app.open_page(page)).pack(side='left',padx=(8,0))
     app.run_controls=dict(button=run_button,action=run_action)
+    from gui.receive_messages import ReceiveMessages
+    app.receive_messages = ReceiveMessages(parent, app)
     online=panel(parent,th);online.pack(fill='x')
     controls=panel(online,th);controls.pack(side='right')
     config=p._load_config(app.root_dir)
@@ -207,6 +215,8 @@ def build_api_settings(parent, app):
     from app.config.providers import DEEPSEEK, PROVIDERS
     provider = th.tk.StringVar(value=PROVIDERS[draft['provider']]
         if draft['endpoint'] == DEEPSEEK['endpoint'] else PROVIDERS['custom'])
+    from gui.api_help import build_help
+    build_help(parent,app,config,provider)
     text(parent,th,'服务商',small=True,muted=True).pack(anchor='w')
     provider_box=th.ttk.Combobox(parent,textvariable=provider,values=tuple(PROVIDERS.values()),state='readonly',font=th.font)
     provider_box.pack(fill='x',pady=(6,12))
@@ -226,14 +236,28 @@ def build_api_settings(parent, app):
     text(key_field,th,'留空不修改你已保存的密钥',small=True,muted=True).pack(anchor='w',pady=(4,0))
     bind_secret_entry(entry,key,lambda value:p._save('api_key',value,app),source=config.key_source,hint=hint,
                       invalid=lambda:app.set_status('保存失败：不能保存掩码',C['err']),autosave=False)
-    text(parent,th,'接口地址 · 完整 chat/completions 地址',small=True,muted=True).pack(anchor='w',pady=(12,6))
+    advanced=panel(parent,th)
+    advanced_open=[provider.get()==PROVIDERS['custom']]
+    def toggle_advanced():
+        advanced_open[0]=not advanced_open[0]
+        show_advanced()
+    advanced_button=th.link(parent,'高级设置 ▸',toggle_advanced)
+    advanced_button.pack(anchor='w',pady=(12,6))
+    def show_advanced():
+        opened=advanced_open[0] or provider.get()==PROVIDERS['custom']
+        advanced_button.configure(text='高级设置 ▾' if opened else '高级设置 ▸')
+        if opened:advanced.pack(fill='x',after=advanced_button)
+        else:advanced.pack_forget()
+    text(advanced,th,'接口地址 · 完整 chat/completions 地址',small=True,muted=True).pack(anchor='w',pady=(0,6))
     endpoint=th.tk.StringVar(value=draft['endpoint'])
-    endpoint_border,endpoint_entry=th.entry(parent,endpoint)
+    endpoint_border,endpoint_entry=th.entry(advanced,endpoint)
     endpoint_border.pack(fill='x')
+    show_advanced()
     def select_provider(_event=None):
         if provider.get() == PROVIDERS['deepseek']:
             endpoint.set(DEEPSEEK['endpoint'])
             model.set(DEEPSEEK['model'])
+        show_advanced()
     provider_box.bind('<<ComboboxSelected>>',select_provider)
     def save():
         from gui.api_save import persist_api_draft
@@ -315,6 +339,12 @@ def build_preferences(parent, app):
         else:action.set(labels[p._load_config(app.root_dir).get('close_action','exit')])
     chooser.bind('<<ComboboxSelected>>',choose)
     app.close_controls=dict(variable=action,box=chooser,save=choose)
+    def refresh():
+        current=p._load_config(app.root_dir)
+        action.set(labels[current.get('close_action','exit')])
+        if launcher.autostart_supported():
+            var.set(launcher.is_autostart_enabled())
+    app.refresh_preferences=refresh
     area=section(parent,th,'首次设置')
     text(area,th,'重新打开安装后的接口填写引导；不会清空已有配置，也不会自动启用联网翻译。',
          small=True,muted=True,wraplength=820,justify='left').pack(anchor='w')
@@ -347,7 +377,7 @@ def build_settings(parent, app):
     heading(parent,app.th,'设置')
     app.updater.build(parent)
     from gui.game_resources import build
-    build(parent, app)
+    build(parent, app, inspect=False)
     build_preferences(parent,app)
 
 
@@ -364,10 +394,14 @@ class Dictionary:
         self.rows, self.selected, self.blocked = [], None, False
         self._snapshot_stamp = None
         self._snapshot = None
+        self.resources = app.game_resources
+        self.resources.inspect()
+        self._resource_state = None
         if self.state['tab'] not in {'formal', 'review', 'processed'}:
             self.state.update(tab='formal', selected=None)
         head=heading(parent,th,'词库','修改常用译文，或停用当前选中的词条。')
         self.subtitle=head.subtitle
+        self.resource_status = self.subtitle
         self.add_button=th.button(head,'＋ 添加词条',self.add,kind='primary')
         self.add_button.pack(side='right',before=head.winfo_children()[0])
         tabs=panel(parent,th);tabs.pack(fill='x')
@@ -456,7 +490,8 @@ class Dictionary:
         return tuple(stamps)
 
     def snapshot(self):
-        stamp = self.file_stamps()
+        self.resources.inspect()
+        stamp = (self.file_stamps(), self.resources.revision)
         if self._snapshot is None or stamp != self._snapshot_stamp:
             entries = store.glossary_entries(self.read(self.gpath))
             try:
@@ -468,12 +503,19 @@ class Dictionary:
                 quarantine_reason=entries.get(row['word'], {}).get('quarantine_reason', ''),
                 can_restore=not entries.get(row['word'], {}).get('quarantine_reason') and bool(
                     entries.get(row['word'], {}).get('deleted') or entries.get(row['word'], {}).get('enabled') is False))
-                for row in glossary_ops.rows(self.gpath, entries=entries, config=config)]
-            if self.file_stamps() != stamp:
+                for row in glossary_ops.rows(self.gpath, entries=entries, config=config,
+                                             official_terms=self.resources.terms)]
+            if (self.file_stamps(), self.resources.revision) != stamp:
                 raise ValueError('数据正在更新，请重新读取')
             self._snapshot = (formal, queue)
             self._snapshot_stamp = stamp
         return self._snapshot
+
+    def resources_changed(self):
+        state = (self.resources.revision, self.resources.message)
+        if state != self._resource_state:
+            self._resource_state = state
+            self.refresh()
 
     def refresh(self,*_):
         self.remember()
@@ -552,7 +594,7 @@ class Dictionary:
             self.tab_rails[name].configure(bg=C['accent'] if name==tab else C['bg'])
         if tab=='processed':self.processed_tools.pack(fill='x',pady=(10,0))
         else:self.processed_tools.pack_forget()
-        self.subtitle.configure(text={'review':'只列尚未处理的内容，在同一页核对、修改和保存。','processed':'可删除处理记录；已经加入词库的译文会保留。'}.get(tab,'修改常用译文，或停用当前选中的词条。'))
+        self.subtitle.configure(text={'review':'只列尚未处理的内容，在同一页核对、修改和保存。','processed':'可删除处理记录；已经加入词库的译文会保留。'}.get(tab,self.resources.message))
 
     def show(self,row):
         for child in self.editor.winfo_children():child.destroy()
@@ -572,6 +614,8 @@ class Dictionary:
         text(self.editor,th,source+(' · 保存将记为人工词条' if tab=='review' else ''),small=True,muted=True).pack(anchor='w',pady=(0,4))
         if row.get('api_translation') and row['api_translation']!=row.get('translation'):
             text(self.editor,th,'API 初稿：'+row['api_translation'],small=True,muted=True,wraplength=340).pack(anchor='w',pady=(0,8))
+        if row.get('previous_translation'):
+            text(self.editor,th,'上次修订：'+row['previous_translation']+'（旧结果已暂停）',small=True,muted=True,wraplength=340).pack(anchor='w',pady=(0,8))
         def show_evidence(body):
             if row.get('request_ids'):
                 text(body,th,f"真实请求 {len(row['request_ids'])} 次 · {row.get('model','历史模型未知')}",small=True,muted=True).pack(anchor='w',pady=(0,8))
@@ -593,7 +637,8 @@ class Dictionary:
             th.label(self.actions,'译文只读',font=th.font_small).pack(anchor='w')
             if tab=='processed':
                 th.button(self.actions,'删除记录',self.delete_processed).pack(fill='x',pady=(8,0))
-                th.button(self.actions,'返回待审核',lambda:self.pick('review')).pack(anchor='w',pady=(8,0))
+                th.button(self.actions,'重新审核此条',self.reopen).pack(fill='x',pady=(8,0))
+                th.button(self.actions,'查看待审核',lambda:self.pick('review')).pack(anchor='w',pady=(8,0))
         elif tab=='review':
             primary=th.button(self.actions,'确认并加入词库',lambda:self.decide('accept'),kind='primary')
             ignore=bordered_button(self.actions,th,'忽略这条',lambda:self.decide('reject'))
@@ -628,7 +673,7 @@ class Dictionary:
         self.notice=frame(self.editor,self.th);self.notice.pack(fill='x',pady=8)
         self.th.label(self.notice,text,fg=C['err'] if error else C['ok'],font=self.th.font_small,wraplength=380,justify='left').pack(anchor='w')
         if reload:self.th.button(self.notice,'重新读取，保留草稿',self.reload).pack(anchor='w',pady=4)
-        if processed:self.th.button(self.notice,'返回待审核',lambda:self.pick('review')).pack(anchor='w',pady=4)
+        if processed:self.th.button(self.notice,'查看待审核',lambda:self.pick('review')).pack(anchor='w',pady=4)
         self.app.set_status(text,C['err'] if error else C['ok'])
         if error and (reload or processed):self.disable_writes()
 
@@ -685,6 +730,23 @@ class Dictionary:
             self.message('处理记录读取异常，未删除；重新读取后再试。', error=True, reload=True)
         else:
             self.message('删除记录保存失败，记录保留，可以重试。', error=True)
+
+    def reopen(self):
+        if self.blocked or not self.selected or self.state['tab'] != 'processed':return
+        row = self.selected
+        result = self.service.reopen(row['key'], token=row['token'], formal_token=row['formal_token'])
+        if result.saved:
+            self.state['selected'] = None
+            self.pick('review')
+            self.list.choose(row['key'])
+            self.app.set_status('旧审核结果已暂停；核对后重新确认、修改或忽略',C['ok'])
+            return
+        reasons = {'review_conflict':'词条已有后续修改，未自动暂停或覆盖；请重新读取并核对。',
+                   'evidence_missing':'历史来源或显示证据不足，不能重新审核；可在正式词库手动核对修改。',
+                   'reopen_queue_write_failed':'旧正式结果已暂停，但队列未保存；请重试重新审核此条。',
+                   'formal_write_failed':'旧结果暂停未保存，未重新进入审核；请重试。'}
+        self.message(reasons.get(result.reason,'重新审核未完成；请重新读取后重试。'),error=True,
+                     reload=result.reason=='review_conflict')
 
     def decide(self,action):
         if self.blocked or not self.selected or self.state['tab']!='review':return

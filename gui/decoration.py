@@ -26,9 +26,13 @@ def city_image():
 class CityArt(tk.Canvas):
     def __init__(self, parent, th, *, title='', eyebrow='', height=86):
         self.th, self.title, self.eyebrow = th, title, eyebrow
+        # Explicit font objects keep measurement and Canvas drawing on the same
+        # DPI generation when Tk scaling changes between pages.
+        self.tag_font = tkfont.Font(root=parent, font=th.font_tag)
+        self.title_font = tkfont.Font(root=parent, font=th.font_title)
         self.title_top, self.title_line = TAG_TOP, 0
         if title:
-            tag_line, self.title_line = self._line_heights(parent, th)
+            tag_line, self.title_line = (self.tag_font.metrics('linespace'), self.title_font.metrics('linespace'))
             self.title_top = TAG_TOP + (tag_line + TAG_GAP if eyebrow else 0)
             # [!] The title font is sized in points, so its pixel height grows
             #     with the Windows display scaling, while this band was a fixed
@@ -41,15 +45,6 @@ class CityArt(tk.Canvas):
         self.photo = None
         self.bind('<Configure>', self.draw)
 
-    @staticmethod
-    def _line_heights(widget, th):
-        """Pixel line heights of the heading fonts at the current Tk scaling."""
-        try:
-            return (tkfont.Font(root=widget, font=th.font_tag).metrics('linespace'),
-                    tkfont.Font(root=widget, font=th.font_title).metrics('linespace'))
-        except Exception:
-            return 17, 33  # 100% DPI metrics, keeps the old geometry as fallback
-
     def draw(self, _event=None):
         width, height = self.winfo_width(), self.winfo_height()
         self.delete('all')
@@ -59,8 +54,8 @@ class CityArt(tk.Canvas):
             self.photo = ImageTk.PhotoImage(image, master=self)
             self.create_image(0, 0, image=self.photo, anchor='nw')
         if self.title:
-            self.create_text(2, TAG_TOP, text=self.eyebrow, font=self.th.font_tag,
+            self.create_text(2, TAG_TOP, text=self.eyebrow, font=self.tag_font,
                              fill=C['accent'], anchor='nw')
-            self.create_text(0, self.title_top, text=self.title, font=self.th.font_title,
+            self.create_text(0, self.title_top, text=self.title, font=self.title_font,
                              fill=C['fg'], anchor='nw')
             self.create_line(2, height-2, 74, height-2, fill=C['accent'], width=3)

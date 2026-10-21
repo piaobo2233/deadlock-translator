@@ -14,12 +14,17 @@ def run():
     if getattr(sys, 'frozen', False):
         from app.platform.update_install import mutex_exists, UPDATE_MUTEX
         if mutex_exists(UPDATE_MUTEX):
-            if sys.argv[1:2] != ['--ocr-worker']:
+            if sys.argv[1:2] not in (['--ocr-worker'], ['--inspect-game-resources']):
                 import ctypes
                 ctypes.windll.user32.MessageBoxW(None, '锁语正在更新，请稍后重新打开。', '锁语更新', 0)
             return 1
         from app.platform.single_instance import retain_install_guard
         retain_install_guard()
+    if sys.argv[1:2] == ['--inspect-game-resources']:
+        if len(sys.argv) != 3:
+            raise SystemExit('Invalid game resource inspection arguments')
+        from app.game_data.service import inspection_worker
+        return inspection_worker(sys.argv[2])
     # The resident helper must keep stdout as its JSON protocol, without
     # starting a second translator, creating user data or installing a GUI.
     if sys.argv[1:2] == ['--ocr-worker']:

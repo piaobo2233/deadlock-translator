@@ -36,6 +36,7 @@
 
 import os
 import traceback
+import time
 
 from gui.theme import COLORS, GAP, PAD, Theme
 from gui.lifecycle import PageCallbacks
@@ -107,6 +108,72 @@ class App:
         self._build_chrome()
         from gui.updates import Updater
         self.updater = Updater(self)
+        # Settings has window-owned workers and no page heartbeat. Construct its
+        # native widgets once, before mapping, instead of recreating them on click.
+        self._settings_page = None
+        self._settings_error = None
+        if 'settings' in _PAGES:
+            try:
+                self._prepare_settings()
+            except Exception as exc:
+                # Report on opening Settings through the visible error/retry path.
+                self._settings_error = exc
+
+    def _prepare_settings(self):
+        if self._settings_page is not None:
+            return
+        frame = self.th.tk.Frame(self.canvas, bg=COLORS['panel'], padx=28, pady=24)
+        frame.bind('<Configure>', self._page_configure)
+        try:
+            _PAGES['settings']['builder'](frame, self)
+        except Exception:
+            frame.destroy()
+            raise
+        self._settings_page = frame
+        self._guard_settings_focus(frame)
+        self._settings_resources = self.game_resources.controls
+
+    def _guard_settings_focus(self, parent):
+        # Cached settings must not take focus while another page is active.
+        for child in parent.winfo_children():
+            if 'takefocus' in child.keys():
+                original = str(child.cget('takefocus'))
+                if original != '0':
+                    def eligible(name, original=original):
+                        if self.current != 'settings':
+                            return 0
+                        if original in ('', '1'):
+                            return original
+                        return self.root.tk.call('eval', original, name)
+                    child.configure(takefocus=eligible)
+            self._guard_settings_focus(child)
+
+    def _fit_page_background(self):
+        # A separate opaque background covers inactive controls below short
+        # pages. Leave page heights natural so dynamic contents still resize.
+        heights = [self.canvas.winfo_height(), self._content_page.winfo_reqheight()]
+        if self._settings_page is not None:
+            heights.append(self._settings_page.winfo_reqheight())
+        self.canvas.itemconfigure(self._background_win, height=max(heights))
+
+    def _show_page(self, settings=False):
+        self.page = self._settings_page if settings else self._content_page
+        if not settings and self._settings_page is not None:
+            focused = str(self.root.tk.call('focus'))
+            if focused.startswith(str(self._settings_page) + '.'):
+                target = self.nav_buttons.get(self.current)
+                (target['button'] if target else self.canvas).focus_set()
+        # One Canvas window owns the visible page. Replacing its widget unmaps
+        # the outgoing subtree before exposing the next, instead of keeping two
+        # native pages mapped and relying on their repaint/stacking order.
+        if self.canvas.itemcget(self._win, 'window') != str(self.page):
+            self.canvas.itemconfigure(self._win, window=self.page)
+        self._page_background.lift()
+        self.page.lift()
+
+    def _clear_page(self):
+        for child in self._content_page.winfo_children():
+            child.destroy()
 
     def _on_destroy(self, event):
         if event.widget is self.root:
@@ -211,15 +278,26 @@ class App:
         content=th.tk.Frame(self.body,bg=c['panel']);content.pack(side='left',fill='both',expand=True)
         self.canvas=th.tk.Canvas(content,bg=c['panel'],highlightthickness=0)
         self.scroll=th.ttk.Scrollbar(content,orient='vertical',command=self.canvas.yview)
+        # Keep the native scrollbar mapped. Showing it on entering a long page
+        # both shrinks the viewport and triggers costly native/theme redraws.
+        self.scroll.pack(side='right',fill='y')
+        self.scroll.state(['disabled'])
         self.canvas.configure(yscrollcommand=self.scroll.set)
+        self._page_background=th.tk.Frame(self.canvas,bg=c['panel'])
+        self._background_win=self.canvas.create_window((0,0),window=self._page_background,anchor='nw')
         self.page=th.tk.Frame(self.canvas,bg=c['panel'],padx=28,pady=24)
+        self._content_page=self.page
         self._win=self.canvas.create_window((0,0),window=self.page,anchor='nw')
         self.canvas.pack(side='left',fill='both',expand=True)
         self._scrolling=False
         def inner(_e=None):
-            self.canvas.configure(scrollregion=self.canvas.bbox('all'));self._update_scroll()
+            self._fit_page_background()
+            self.canvas.configure(scrollregion=self.canvas.bbox(self._win));self._update_scroll()
         def viewport(event):
-            self.canvas.itemconfigure(self._win,width=event.width);self._update_scroll()
+            for item in (self._background_win,self._win):
+                self.canvas.itemconfigure(item,width=event.width)
+            inner()
+        self._page_configure=inner
         self.page.bind('<Configure>',inner);self.canvas.bind('<Configure>',viewport)
         self.canvas.bind_all('<MouseWheel>',self._wheel)
         th.hairline(self.root)
@@ -293,6 +371,7 @@ class App:
         if key == self.current and not self._page_failed:
             return True
 
+        requested = time.perf_counter()
         dictionary = getattr(self, 'dictionary', None)
         if self.current == 'send':
             self.composer['remember']()
@@ -308,16 +387,34 @@ class App:
         self._page_failed = False
         self._refresh_nav()
 
-        # [!] 清的是 **self.page**（内容区），不是 self.body ——
-        #     body 里装的是画布和滚动条，删了它们整个导航就废了。
         self.page_callbacks.cancel_all()
-        for child in self.page.winfo_children():
-            child.destroy()
+        started = time.perf_counter()
+        if key == 'settings' and self._settings_page is not None:
+            # Detach the outgoing native subtree before destroying its controls.
+            self._show_page(True)
+        self._clear_page()
+        destroyed = time.perf_counter()
         try:
-            spec["builder"](self.page, self)
+            self.page = self._content_page
+            if key == 'settings':
+                if self._settings_error is not None:
+                    error, self._settings_error = self._settings_error, None
+                    raise error
+                self._prepare_settings()
+                self.page = self._settings_page
+                self.refresh_preferences()
+                self.updater.repaint()
+                self.game_resources.controls = self._settings_resources
+                self.game_resources.repaint()
+                self.game_resources.inspect()
+            else:
+                spec["builder"](self.page, self)
+            self._show_page(key=='settings')
         except Exception as exc:                      # 页面自己炸了
             self._fail(key, exc)
             return False
+
+        built = time.perf_counter()
 
         # 标题 / 返回按钮 / 窗口尺寸
         is_home = (key == "home")
@@ -329,6 +426,17 @@ class App:
             self.back_btn.pack_forget()
 
         self._resize(spec)
+        elapsed = time.perf_counter()
+        from app.runtime.diagnostics import record
+        def settled():
+            if self.current == key and not self._page_failed:
+                # Tk's idle milestone is separate from callback time and does
+                # not claim that Windows has presented the final screen pixels.
+                record(self.root_dir, 'navigation', 'completed', page=key, code='layout',
+                    destroy_ms=(destroyed-started)*1000, build_ms=(built-destroyed)*1000,
+                    layout_ms=(elapsed-built)*1000, elapsed_ms=(elapsed-requested)*1000,
+                    idle_ms=(time.perf_counter()-requested)*1000)
+        self.window_callbacks.schedule('idle', settled)
         return True
 
     def watch_application_fields(self, values, prefix=''):
@@ -393,17 +501,17 @@ class App:
             if scrolling == self._scrolling:
                 return
             self._scrolling = scrolling
-            if scrolling:
-                self.scroll.pack(side="right", fill="y", before=self.canvas)
-            else:
-                self.scroll.pack_forget()
+            self.scroll.state(['!disabled'] if scrolling else ['disabled'])
+            if not scrolling:
                 self.canvas.yview_moveto(0)
         except self.th.tk.TclError:
             pass
 
     def _resize(self, spec):
         """Refresh content geometry without resetting the user's window size."""
-        self.root.update_idletasks()
+        # Configure handlers already settle the canvas after Tk lays it out.
+        # Flushing idle work here forces all native redraws inside navigation
+        # (455 ms/call in the settings baseline) and re-enters page callbacks.
         self._update_scroll()
 
     def refresh_layout(self):
@@ -445,8 +553,8 @@ class App:
         if not isinstance(exc, UnknownPage):
             traceback.print_exc()
         try:
-            for child in self.page.winfo_children():
-                child.destroy()
+            self._clear_page()
+            self._show_page()
             self.th.label(self.page, detail, bg=COLORS["bg"],
                           fg=COLORS["err"], font=self.th.font_small,
                           wraplength=400, justify="left").pack(anchor="w")

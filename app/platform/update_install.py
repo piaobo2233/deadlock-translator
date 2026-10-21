@@ -189,27 +189,37 @@ def read_job(job_path):
 
 def apply(job_path):
     path, job, root = read_job(job_path)
+    from app.runtime.diagnostics import record
+    record(root, 'update', 'started', code='verify')
     directory, previous = path.parent, path.parent / 'previous'
     setup = Path(job['setup'])
     deadline = time.monotonic() + 30
     while not (directory / 'armed.json').is_file():
         if time.monotonic() > deadline:
+            record(root, 'update', 'failed', code='verify')
             raise UpdateError('更新未获启动确认，旧程序未更改')
         time.sleep(.1)
-    wait_for_exit(job['processes'])
+    try:
+        wait_for_exit(job['processes'])
+    except Exception:
+        record(root, 'update', 'failed', code='verify')
+        raise
     if not store.atomic_write_json(path, dict(job, status='applying')):
+        record(root, 'update', 'failed', code='save')
         raise UpdateError('无法登记更新状态，未执行安装')
     data = Path(store.data_dir(root))
     if data.exists() and any(data.iterdir()):
         backup = store.backup(root, note='软件更新前的备份；请勿自动回退付费请求记录',
                               dest_dir=str(directory / 'data-backup'))
         if not backup:
+            record(root, 'update', 'failed', code='save')
             raise UpdateError('更新前数据备份失败，未执行安装')
     else:
         backup = ''
     program_files(previous)
     # No child may outlive this installer wait and race with recovery.
     try:
+        record(root, 'update', 'started', code='install')
         result = subprocess.run([str(setup), '/VERYSILENT', '/SUPPRESSMSGBOXES', '/SP-',
                                  '/NORESTART', '/DIR=' + str(root), '/LOG=' + str(directory / 'install.log')],
                                 cwd=directory, creationflags=subprocess.CREATE_NO_WINDOW)
@@ -219,8 +229,10 @@ def apply(job_path):
         if (root / 'VERSION').read_text(encoding='utf-8-sig').strip() != job['version']:
             raise UpdateError('安装后的版本不匹配')
     except Exception as exc:
+        record(root, 'update', 'failed', code='install')
         restore_program(root, previous, directory)
         raise UpdateError('安装未完成，已恢复旧程序；个人数据未回退') from exc
+    record(root, 'update', 'completed', code='install')
     return dict(status='success', version=job['version'], backup=backup,
                 message='更新完成；个人数据已保留。可在接收翻译页启动助手。')
 

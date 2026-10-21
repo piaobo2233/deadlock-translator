@@ -17,6 +17,7 @@ WINDOWS_PUBLIC_TESTS = (
     'test_onboarding_ui', 'test_usage_dashboard', 'test_panel_instance', 'test_receive_send',
     'test_latency_acceptance', 'test_release_gate', 'test_terms_optional',
     'test_game_resources', 'test_msys2_ocr',
+    'test_region_calibration', 'test_region_editor',
 )
 
 

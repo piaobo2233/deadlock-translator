@@ -12,6 +12,34 @@ from gui import region
 
 
 class RegionGeometryTests(unittest.TestCase):
+    def test_1610_recorded_edge_bubbles_are_fully_inside_default_region(self):
+        # Physical geometry measured in the supplied 2304x1440 recording.
+        bubbles = ((260, 314, 278, 60), (1683, 261, 259, 95), (1873, 190, 119, 57))
+        for size in ((2304,1440), (1920,1200), (2560,1600)):
+            scale = size[1] / 1440
+            rect = resolve_region(dict(capture_preset='auto'), size)
+            for x,y,w,h in bubbles:
+                with self.subTest(size=size, bubble=(x,y,w,h)):
+                    self.assertLessEqual(rect[0], round(x*scale))
+                    self.assertLessEqual(rect[1], round(y*scale))
+                    self.assertGreaterEqual(rect[2], round((x+w)*scale))
+                    self.assertGreaterEqual(rect[3], round((y+h)*scale))
+            self.assertEqual(resolve_region(dict(capture_preset='2560x1440'),size), rect)
+
+    def test_1610_region_source_records_calibration_without_claiming_signoff(self):
+        from app.recognition.region import region_details, experimental_aspect
+        detail = region_details(dict(capture_preset='auto'),(2304,1440))
+        self.assertEqual(detail['region_source'],'recording16_10')
+        self.assertEqual(detail['region'],[211,190,2092,766])
+        self.assertIn('待',detail['verification'])
+        self.assertTrue(experimental_aspect((2304,1440)))
+        legacy = region_details(dict(capture_preset='auto'),(2560,1440))
+        self.assertEqual(legacy['region'],[339,190,2220,766])
+        self.assertEqual(legacy['region_source'],'reference16_9')
+        manual = dict(capture_region=dict(rect=[50,60,900,600],screen=[2304,1440]))
+        self.assertEqual(resolve_region(manual,(2304,1440)),(50,60,900,600))
+        self.assertEqual(region_details(manual,(2304,1440))['region_source'],'saved_manual')
+
     def test_config_write_is_not_delayed_by_the_poll_cache(self):
         config=dict(capture_region={})
         stamp=[1]
