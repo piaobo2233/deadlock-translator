@@ -1,6 +1,6 @@
 # 锁语 · LockLingo
 
-为《异锁》（Deadlock）玩家提供聊天翻译与跨语言回复的 Windows 桌面工具。
+锁语是面向《异锁》（Deadlock）的 Windows 聊天翻译工具，通过本机 OCR 读取聊天；本地未命中时，可按用户设置调用翻译服务。中文译英由用户主动开启，译文写入剪贴板后自行粘贴和发送。
 
 [![公开源码检查](https://github.com/piaobo2233/deadlock-translator/actions/workflows/public-checks.yml/badge.svg?branch=main)](https://github.com/piaobo2233/deadlock-translator/actions/workflows/public-checks.yml)
 
@@ -19,7 +19,7 @@
 | 词库与审核 | 编辑、导入导出、审核及重新审核；后台校验游戏资料，切页保留草稿。 |
 | 配置与用量 | 自定义兼容接口、保存与生效状态、连接测试、请求明细与费用趋势。 |
 
-1.0 还改进了数字聊天、输入动画过滤、16:10 参考范围、长文阅读位置、设置与词库响应，以及安装目录选择和更新流程。详见[主要功能名单](docs/releases/v1.0.0-features.md)和[发布说明](docs/releases/v1.0.0.md)。
+完整功能及版本变化见[功能清单](docs/releases/v1.0.0-features.md)和[发布说明](docs/releases/v1.0.0.md)。
 
 ## 开始使用
 
@@ -34,7 +34,7 @@
 
 <img src="docs/assets/deadlock-ui/receive.png" width="900" alt="锁语接收翻译页面">
 
-历史版本的真实 Tk 界面与隔离演示数据，仅展示界面风格；当前功能以 1.0.0 程序及说明为准。
+历史版本的真实 Tk 界面，使用隔离演示数据；精确截图版本待核实。此图展示界面风格，当前操作以 1.0.0 说明为准。
 
 ## 数据与适用范围
 
@@ -44,8 +44,8 @@ OCR 在本机执行；启用 API 后，待翻译文字发送给用户配置的�
 
 [测试状态](docs/TESTING.md) · [个人区域操作](docs/guides/个人识别区域.md) · [收发说明](docs/guides/接收与中文转英文.md) · [开发与构建](docs/DEVELOPMENT.md)
 
-## 开源与致谢
+## 许可、致谢与反馈
 
-原创源码采用 [MIT](LICENSE)。感谢 Tesseract OCR、tessdata_fast、OpenCV、NumPy、Pillow、Python / Tcl/Tk、ttkbootstrap、pystray 与 PyInstaller 等项目。第三方许可及对应源码安排见[第三方清单](docs/THIRD-PARTY-NOTICES.md)和[技术致谢](docs/ACKNOWLEDGEMENTS.md)。
+原创源码采用 [MIT](LICENSE)。感谢 Tesseract OCR、tessdata_fast、OpenCV、NumPy、Pillow、Python / Tcl/Tk、ttkbootstrap、pystray 与 PyInstaller 等项目。第三方组件、模型、字体和引用实现分别适用其原有条款；许可、对应源码及待核实项见[第三方清单](docs/THIRD-PARTY-NOTICES.md)和[技术致谢](docs/ACKNOWLEDGEMENTS.md)。
 
-本项目是独立社区工具，与 Valve 无关联。《异锁》（Deadlock）及相关内容归原权利人，见[项目与素材说明](docs/PROJECT-NOTICE.md)。
+感谢所使用开源项目的作者、维护者、贡献者及反馈问题的玩家。本项目由社区独立维护，非 Valve 官方产品。《异锁》（Deadlock）及相关内容归原权利人，见[项目与素材说明](docs/PROJECT-NOTICE.md)。问题反馈请使用 [Issues](https://github.com/piaobo2233/deadlock-translator/issues/new/choose)，安全问题见[私密反馈说明](.github/SECURITY.md)。

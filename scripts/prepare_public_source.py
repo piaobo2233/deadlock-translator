@@ -24,6 +24,7 @@ TEMPLATES = {
     'docs/TESTING.md': 'TESTING-public.md',
     'docs/CHANGELOG.md': 'CHANGELOG-public.md',
     'docs/README.md': 'INDEX-public.md',
+    'docs/CONTRIBUTING.md': 'CONTRIBUTING-public.md',
 }
 PRIVATE_PARTS = {'data', 'backups', '.git', '.temp', 'truth', 'truth_candidates', 'archive',
                  'plans', 'reviews', '__pycache__'}
@@ -62,7 +63,10 @@ def public_files(base):
         'docs/releases/game-data-audit.json',
         'docs/guides/本机游戏资料.md', 'docs/releases/v1.0.0-beta.1.md',
         'docs/releases/ocr-msys2-packages.lock.json', 'docs/releases/ocr-msys2-sources.json',
-        'docs/PROJECT-NOTICE.md', 'docs/releases/README.md', 'tools/extract_game_terms.py',
+        'docs/PROJECT-NOTICE.md', 'docs/ACKNOWLEDGEMENTS.md',
+        'docs/releases/third-party-history.md', 'docs/releases/v1.0.0-material-review.md',
+        'docs/releases/distribution-audit-history.md',
+        'docs/releases/README.md', 'tools/extract_game_terms.py',
         'docs/releases/game-data-validation.md',
         'verify/game_resources_smoke.py',
         'docs/guides/首版测试与分享.md', 'docs/guides/接收与中文转英文.md',

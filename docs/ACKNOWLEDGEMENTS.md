@@ -1,22 +1,19 @@
 # 技术致谢
 
-感谢以下项目的作者、维护者和贡献者。本页说明技术用途；第三方原许可、已发布包版本及核对边界见[第三方清单](THIRD-PARTY-NOTICES.md)。
+感谢以下项目的作者、维护者和贡献者，以及提供可复现问题和使用反馈的玩家。用途与许可分别记录；本页不替代随包许可、版权声明、NOTICE 或对应源码。
 
-| 项目 | 在本工具中的作用 |
+| 项目 | 在锁语中的用途 |
 | --- | --- |
-| [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) | 本机文字识别；常驻辅助进程使用已安装的 C API，另有命令行后备路径 |
-| [tessdata_fast](https://github.com/tesseract-ocr/tessdata_fast) | 随源码和测试包提供的 OCR 模型，保留固定提交与逐文件摘要 |
-| [pytesseract](https://github.com/madmaze/pytesseract) | Python 侧 Tesseract 接口 |
-| [OpenCV / opencv-python](https://github.com/opencv/opencv-python) | 气泡与正文检测、图像预处理 |
-| [NumPy](https://numpy.org/) | 图像数组与数值运算 |
-| [Pillow](https://python-pillow.org/) | 截图采集与图像处理 |
-| [Python](https://www.python.org/)、[Tcl](https://github.com/tcltk/tcl)、[Tk](https://github.com/tcltk/tk) | 运行环境、Tkinter 界面与外部浮窗 |
-| [ttkbootstrap](https://github.com/israel-dryer/ttkbootstrap) | 可选界面主题与控件样式 |
-| [Bootstrap Icons](https://github.com/twbs/icons) | ttkbootstrap 随包附带的图标字体资源 |
-| [PyInstaller](https://pyinstaller.org/) | Windows 目录模式打包 |
-| [packaging](https://github.com/pypa/packaging) | 所收集依赖使用的版本处理组件 |
-| [pystray](https://github.com/moses-palmer/pystray) | 可选源码托盘路径；test.3 下载包未打包此组件 |
+| [Tesseract OCR](https://github.com/tesseract-ocr/tesseract)、[tessdata_fast](https://github.com/tesseract-ocr/tessdata_fast)、[Leptonica](https://github.com/DanBloomberg/leptonica) | 本机 OCR、识别模型与 OCR 图像处理 |
+| [pytesseract](https://github.com/madmaze/pytesseract) | Python OCR 接口 |
+| [OpenCV / opencv-python](https://github.com/opencv/opencv-python)、[NumPy](https://github.com/numpy/numpy)、[Pillow](https://github.com/python-pillow/Pillow) | 画面检测、数组运算、截图及图像处理 |
+| [Python](https://www.python.org/)、[Tcl/Tk](https://www.tcl-lang.org/) | 运行环境、界面和外部浮窗 |
+| [ttkbootstrap](https://github.com/israel-dryer/ttkbootstrap)、[Bootstrap Icons](https://github.com/twbs/icons) | 主题控件与图标字体 |
+| [pystray](https://github.com/moses-palmer/pystray)、[six](https://github.com/benjaminp/six)、[packaging](https://github.com/pypa/packaging) | 系统托盘、兼容辅助和版本处理 |
+| [ValveResourceFormat](https://github.com/ValveResourceFormat/ValveResourceFormat/tree/73f5ee5a02531f946b5f3e83dc79b264097cf8d3) | 本机 VPK/KV3 读取实现的参考与适配来源 |
+| [MSYS2](https://www.msys2.org/) 及其上游组件 | OCR 固定二进制包、源码包、构建配方和许可材料 |
+| [PyInstaller](https://pyinstaller.org/)、[Inno Setup](https://jrsoftware.org/isinfo.php) | Windows 冻结包和安装器构建 |
 
-感谢反馈可复现问题的玩家。引用外部代码、算法或素材时，应提供能定位到原作者、原文或原始提交的链接，并保留其声明；本页不将依赖项目或服务商列为本工具的合作方。
+具体版本、原作者声明、许可与源码获取方式见[第三方说明](THIRD-PARTY-NOTICES.md)。游戏内容及图片来源见[项目与素材说明](PROJECT-NOTICE.md)。
 
-自带 API 预设仅用于连接用户自行选择的服务，不代表服务商对本项目的背书。本项目主要介绍英文聊天场景，不用未实测语言或未来性能目标作为效果宣传。
+本项目由社区独立维护，非 Valve 官方产品。API 预设用于连接用户选择的服务，不表示上游项目或服务商对锁语的认可、合作或背书。
