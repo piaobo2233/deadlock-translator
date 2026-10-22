@@ -1,4 +1,11 @@
 """UI decisions exercised through real renderer/config/hotkey boundaries."""
+
+import gui.overlay as overlay_ui
+
+import app.recognition.live as live_state
+
+import app.config.service as config_service
+import app.platform.game_fonts as game_fonts
 import contextlib
 import ctypes
 import io
@@ -9,7 +16,6 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-import app.main as dt
 from app.config.defaults import default_config, RETIRED_UI_KEYS
 from app.config.repository import ConfigRepository
 from app.config.specification import BY_KEY
@@ -62,7 +68,7 @@ class UiDecisionTests(unittest.TestCase):
         messages=[DisplayMessage('','original english','中文译文','all',1,None,1),
                   DisplayMessage('','another original','reason detail','all',2,None,2,
                                  successful=False,reason_code='pending')]
-        with patch.object(dt,'live_box',return_value=(100,200,200,35)):
+        with patch.object(live_state,'live_box',return_value=(100,200,200,35)):
             view.render(messages)
         texts=[call.kwargs.get('text','') for call in view.canvas.create_text.call_args_list]
         self.assertIn('中文译文',texts)
@@ -70,9 +76,9 @@ class UiDecisionTests(unittest.TestCase):
         self.assertNotIn('original english',texts)
         self.assertFalse(any('拖动' in text or '保存' in text for text in texts))
         self.assertEqual(view._draw_bubble.call_count,1)
-        self.assertFalse(hasattr(dt.Overlay,'set_click_through'))
-        self.assertFalse(hasattr(dt.Overlay,'_drag_move'))
-        self.assertFalse(hasattr(dt.Overlay,'_enter_settings'))
+        self.assertFalse(hasattr(overlay_ui.Overlay,'set_click_through'))
+        self.assertFalse(hasattr(overlay_ui.Overlay,'_drag_move'))
+        self.assertFalse(hasattr(overlay_ui.Overlay,'_enter_settings'))
 
     def test_unassociated_translation_and_failure_notice_never_draw_game_bubbles(self):
         view=overlay();view._notice=FailureNotice('visual_capture','diagnostic detail')
@@ -86,7 +92,7 @@ class UiDecisionTests(unittest.TestCase):
         self.assertIsNone(frame.entries[0].rect)
 
     def test_mandatory_styles_preserve_other_bits_and_have_no_toggle(self):
-        view=dt.Overlay.__new__(dt.Overlay)
+        view=overlay_ui.Overlay.__new__(overlay_ui.Overlay)
         view.user32=Mock();view._hwnd=lambda:123
         previous=0x8|0x100|0x400
         view.user32.GetWindowLongW.return_value=previous
@@ -98,24 +104,24 @@ class UiDecisionTests(unittest.TestCase):
             self.assertEqual(style&previous,previous)
 
     def test_hotkeys_are_removed_including_poll_registration(self):
-        self.assertFalse(hasattr(dt.Overlay, '_poll_hotkeys'))
-        self.assertFalse(hasattr(dt.Overlay, '_key_down'))
+        self.assertFalse(hasattr(overlay_ui.Overlay, '_poll_hotkeys'))
+        self.assertFalse(hasattr(overlay_ui.Overlay, '_key_down'))
         import inspect
-        self.assertNotIn('_poll_hotkeys', inspect.getsource(dt.Overlay.__init__))
+        self.assertNotIn('_poll_hotkeys', inspect.getsource(overlay_ui.Overlay.__init__))
 
     def test_current_message_limit_refresh_uses_live_history_not_old_last_messages(self):
         view=overlay();view.config={'max_messages':6};view.font_size=15;view._build_fonts=Mock()
         current=[DisplayMessage('','en'+str(i),'中文'+str(i),'all',i,None,i+1) for i in range(3)]
         view._last_messages=[current[0]];view._current_messages=lambda:current
         report={}
-        with patch.object(dt,'live_box',side_effect=lambda bid:(100,100+bid*100,200,35)):
-            self.assertIn('font_size',dt.apply_live_config({'font_size':20},overlay=view,report=report))
+        with patch.object(live_state,'live_box',side_effect=lambda bid:(100,100+bid*100,200,35)):
+            self.assertIn('font_size',config_service.apply_live_config({'font_size':20},overlay=view,report=report))
         texts=[call.kwargs.get('text','') for call in view.canvas.create_text.call_args_list]
         self.assertTrue(all('中文'+str(i) in texts for i in range(3)))
         self.assertEqual(report['font_size']['state'],'applied')
 
     def test_shared_tray_and_q_shutdown_preserves_window_when_save_fails(self):
-        view=dt.Overlay.__new__(dt.Overlay)
+        view=overlay_ui.Overlay.__new__(overlay_ui.Overlay)
         view.root=Mock();view.on_exit=Mock(side_effect=OSError('save failed'))
         with self.assertRaises(OSError):
             view.close_assistant()
@@ -130,7 +136,7 @@ class UiDecisionTests(unittest.TestCase):
         view=Mock();view.config={'fade_seconds':10,'fade_extension':7}
         view._last_messages=[]
         before=list(view._last_messages)
-        applied=dt.apply_live_config({'fade_seconds':20,'fade_extension':9},overlay=view)
+        applied=config_service.apply_live_config({'fade_seconds':20,'fade_extension':9},overlay=view)
         self.assertEqual(applied,[])
         view.render.assert_not_called()
         self.assertEqual(view._last_messages,before)
@@ -140,12 +146,12 @@ class UiDecisionTests(unittest.TestCase):
         view.render.side_effect=RuntimeError('private-detail')
         report={}
         with contextlib.redirect_stdout(io.StringIO()) as output:
-            applied=dt.apply_live_config({'font_size':22},overlay=view,report=report)
+            applied=config_service.apply_live_config({'font_size':22},overlay=view,report=report)
         self.assertNotIn('font_size',applied)
         self.assertEqual(report['font_size']['state'],'failed')
         self.assertNotIn('private-detail',output.getvalue())
         view.render.side_effect=None
-        dt.apply_live_config({'font_size':22},overlay=view,report=report)
+        config_service.apply_live_config({'font_size':22},overlay=view,report=report)
         self.assertEqual(report['font_size']['state'],'applied')
 
     def test_application_confirmation_is_bound_to_current_process_session_and_value(self):
@@ -173,14 +179,14 @@ class UiDecisionTests(unittest.TestCase):
         view._build_fonts.side_effect=broken_fonts
         report={}
         with contextlib.redirect_stdout(io.StringIO()):
-            dt.apply_live_config({'font_size':22},overlay=view,report=report)
+            config_service.apply_live_config({'font_size':22},overlay=view,report=report)
         self.assertEqual(report['font_size']['state'],'failed')
         self.assertEqual(view.font_size,15)
         self.assertIs(view.font_text,old_font)
-        dt.merge_disk_into_memory(view.config,{'font_size':22})
+        config_service.merge_disk_into_memory(view.config,{'font_size':22})
         self.assertEqual(view.config['font_size'],22)
         view._build_fonts.side_effect=None
-        dt.apply_live_config({'font_size':22},overlay=view,report=report)
+        config_service.apply_live_config({'font_size':22},overlay=view,report=report)
         self.assertEqual(view.font_size,22)
         self.assertEqual(view._build_fonts.call_count,2)
         self.assertEqual(report['font_size']['state'],'applied')
@@ -204,8 +210,8 @@ class NativeOverlayStyleTests(unittest.TestCase):
         probe.update();probe.focus_force();probe.update()
         api=ctypes.windll.user32
         before=api.GetForegroundWindow()
-        with patch.object(dt,'register_game_font',return_value=[]):
-            view=dt.Overlay(dict(default_config(),show_original=True,position=[.3,.9],auto_settings=True,hold_key='x'))
+        with patch.object(game_fonts,'register_game_font',return_value=[]):
+            view=overlay_ui.Overlay(dict(default_config(),show_original=True,position=[.3,.9],auto_settings=True,hold_key='x'))
         try:
             required=view.WS_EX_LAYERED|view.WS_EX_TRANSPARENT|view.WS_EX_TOOLWINDOW|view.WS_EX_NOACTIVATE
             for size in ('200x40+100+100','300x60+110+110'):

@@ -14,6 +14,10 @@
 这个模块**不 import 任何界面库**，可以脱离窗口测试，也方便命令行用。
 """
 
+import app.platform.desktop as desktop
+import app.platform.game_fonts as game_fonts
+import app.translation.local_glossary as local_glossary
+
 import os
 import platform
 import shutil
@@ -136,8 +140,7 @@ def run_checks(config: dict = None, root_dir: str = "") -> list:
     # ---- 3. 游戏安装 ----
     game_dir = ""
     try:
-        import app.main as dt
-        game_dir = dt.resolve_game_dir(config or {})
+        game_dir = game_fonts.resolve_game_dir(config or {})
     except Exception:
         game_dir = ""
     exists = bool(game_dir) and os.path.isdir(game_dir)
@@ -152,8 +155,8 @@ def run_checks(config: dict = None, root_dir: str = "") -> list:
     key = str((config or {}).get("api_key") or "")
     masked = ""
     try:
-        import app.main as dt2
-        masked = dt2.mask_key(key)
+        from app.platform.logging import mask_key
+        masked = mask_key(key)
     except Exception:
         masked = "****" if key else "（未配置）"
     out.append(CheckResult(
@@ -165,8 +168,7 @@ def run_checks(config: dict = None, root_dir: str = "") -> list:
     # ---- 5. 词库 ----
     glossary_n = 0
     try:
-        import app.main as dt3
-        glossary_n = len(dt3.load_glossary(store.data_path(root_dir, "glossary.json")))
+        glossary_n = len(local_glossary.load_glossary(store.data_path(root_dir, "glossary.json")))
     except Exception:
         pass
     out.append(CheckResult(
@@ -209,8 +211,7 @@ def run_checks(config: dict = None, root_dir: str = "") -> list:
     # ---- 8. 单实例 ----
     running = False
     try:
-        import app.main as dt4
-        running = dt4.translator_is_running()
+        running = desktop.translator_is_running()
     except Exception:
         pass
     out.append(CheckResult(

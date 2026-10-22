@@ -1,4 +1,13 @@
 """Receive deadlines, language boundaries, displayed review and manual send isolation."""
+
+import app.cli as cli
+import app.recognition.selection as recognition_selection_module
+import gui.overlay as overlay_ui
+import time
+
+import app.recognition.capture as recognition_capture
+
+import app.translation.policy as chat_policy
 from dataclasses import replace
 from pathlib import Path
 import tempfile
@@ -7,7 +16,6 @@ import unittest
 from unittest.mock import Mock, patch
 
 import numpy as np
-import app.main as dt
 from app.recognition.languages import contains_han
 from app.recognition.messages import ConfirmedMessage
 from app.recognition.tracking import Consensus
@@ -65,15 +73,15 @@ class ReceiveTests(unittest.TestCase):
                       'où êtes vous', 'não agora', 'danke', 'gracias', 'wait for me',
                       '一緒に攻撃しよう', 'まって', '같이 공격해요', 'Ждите меня',
                       '中 push together', 'push 中'):
-            self.assertTrue(dt.is_chat_text(value, {}), value)
-            selection = dt.select_candidate([('body7', value)], {}, dt.recognition_rules())
+            self.assertTrue(chat_policy.is_chat_text(value, {}), value)
+            selection = recognition_selection_module.select_candidate([('body7', value)], {}, recognition_capture.recognition_rules())
             self.assertEqual(selection.text, value)
-            self.assertEqual(dt._translation_quality_report(value, '一起行动', {})['reason'], '')
+            self.assertEqual(chat_policy._translation_quality_report(value, '一起行动', {})['reason'], '')
         for value in ('等我一起推', 'a𠀀b', '我们在 A 点', '按 O 键', '我们在 mid', '玩 Deadlock', '用 Haze Seven'):
             self.assertTrue(contains_han(value))
-            self.assertFalse(dt.is_chat_text(value, {}))
+            self.assertFalse(chat_policy.is_chat_text(value, {}))
         for value in ('O0O0 O00', 'eeeeeeee rrrrrrr', 'ああああああ', 'ㅋㅋㅋㅋㅋㅋ'):
-            self.assertFalse(dt.is_chat_text(value, {}), value)
+            self.assertFalse(chat_policy.is_chat_text(value, {}), value)
 
     def test_source_preserves_accents_word_boundaries_and_numbers(self):
         def read(value, expected):
@@ -116,9 +124,9 @@ class ReceiveTests(unittest.TestCase):
         self.assertFalse(cache.skip(cache.key(pixels,(0,0,50,20)),1.4))
 
     def test_deadline_applies_to_first_display_only(self):
-        overlay = object.__new__(dt.Overlay)
+        overlay = object.__new__(overlay_ui.Overlay)
         msg = DisplayMessage('','hello','你好','all',0,(0,0,100,50),1,display_deadline=4.)
-        with patch.object(dt.time,'monotonic',return_value=4.1):
+        with patch.object(time,'monotonic',return_value=4.1):
             self.assertFalse(overlay._within_display_deadline(msg))
             overlay._drawn_on_time = {(1,0):True}
             self.assertTrue(overlay._within_display_deadline(msg))
@@ -160,8 +168,8 @@ class StorageAndManualTests(unittest.TestCase):
 
     def test_only_drawn_qualified_candidate_persists_across_sessions(self):
         queue = ReviewQueue(self.root/'pending.json',self.root/'glossary.json')
-        good = dt._translation_quality_report('help me','帮帮我',{})
-        bad = dt._translation_quality_report('help me','help me',{})
+        good = chat_policy._translation_quality_report('help me','帮帮我',{})
+        bad = chat_policy._translation_quality_report('help me','help me',{})
         queue.record('help me','帮帮我',request_id='good',quality_checks=good)
         queue.record('help me','help me',request_id='bad',quality_checks=bad)
         self.assertFalse(any(queue.reviewable(row,'session') for row in queue.items()))
@@ -229,7 +237,7 @@ class StorageAndManualTests(unittest.TestCase):
             self.assertFalse(service.translate('请等一下').successful)
         record=service.engine.journal.read('请等一下')
         default_journal=RequestJournal(store.data_path(self.root,'requests'))
-        self.assertEqual(dt.pending_requests_cli('release',record['request_id'],journal=default_journal),0)
+        self.assertEqual(cli.pending_requests_cli('release',record['request_id'],journal=default_journal),0)
         self.assertEqual(service.engine.journal.read('请等一下')['state'],'released')
 
 

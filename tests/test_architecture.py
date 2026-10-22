@@ -1,3 +1,7 @@
+
+import app.bootstrap as bootstrap
+
+import app.platform.desktop as desktop
 import ast
 import os
 from pathlib import Path
@@ -11,6 +15,65 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ArchitectureTests(unittest.TestCase):
+    def test_business_and_gui_imports_do_not_point_back_to_startup(self):
+        from importlib.util import resolve_name
+        roots = ('app', 'gui')
+        startup = {'app.main', 'app.bootstrap'}
+        for path in (p for folder in roots for p in (ROOT / folder).rglob('*.py')):
+            if path.relative_to(ROOT).as_posix() in {'app/main.py', 'app/__main__.py'}:
+                continue
+            package = '.'.join(path.relative_to(ROOT).parts[:-1])
+            tree = ast.parse(path.read_text(encoding='utf-8'))
+            for node in ast.walk(tree):
+                targets = set()
+                if isinstance(node, ast.Import):
+                    targets.update(alias.name for alias in node.names)
+                elif isinstance(node, ast.ImportFrom):
+                    base = resolve_name('.' * node.level + (node.module or ''), package) if node.level else node.module or ''
+                    targets.add(base)
+                    targets.update(base + '.' + alias.name for alias in node.names)
+                self.assertFalse(startup.intersection(targets), (str(path), targets))
+
+    def test_extracted_modules_import_without_starting_runtime(self):
+        script = '''
+import sys, threading
+from pathlib import Path
+from unittest.mock import patch
+def forbidden(*args, **kwargs): raise AssertionError('Import started runtime')
+with patch.object(threading.Thread, 'start', forbidden):
+    import app.translation.policy
+    import app.translation.memory
+    import app.translation.local_cache
+    import app.recognition.capture
+    import app.runtime.pipeline
+    import gui.overlay
+assert 'app.main' not in sys.modules
+assert 'app.bootstrap' not in sys.modules
+assert 'tkinter' not in sys.modules
+assert 'cv2' not in sys.modules
+assert list(Path('.').iterdir()) == []
+'''
+        with tempfile.TemporaryDirectory() as folder:
+            result = subprocess.run([sys.executable, '-X', 'utf8', '-c', script], cwd=folder,
+                env=dict(os.environ, PYTHONPATH=str(ROOT) + os.pathsep + os.environ.get('PYTHONPATH', '')),
+                capture_output=True, text=True, timeout=15)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_storage_defaults_resolve_the_current_input_scope(self):
+        from unittest.mock import patch
+        from app.runtime import input_scope
+        from app.translation.memory import TranslationMemory
+        from app.translation.local_cache import LocalCache
+        with tempfile.TemporaryDirectory() as folder:
+            memory_path = str(Path(folder) / 'translations.json')
+            cache_path = str(Path(folder) / 'local_cache.json')
+            with patch.object(input_scope, 'MEMORY_PATH', memory_path), patch.object(input_scope, 'CACHE_PATH', cache_path):
+                memory = TranslationMemory(audit_legacy=False)
+                cache = LocalCache()
+            self.assertEqual(memory.path, memory_path)
+            self.assertEqual(cache.path, cache_path)
+            self.assertEqual(list(Path(folder).iterdir()), [])
+
     def test_batch_files_use_windows_line_endings(self):
         for path in list(ROOT.glob("*.bat")) + list((ROOT / "scripts").glob("*.bat")):
             content = path.read_bytes()
@@ -84,6 +147,7 @@ class ArchitectureTests(unittest.TestCase):
             self.assertFalse((Path(folder) / "data").exists())
             self.assertFalse((project / "app/data").exists())
             self.assertFalse((project / "scripts/data").exists())
+            self.assertFalse((project / "data").exists())
 
     def test_config_import_has_no_environment_or_filesystem_side_effect(self):
         script = (
@@ -114,11 +178,7 @@ class ArchitectureTests(unittest.TestCase):
             demo.write_text("10/08 21:40:00 [Team] Tester: gg\n"
                             "10/08 21:40:01 [Team] Tester: omw\n", encoding="utf-8")
             script = (
-                "import sys, urllib.request; import app.main as dt; "
-                "dt.single_instance_guard=lambda: (1, True); "
-                "urllib.request.urlopen=lambda *a, **k: (_ for _ in ()).throw(AssertionError('Network disabled')); "
-                "sys.argv=['deadlock_translate.py','--simulate','input.txt','--headless','--once','--offline']; "
-                "sys.exit(dt.main())"
+                "import app.bootstrap as bootstrap; import app.platform.desktop as desktop; import sys, urllib.request; import app.main as dt; desktop.single_instance_guard=lambda: (1, True); urllib.request.urlopen=lambda *a, **k: (_ for _ in ()).throw(AssertionError('Network disabled')); sys.argv=['deadlock_translate.py','--simulate','input.txt','--headless','--once','--offline']; sys.exit(bootstrap.main())"
             )
             env = dict(os.environ, DEEPSEEK_API_KEY="", PYTHONPATH=str(project))
             result = subprocess.run([sys.executable, "-X", "utf8", "-c", script],

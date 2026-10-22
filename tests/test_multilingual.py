@@ -1,4 +1,10 @@
 """Multilingual admission, config compatibility and game transaction boundaries."""
+
+import app.translation.builtins as translation_builtins_module
+
+import app.recognition.capture as recognition_capture
+
+import app.translation.policy as chat_policy
 from pathlib import Path
 import tempfile
 import threading
@@ -6,7 +12,6 @@ import unittest
 from unittest.mock import Mock, patch
 import numpy as np
 
-import app.main as dt
 from app.config.repository import ConfigRepository
 from app.platform.game_input import InputTransaction
 from app.recognition import ocr
@@ -23,7 +28,7 @@ class MultilingualTests(unittest.TestCase):
     def test_mixed_and_non_latin_reach_request_preparation(self):
         for text in ('一緒に攻撃しよう', '같이 공격해요', 'Ждите меня', '一起 push together'):
             engine, processor = source_tests.AdmissionTests().processor()
-            processor.is_chinese = dt.is_chinese
+            processor.is_chinese = chat_policy.is_chinese
             evidence = SourceEvidence(True, '', reading=text, confidence=95)
             self.assertIs(processor.prepare(source_tests.candidate(text=text, evidence=evidence)), NEEDS_API, text)
             engine.try_local_result.assert_called_once_with(text)
@@ -45,7 +50,7 @@ class MultilingualTests(unittest.TestCase):
         def verify(text):
             return SourceEvidence(text == '같이 공격해요', '' if text == '같이 공격해요' else 'source_disagrees')
         selection = select_candidate([('body7', 'wait for me now'), ('body_kor', '같이 공격해요')],
-            dt.DEFAULT_GLOSSARY, dt.recognition_rules(), verify_body=verify)
+            translation_builtins_module.DEFAULT_GLOSSARY, recognition_capture.recognition_rules(), verify_body=verify)
         self.assertEqual(selection.text, '같이 공격해요')
 
     def test_missing_any_receive_model_is_explicit(self):
@@ -84,7 +89,7 @@ class MultilingualTests(unittest.TestCase):
         set_words = ocr.set_user_words
         with tempfile.TemporaryDirectory() as folder, patch.object(ocr, 'set_user_words',
                 side_effect=lambda words, **kw: set_words(words, path=str(Path(folder)/'words.txt'))):
-            source = dt.iter_ocr_source(interval=0, threshold=3, glossary=dt.DEFAULT_GLOSSARY,
+            source = recognition_capture.iter_ocr_source(interval=0, threshold=3, glossary=translation_builtins_module.DEFAULT_GLOSSARY,
                 only_in_game=False, allow_popup=False, message_snapshots=True,
                 frame_provider=lambda: next(frames, None), screen_size=(2560, 1440), multilingual=True)
             try:

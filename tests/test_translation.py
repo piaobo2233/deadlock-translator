@@ -1,12 +1,15 @@
 """Translation contracts: no network, no real keys, isolated vocabulary files."""
 
+import app.config.service as config_service
+import app.translation.desktop_engine as desktop_translation
+import app.translation.policy as chat_policy
+
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-import app.main as dt
 import app.translation.glossary_ops as glossary_ops
 from app.storage import store
 from app.storage.learning_cache import LearningReceipt
@@ -28,7 +31,7 @@ class TranslationTests(unittest.TestCase):
         self.path = str(Path(self.temp.name) / "glossary.json")
 
     def engine(self, **kwargs):
-        engine = dt.Translator("test-key-not-real", "https://invalid.example", "test", False,
+        engine = desktop_translation.Translator("test-key-not-real", "https://invalid.example", "test", False,
                                allow_popup=False, **kwargs)
         engine.client.request = Mock(side_effect=AssertionError("Unmocked HTTP is forbidden"))
         return engine
@@ -53,12 +56,12 @@ class TranslationTests(unittest.TestCase):
 
     def test_glossary_lookup_does_not_remove_words_or_word_boundaries(self):
         glossary = {"help": "需要帮助", "help me": "帮我", "push mid": "推中", "nowhere": "无处"}
-        self.assertEqual(dt.glossary_key("  HELP   ME  ", glossary), "help me")
-        self.assertEqual(dt.glossary_lookup("HELP ME", glossary), "帮我")
+        self.assertEqual(chat_policy.glossary_key("  HELP   ME  ", glossary), "help me")
+        self.assertEqual(chat_policy.glossary_lookup("HELP ME", glossary), "帮我")
         for text in ("helpme", "help u", "help ur", "help me pls", "push the mid",
                      "push mid 2", "don't push mid", "push right", "now here"):
             with self.subTest(text=text):
-                self.assertIsNone(dt.glossary_key(text, glossary))
+                self.assertIsNone(chat_policy.glossary_key(text, glossary))
                 self.assertIsNone(self.engine(glossary=glossary).try_local_result(text))
 
     def test_exact_memory_hit_remains_free(self):
@@ -232,7 +235,7 @@ class TranslationTests(unittest.TestCase):
         repo.save_key("fake-user-credential")
         config = repo.load(environment={})
         engine = self.engine()
-        dt.apply_live_config(config, translator=engine, api_toggle=False)
+        config_service.apply_live_config(config, translator=engine, api_toggle=False)
         with patch.object(engine.client, "request", return_value=ApiResponse(text="一起行动")) as request:
             self.assertTrue(engine.translate_result("together").successful)
         self.assertEqual(request.call_args.kwargs["api_key"], "fake-user-credential")

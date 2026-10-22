@@ -6,6 +6,8 @@ ingame retains its compatibility route to recognition; cost is independent.
 The UI calls existing configuration, glossary and accounting services.
 """
 
+import app.platform.desktop as desktop
+
 import os
 import time
 
@@ -53,9 +55,8 @@ def status_of(root_dir):
         文件可能是翻译器被强杀后留下的尸体。
     [!] 完全不出现进程名 / PID / 路径（§29 / §二十一）。
     """
-    import app.main as dt
     try:
-        running = dt.translator_is_running()
+        running = desktop.translator_is_running()
     except Exception:
         running = False
     if not running:
@@ -102,7 +103,6 @@ def _save(key, value, app):
         `save_config` 的原则是「绝不碰 api_key」（它是浮窗挪位置就会跑的，
         不能把环境变量里的 key 顺手落盘）。这里是用户**明确要填**，走另一条。
     """
-    import app.main as dt
     try:
         if key == "api_key":
             ok = _config_repository(app.root_dir).save_key(str(value))

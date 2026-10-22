@@ -175,7 +175,8 @@ def primary_game_screen():
     """Physical primary pixels; reject a foreground game client on another surface."""
     import ctypes
     from ctypes import wintypes
-    from app.main import game_in_foreground,DPI_AWARE
+    from app.platform.desktop import game_in_foreground
+    from app.platform.desktop import DPI_AWARE
     user=ctypes.windll.user32
     screen=(user.GetSystemMetrics(0),user.GetSystemMetrics(1))
     global _PRIMARY_GEOMETRY

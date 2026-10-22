@@ -80,7 +80,7 @@ class BrandAssetTests(unittest.TestCase):
         import os
         if os.name != 'nt':
             self.skipTest('Windows overlay only')
-        from app.main import Overlay
+        from gui.overlay import Overlay
         from app.config.defaults import default_config
         overlay = Overlay(default_config())
         try:

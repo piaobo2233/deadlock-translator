@@ -1,4 +1,6 @@
 """Real Tk preview, explicit copy, stale response and page lifecycle boundaries."""
+
+import app.platform.desktop as desktop
 import gc
 from pathlib import Path
 import tempfile
@@ -7,7 +9,6 @@ import time
 import unittest
 from unittest.mock import patch
 
-import app.main as dt
 from app.translation.client import ApiResponse
 from app.translation.control import RequestControl
 from app.translation.results import TranslationResult
@@ -20,7 +21,7 @@ class ComposerTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.running=patch.object(dt,'translator_is_running',return_value=False)
+        self.running=patch.object(desktop,'translator_is_running',return_value=False)
         self.running.start()
         self.addCleanup(self.running.stop)
         self.app=App(self.temp.name)

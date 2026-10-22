@@ -1,10 +1,11 @@
 """Removing review history keeps decisions, paid recovery and formal entries."""
+
+import app.translation.desktop_engine as desktop_translation
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-import app.main as dt
 from app.storage import store
 from app.storage.pending import PendingReview
 from app.storage.review_queue import ReviewQueue
@@ -34,7 +35,7 @@ class ProcessedCleanupTests(unittest.TestCase):
         return self.queue.hide_processed({row['key']: row['token'] for row in rows})
 
     def engine(self):
-        engine = dt.Translator('fixture-key', 'https://invalid.local', 'fixture', False,
+        engine = desktop_translation.Translator('fixture-key', 'https://invalid.local', 'fixture', False,
             hard_offline=False, learning=LearnedGlossary(str(self.glossary)), allow_popup=False)
         engine.client.request = Mock(return_value=ApiResponse(text='一起行动', finish_reason='stop',
             usage={'prompt_tokens': 2, 'completion_tokens': 2}))

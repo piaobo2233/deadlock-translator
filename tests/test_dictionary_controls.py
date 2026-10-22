@@ -1,11 +1,13 @@
 """Actual Tk drag and deletion controls using disposable records only."""
+
+import app.platform.desktop as desktop
+import app.translation.policy as chat_policy
 from pathlib import Path
 import tempfile
 import traceback
 import unittest
 from unittest.mock import patch
 
-import app.main as dt
 from app.storage import store
 from gui.app import App
 from gui.appearance import EntryCards
@@ -20,7 +22,7 @@ class DictionaryControlTests(unittest.TestCase):
         self.config = store.data_path(self.root, 'config.json')
         store.atomic_write_json(self.config, dict(api_key='', builtins_enabled=False,
                                                  budget_session=3.5, budget_daily=8.0))
-        running = patch.object(dt, 'translator_is_running', return_value=False)
+        running = patch.object(desktop, 'translator_is_running', return_value=False)
         running.start()
         self.addCleanup(running.stop)
         self.app = App(str(self.root))
@@ -38,7 +40,7 @@ class DictionaryControlTests(unittest.TestCase):
         service = dictionary.service
         store.atomic_write_json(store.data_path(self.temp.name,'runtime.json'),dict(review_session_id='a'*32))
         service.record(original, '确认的译文', request_id='request-'+original,
-                       quality_checks=dt._translation_quality_report(original,'确认的译文',{}))
+                       quality_checks=chat_policy._translation_quality_report(original,'确认的译文',{}))
         service.mark_displayed(original,request_id='request-'+original,session_id='a'*32,
                                identity=['a'*32,1,1],at=1)
         row = next(row for row in service.items() if row['original'] == original)

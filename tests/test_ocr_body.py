@@ -1,5 +1,13 @@
 """Pixel geometry, OCR lifecycle and minimized real-frame regressions; no API."""
 
+import app.translation.builtins as translation_builtins_module
+import app.translation.text as translation_text_module
+import ctypes
+
+import app.recognition.capture as recognition_capture
+import app.recognition.live as live_state
+import app.storage.chatlog as chat_logs
+
 import json
 from contextlib import redirect_stderr
 import io
@@ -13,7 +21,6 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 import app.recognition.ocr as ocr
-import app.main as dt
 from app.recognition.selection import select_candidate
 from app.vision.body import locate_body, padded_gray
 
@@ -168,7 +175,7 @@ class RealBodyOcrTests(unittest.TestCase):
                 with self.subTest(box=box):
                     self.assertEqual(locate_body(image, box).line_count, 1)
                     decision = select_candidate(ocr.ocr_variants(image, box, screen=(2560, 1440)),
-                                                dt.DEFAULT_GLOSSARY, dt.recognition_rules())
+                                                translation_builtins_module.DEFAULT_GLOSSARY, recognition_capture.recognition_rules())
                     self.assertEqual(decision.text.lower(), "gg", decision)
     def test_final_selection_is_exact_for_all_minimized_real_cases(self):
         # Disable application word files: independence from private user data is required.
@@ -178,15 +185,15 @@ class RealBodyOcrTests(unittest.TestCase):
                     image = fixture(name)
                     variants = ocr.ocr_variants(image, (0, 0, image.shape[1], image.shape[0], 8),
                                                 screen=case["screen"])
-                    decision = select_candidate(variants, dt.DEFAULT_GLOSSARY, dt.recognition_rules())
+                    decision = select_candidate(variants, translation_builtins_module.DEFAULT_GLOSSARY, recognition_capture.recognition_rules())
                     self.assertEqual(decision.text.lower(), case["expect"] or "", decision)
 
     def test_multiline_full_text_reaches_the_selector(self):
         image = synthetic_chat(("push mid now", "wait for me"))
         with patch.object(ocr, "_USER_WORDS", ""):
             decision = select_candidate(ocr.ocr_variants(image, (0, 0, image.shape[1], image.shape[0])),
-                                        dt.DEFAULT_GLOSSARY, dt.recognition_rules())
-        self.assertEqual(dt.normalize_text(decision.text), "push mid now wait for me", decision)
+                                        translation_builtins_module.DEFAULT_GLOSSARY, recognition_capture.recognition_rules())
+        self.assertEqual(translation_text_module.normalize_text(decision.text), "push mid now wait for me", decision)
 
     def test_real_go_confirmation_tracks_body_and_adds_capture_offset_once(self):
         now = [0]
@@ -198,7 +205,7 @@ class RealBodyOcrTests(unittest.TestCase):
                 region = locate_body(image, (0, 0, image.shape[1], image.shape[0]), scale=.75)
                 decision = select_candidate(ocr.ocr_variants(image, region.tracking_box,
                                             screen=(1920, 1080), region=region),
-                                            dt.DEFAULT_GLOSSARY, dt.recognition_rules())
+                                            translation_builtins_module.DEFAULT_GLOSSARY, recognition_capture.recognition_rules())
                 now[0] = index
                 result = tracker.feed(decision.text, box=region.tracking_box)
                 self.assertEqual(result, "go" if index else None)
@@ -222,18 +229,18 @@ class RealBodyOcrTests(unittest.TestCase):
         stop.is_set.side_effect = [False, True]
         with tempfile.TemporaryDirectory() as folder, \
                 patch.object(ImageGrab, "grab", side_effect=capture), \
-                patch.object(dt.ctypes.windll.user32, "GetSystemMetrics", side_effect=lambda axis: (1920, 1080)[axis]), \
+                patch.object(ctypes.windll.user32, "GetSystemMetrics", side_effect=lambda axis: (1920, 1080)[axis]), \
                 patch.object(ocr, "set_user_words", return_value=""), \
-                patch.object(ocr, "_USER_WORDS", ""), patch.object(dt, "is_paused", return_value=False), \
-                patch.dict(dt._LIVE, {}, clear=True):
+                patch.object(ocr, "_USER_WORDS", ""), patch.object(live_state, "is_paused", return_value=False), \
+                patch.dict(live_state._LIVE, {}, clear=True):
             path = Path(folder) / "chatlog.jsonl"
-            records = list(dt.iter_ocr_source(interval=0, threshold=1, glossary=dt.DEFAULT_GLOSSARY,
+            records = list(recognition_capture.iter_ocr_source(interval=0, threshold=1, glossary=translation_builtins_module.DEFAULT_GLOSSARY,
                            verbose=False, only_in_game=False, allow_popup=False,
-                           chatlog=dt.ChatLog(str(path)), stop_event=stop))
+                           chatlog=chat_logs.ChatLog(str(path)), stop_event=stop))
             self.assertEqual(len(records), 1)
             self.assertEqual(records[0][1], "go")
             self.assertEqual(records[0][3][:4], (787, 162, 80, 31))
-            self.assertEqual(dt.live_box(records[0][4])[:4], records[0][3][:4])
+            self.assertEqual(live_state.live_box(records[0][4])[:4], records[0][3][:4])
             logs = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
             self.assertTrue(any(row.get("pixel_reason") == "no_aligned_glyphs" for row in logs), logs)
 
@@ -250,10 +257,10 @@ class RealBodyOcrTests(unittest.TestCase):
         stop = Mock()
         stop.is_set.side_effect = [False, True]
         with patch.object(ImageGrab, "grab", side_effect=capture), \
-                patch.object(dt.ctypes.windll.user32, "GetSystemMetrics", side_effect=lambda axis: (1920, 1080)[axis]), \
+                patch.object(ctypes.windll.user32, "GetSystemMetrics", side_effect=lambda axis: (1920, 1080)[axis]), \
                 patch.object(ocr, "set_user_words", return_value=""), patch.object(ocr, "_USER_WORDS", ""), \
-                patch.object(dt, "is_paused", return_value=False), patch.dict(dt._LIVE, {}, clear=True):
-            records = list(dt.iter_ocr_source(interval=0, threshold=1, glossary=dt.DEFAULT_GLOSSARY,
+                patch.object(live_state, "is_paused", return_value=False), patch.dict(live_state._LIVE, {}, clear=True):
+            records = list(recognition_capture.iter_ocr_source(interval=0, threshold=1, glossary=translation_builtins_module.DEFAULT_GLOSSARY,
                 verbose=False, only_in_game=False, allow_popup=False, stop_event=stop, message_snapshots=True))
             self.assertEqual(len(records), 1)
             message = records[0]
@@ -261,7 +268,7 @@ class RealBodyOcrTests(unittest.TestCase):
             self.assertEqual(message.position, (787, 162, 80, 31))
             self.assertEqual(message.identity.original, message.text)
             self.assertEqual(message.identity.clock_domain, "monotonic")
-            self.assertEqual(dt.live_message_box(message), message.position)
+            self.assertEqual(live_state.live_message_box(message), message.position)
 
 
 if __name__ == "__main__":

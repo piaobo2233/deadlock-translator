@@ -1,4 +1,11 @@
 """Actual Tk display and real isolated translation routing; no paid requests."""
+
+import gui.overlay as overlay_ui
+
+import app.recognition.live as live_state
+
+import app.platform.game_fonts as game_fonts
+import app.translation.desktop_engine as desktop_translation
 import inspect
 import tempfile
 import time
@@ -31,7 +38,7 @@ class UserKeyRoutingTests(unittest.TestCase):
             path=str(Path(root)/'glossary.json')
             repo=LearnedGlossary(path)
             repo.learn('hold here','守住这里')
-            engine=dt.Translator('fixture-key','https://invalid.local','fixture',False,
+            engine=desktop_translation.Translator('fixture-key','https://invalid.local','fixture',False,
                                  learning=repo,allow_popup=False)
             engine.client.request=Mock(side_effect=AssertionError('Real HTTP forbidden'))
             with patch.object(engine,'_call',return_value='一起前进') as call:
@@ -41,7 +48,7 @@ class UserKeyRoutingTests(unittest.TestCase):
                 online=engine.translate_result('move together')
                 self.assertTrue(online.successful);self.assertEqual(online.text,'一起前进')
                 call.assert_called_once()
-            restarted=dt.Translator('','https://invalid.local','fixture',True,
+            restarted=desktop_translation.Translator('','https://invalid.local','fixture',True,
                                     learning=LearnedGlossary(path),allow_popup=False)
             with patch.object(restarted,'_call',side_effect=AssertionError('Paid request forbidden')):
                 self.assertEqual(restarted.translate_result('move together').text,'一起前进')
@@ -50,11 +57,11 @@ class UserKeyRoutingTests(unittest.TestCase):
     def test_disabled_missing_key_and_failed_api_do_not_become_translation(self):
         for key,offline,expected in (('fixture-key',True,'pending'),('',False,'none')):
             with self.subTest(key_present=bool(key),offline=offline):
-                engine=dt.Translator(key,'https://invalid.local','fixture',offline,glossary={},allow_popup=False)
+                engine=desktop_translation.Translator(key,'https://invalid.local','fixture',offline,glossary={},allow_popup=False)
                 with patch.object(engine,'_call',side_effect=AssertionError('Paid request forbidden')):
                     result=engine.translate_result('move together')
                     self.assertFalse(result.successful);self.assertEqual(result.reason_code,expected)
-        engine=dt.Translator('fixture-key','https://invalid.local','fixture',False,glossary={},allow_popup=False)
+        engine=desktop_translation.Translator('fixture-key','https://invalid.local','fixture',False,glossary={},allow_popup=False)
         with patch.object(engine,'_call',return_value='[翻译失败 HTTP 429]'):
             self.assertFalse(engine.translate_result('move together').successful)
 
@@ -72,8 +79,8 @@ class UserKeyRoutingTests(unittest.TestCase):
 
 class TranslationOnlyTkTests(unittest.TestCase):
     def setUp(self):
-        with patch.object(dt,'register_game_font',return_value=[]):
-            self.view=dt.Overlay(dict(width=300,font_size=18,max_messages=1))
+        with patch.object(game_fonts,'register_game_font',return_value=[]):
+            self.view=overlay_ui.Overlay(dict(width=300,font_size=18,max_messages=1))
         self.health=RuntimeHealth();self.monitor=DisplayMonitor(self.health)
         self.view._display_observer=self.monitor.observe
         self.errors=[]
@@ -85,9 +92,9 @@ class TranslationOnlyTkTests(unittest.TestCase):
         self.assertFalse(self.errors)
 
     def render(self,messages,current=True):
-        with patch.object(dt,'live_message_box',return_value=self.box if current else None), \
-             patch.object(dt,'live_box',return_value=self.box if current else None), \
-             patch.object(dt,'live_obstacles',return_value=()):
+        with patch.object(live_state,'live_message_box',return_value=self.box if current else None), \
+             patch.object(live_state,'live_box',return_value=self.box if current else None), \
+             patch.object(live_state,'live_obstacles',return_value=()):
             self.view.render(messages);self.view.root.update()
 
     def test_failed_messages_have_no_canvas_bubbles_and_do_not_take_translation_slots(self):

@@ -1,5 +1,9 @@
 """Durable fences, crash gaps and recovery. Temporary data, mock HTTP only."""
 
+import app.cli as cli
+
+import app.translation.desktop_engine as desktop_translation
+
 from concurrent.futures import ThreadPoolExecutor
 import json
 import os
@@ -11,7 +15,6 @@ import threading
 import unittest
 from unittest.mock import Mock, patch
 
-import app.main as dt
 import app.translation.glossary_ops as glossary_ops
 from app.storage import store
 from app.storage.learning_cache import LearningReceipt
@@ -25,38 +28,7 @@ from app.translation.sharing import SharedRequest
 ROOT = Path(__file__).resolve().parents[1]
 USAGE = {"prompt_tokens": 10, "completion_tokens": 2}
 
-CRASH_PROBE = r'''
-import os, sys
-from unittest.mock import Mock
-def deny_network(event, args):
-    if event in ("socket.connect", "socket.getaddrinfo"):
-        raise AssertionError("Network forbidden")
-sys.addaudithook(deny_network)
-import app.main as dt
-from app.translation.client import ApiResponse
-from app.translation.learning import LearnedGlossary
-path, gap = sys.argv[1:]
-learning = LearnedGlossary(path)
-engine = dt.Translator("fake", "https://invalid.example", "test", False,
-                       learning=learning, allow_popup=False)
-engine.client.request = Mock(return_value=ApiResponse(text="一起行动",
-                usage={"prompt_tokens":10,"completion_tokens":2}))
-if gap == "prepared":
-    engine.client.request = Mock(side_effect=lambda **k: os._exit(17))
-elif gap == "response":
-    engine.journal.qualified = lambda *a, **k: os._exit(17)
-elif gap == "qualified":
-    engine.learning_cache.save = lambda *a, **k: os._exit(17)
-elif gap == "committed":
-    saved=engine.learning_cache.save
-    def crash_after_cache(*a,**k):
-        receipt=saved(*a,**k)
-        assert receipt.saved
-        os._exit(17)
-    engine.learning_cache.save=crash_after_cache
-engine.translate_result("together")
-raise AssertionError("Crash point not reached")
-'''
+CRASH_PROBE = 'import app.translation.desktop_engine as desktop_translation\n\nimport os, sys\nfrom unittest.mock import Mock\ndef deny_network(event, args):\n    if event in ("socket.connect", "socket.getaddrinfo"):\n        raise AssertionError("Network forbidden")\nsys.addaudithook(deny_network)\nimport app.main as dt\nfrom app.translation.client import ApiResponse\nfrom app.translation.learning import LearnedGlossary\npath, gap = sys.argv[1:]\nlearning = LearnedGlossary(path)\nengine = desktop_translation.Translator("fake", "https://invalid.example", "test", False,\n                       learning=learning, allow_popup=False)\nengine.client.request = Mock(return_value=ApiResponse(text="一起行动",\n                usage={"prompt_tokens":10,"completion_tokens":2}))\nif gap == "prepared":\n    engine.client.request = Mock(side_effect=lambda **k: os._exit(17))\nelif gap == "response":\n    engine.journal.qualified = lambda *a, **k: os._exit(17)\nelif gap == "qualified":\n    engine.learning_cache.save = lambda *a, **k: os._exit(17)\nelif gap == "committed":\n    saved=engine.learning_cache.save\n    def crash_after_cache(*a,**k):\n        receipt=saved(*a,**k)\n        assert receipt.saved\n        os._exit(17)\n    engine.learning_cache.save=crash_after_cache\nengine.translate_result("together")\nraise AssertionError("Crash point not reached")\n'
 
 
 class RequestRecoveryTests(unittest.TestCase):
@@ -66,7 +38,7 @@ class RequestRecoveryTests(unittest.TestCase):
         self.path = str(Path(self.temp.name) / "glossary.json")
 
     def engine(self, **kwargs):
-        engine = dt.Translator("secret-not-real", "https://invalid.example?token=secret-url",
+        engine = desktop_translation.Translator("secret-not-real", "https://invalid.example?token=secret-url",
                                "test", False, learning=LearnedGlossary(self.path),
                                allow_popup=False, **kwargs)
         engine.client.request = Mock(side_effect=AssertionError("Unmocked HTTP forbidden"))
@@ -200,12 +172,12 @@ class RequestRecoveryTests(unittest.TestCase):
         engine.translate_result("together")
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            code = dt.pending_requests_cli("list", journal=engine.journal)
+            code = cli.pending_requests_cli("list", journal=engine.journal)
         self.assertEqual(code, 0)
         self.assertIn("together", output.getvalue())
 
         with contextlib.redirect_stdout(io.StringIO()):
-            code = dt.pending_requests_cli(
+            code = cli.pending_requests_cli(
                 "release", engine.journal.read("together")["request_id"], journal=engine.journal)
         self.assertEqual(code, 0)
         self.assertEqual(engine.journal.read("together")["state"], "released")
@@ -217,7 +189,7 @@ class RequestRecoveryTests(unittest.TestCase):
         engine = self.engine()
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            code = dt.pending_requests_cli("release", "deadbeef", journal=engine.journal)
+            code = cli.pending_requests_cli("release", "deadbeef", journal=engine.journal)
         self.assertEqual(code, 2)
         self.assertIn("匹配到 0 条", output.getvalue())
 

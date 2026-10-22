@@ -46,7 +46,7 @@ def import_game_image(path):
 
 
 def capture_game_frame():
-    from app.main import game_in_foreground
+    from app.platform.desktop import game_in_foreground
     from PIL import ImageGrab
     if not game_in_foreground():
         raise CaptureError('未检测到游戏在前台；请重新点击，并在倒计时结束前切回游戏。')

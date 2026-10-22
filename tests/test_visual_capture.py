@@ -1,5 +1,11 @@
 """Production generator wiring, with real OCR and a simulated desktop only."""
 
+import app.translation.builtins as translation_builtins_module
+import ctypes
+
+import app.recognition.capture as recognition_capture
+import app.recognition.live as live_state
+
 from pathlib import Path
 import threading
 import unittest
@@ -10,7 +16,6 @@ import numpy as np
 from PIL import Image, ImageGrab
 
 import app.recognition.ocr as ocr
-import app.main as dt
 from app.runtime.events import RuntimeHealth
 from app.runtime.visual_pulse import VisualPulse
 
@@ -46,19 +51,19 @@ class VisualCaptureTests(unittest.TestCase):
                 raise AssertionError("Test failed to release OCR")
             return "go"
         with patch.object(ImageGrab, "grab", side_effect=capture), \
-                patch.object(dt.ctypes.windll.user32, "GetSystemMetrics", side_effect=lambda axis: (1920,1080)[axis]), \
+                patch.object(ctypes.windll.user32, "GetSystemMetrics", side_effect=lambda axis: (1920,1080)[axis]), \
                 patch.object(ocr, "set_user_words", return_value=""), patch.object(ocr, "_USER_WORDS", ""), \
-                patch.object(dt, "is_paused", return_value=False), patch.dict(dt._LIVE, {}, clear=True), \
+                patch.object(live_state, "is_paused", return_value=False), patch.dict(live_state._LIVE, {}, clear=True), \
                 patch.object(VisualPulse, "update", observe):
-            source = dt.iter_ocr_source(interval=0, threshold=2, glossary=dt.DEFAULT_GLOSSARY,
+            source = recognition_capture.iter_ocr_source(interval=0, threshold=2, glossary=translation_builtins_module.DEFAULT_GLOSSARY,
                 verbose=False, only_in_game=False, allow_popup=False, stop_event=stop,
                 message_snapshots=True, visual_tracking=True, capture_owner=own, health=health)
             reader = None
             try:
                 messages.append(next(source))
                 self.assertEqual(messages[0].text, "go")
-                self.assertIsNotNone(dt.live_message_box(messages[0]))
-                dt._LIVE["con"].recheck = 0
+                self.assertIsNotNone(live_state.live_message_box(messages[0]))
+                live_state._LIVE["con"].recheck = 0
                 def consume():
                     try:
                         next(source)
@@ -73,7 +78,7 @@ class VisualCaptureTests(unittest.TestCase):
                     self.assertTrue(ocr_started.wait(2))
                     disappeared.set()
                     self.assertTrue(hidden.wait(2), "Visual owner waited for slow OCR")
-                    self.assertIsNone(dt.live_message_box(messages[0]))
+                    self.assertIsNone(live_state.live_message_box(messages[0]))
                     self.assertTrue(reader.is_alive())
                     stop.set()
                     release.set()

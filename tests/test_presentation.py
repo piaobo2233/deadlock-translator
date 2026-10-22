@@ -1,9 +1,12 @@
 """Pure layout and production Tk adapter with a non-window drawing surface."""
 
+import gui.overlay as overlay_ui
+
+import app.recognition.live as live_state
+
 import unittest
 from unittest.mock import Mock, patch
 
-import app.main as dt
 from app.presentation.layout import below_bubble
 from app.presentation.receipts import DisplayMonitor, DrawEntry, DrawFrame, DisplayState
 from app.runtime.events import RuntimeHealth, PipelineStage
@@ -11,7 +14,7 @@ from app.runtime.messages import DisplayMessage
 
 
 def overlay():
-    view = dt.Overlay.__new__(dt.Overlay)
+    view = overlay_ui.Overlay.__new__(overlay_ui.Overlay)
     view.canvas, view.root = Mock(), Mock()
     view.root.winfo_screenwidth.return_value = 1920
     view.root.winfo_screenheight.return_value = 1080
@@ -65,17 +68,17 @@ class ProductionAdapterTests(unittest.TestCase):
     def test_production_moves_x_and_y_using_latest_box(self):
         view = overlay()
         message = ("", "go", "走", "team", (100, 200, 180, 35), 1)
-        with patch.object(dt, "live_box", return_value=(100, 200, 180, 35)):
+        with patch.object(live_state, "live_box", return_value=(100, 200, 180, 35)):
             view.render([message])
         first = view.label_rects[0]
-        with patch.object(dt, "live_box", return_value=(500, 300, 180, 35)):
+        with patch.object(live_state, "live_box", return_value=(500, 300, 180, 35)):
             view.render([message])
         self.assertEqual(view.label_rects[0][:2], (500, 339))
         self.assertNotEqual(first[0], view.label_rects[0][0])
 
     def test_production_reports_failure_when_bottom_and_right_are_unavailable(self):
         view = overlay()
-        with patch.object(dt, "live_box", return_value=(1710, 1030, 180, 35)):
+        with patch.object(live_state, "live_box", return_value=(1710, 1030, 180, 35)):
             view.render([("", "go", "走", "team", None, 1)])
         view._draw_bubble.assert_not_called()
         self.assertEqual(view.label_rects, [])
@@ -83,7 +86,7 @@ class ProductionAdapterTests(unittest.TestCase):
 
     def draw(self, view, box=(100, 200, 180, 35)):
         message = DisplayMessage("", "go", "走", "team", 1, box, 1)
-        with patch.object(dt, "live_box", return_value=box):
+        with patch.object(live_state, "live_box", return_value=box):
             view.render([message])
         return view.root.after_idle.call_args.args[0]
 
@@ -91,7 +94,7 @@ class ProductionAdapterTests(unittest.TestCase):
         view = overlay()
         callback = self.draw(view)
         view._display_observer.assert_not_called()
-        with patch.object(dt, "live_box", return_value=(100, 200, 180, 35)):
+        with patch.object(live_state, "live_box", return_value=(100, 200, 180, 35)):
             callback()
         view.root.update_idletasks.assert_called_once()
         frame = view._display_observer.call_args.args[1]
@@ -110,7 +113,7 @@ class ProductionAdapterTests(unittest.TestCase):
         for box, reason in ((None, "not_current"), ((500, 300, 180, 35), "source_changed")):
             view = overlay()
             callback = self.draw(view)
-            with patch.object(dt, "live_box", return_value=box):
+            with patch.object(live_state, "live_box", return_value=box):
                 callback()
             entry = view._display_observer.call_args.args[1].entries[0]
             self.assertIsNone(entry.rect)
@@ -140,7 +143,7 @@ class ProductionAdapterTests(unittest.TestCase):
         view = overlay()
         old_callback = self.draw(view)
         view._draw_bubble.side_effect = RuntimeError("secret canvas detail")
-        with patch.object(dt, "live_box", return_value=(100, 200, 180, 35)):
+        with patch.object(live_state, "live_box", return_value=(100, 200, 180, 35)):
             with self.assertRaises(RuntimeError):
                 view.render([DisplayMessage("", "go", "走", "team", 1, None, 1)])
         frame = view._display_observer.call_args.args[1]
@@ -153,13 +156,13 @@ class ProductionAdapterTests(unittest.TestCase):
 
     def test_translation_can_be_drawn_outside_ocr_search_band(self):
         view = overlay()
-        with patch.object(dt, "live_box", return_value=(100, 500, 180, 35)):
+        with patch.object(live_state, "live_box", return_value=(100, 500, 180, 35)):
             view.render([("", "go", "走", "team", None, 1)])
         self.assertEqual(view.label_rects[0][1], 539)
 
     def test_malformed_current_box_does_not_use_unanchored_fallback(self):
         view = overlay()
-        with patch.object(dt, "live_box", return_value=(100, 200, 180)):
+        with patch.object(live_state, "live_box", return_value=(100, 200, 180)):
             view.render([("", "go", "走", "team", None, 1)])
         view._draw_bubble.assert_not_called()
         self.assertEqual(view._display_observer.call_args.args[1].entries[0].reason, "invalid_geometry")
@@ -167,7 +170,7 @@ class ProductionAdapterTests(unittest.TestCase):
     def test_overlapping_original_bubble_is_not_covered(self):
         view = overlay()
         boxes = {1: (100, 200, 180, 35), 2: (100, 240, 180, 35)}
-        with patch.object(dt, "live_box", side_effect=boxes.get):
+        with patch.object(live_state, "live_box", side_effect=boxes.get):
             view.render([("", "go", "走", "team", None, 1), ("", "gg", "打得好", "team", None, 2)])
         self.assertEqual(len(view.label_rects), 2)
         self.assertGreaterEqual(view.label_rects[0][0], 280)
@@ -185,10 +188,10 @@ class ProductionAdapterTests(unittest.TestCase):
 
     def test_another_source_appearing_before_idle_invalidates_draw_ack(self):
         view=overlay()
-        with patch.object(dt,'live_obstacles',return_value=()):
+        with patch.object(live_state,'live_obstacles',return_value=()):
             callback=self.draw(view)
-        with patch.object(dt,'live_obstacles',return_value=((100,240,280,300),)), \
-             patch.object(dt,'live_box',return_value=(100,200,180,35)):
+        with patch.object(live_state,'live_obstacles',return_value=((100,240,280,300),)), \
+             patch.object(live_state,'live_box',return_value=(100,200,180,35)):
             callback()
         frame=view._display_observer.call_args.args[1]
         self.assertEqual(frame.entries[0].reason,'layout_changed')
@@ -205,10 +208,10 @@ class ProductionAdapterTests(unittest.TestCase):
 
     def test_source_touching_only_the_arrow_before_idle_also_invalidates_ack(self):
         view=overlay()
-        with patch.object(dt,'live_obstacles',return_value=()):
+        with patch.object(live_state,'live_obstacles',return_value=()):
             callback=self.draw(view)
-        with patch.object(dt,'live_obstacles',return_value=((110,238,125,243),)), \
-             patch.object(dt,'live_box',return_value=(100,200,180,35)):
+        with patch.object(live_state,'live_obstacles',return_value=((110,238,125,243),)), \
+             patch.object(live_state,'live_box',return_value=(100,200,180,35)):
             callback()
         self.assertEqual(view._display_observer.call_args.args[1].entries[0].reason,'layout_changed')
 
@@ -216,7 +219,7 @@ class ProductionAdapterTests(unittest.TestCase):
         view = overlay()
         self.draw(view)
         view.root.after.assert_not_called()
-        self.assertFalse(hasattr(dt.Overlay,'_animate_appear'))
+        self.assertFalse(hasattr(overlay_ui.Overlay,'_animate_appear'))
         view.canvas.move.assert_not_called()
 
 

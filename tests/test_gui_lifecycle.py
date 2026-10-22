@@ -1,3 +1,7 @@
+
+import app.platform.desktop as desktop
+import app.runtime.input_scope as input_scope
+import app.translation.policy as chat_policy
 import gc
 import tempfile
 import unittest
@@ -93,7 +97,6 @@ probe=tk.Tk();probe.update();probe.destroy()
             probe.destroy()
         except Exception as exc:
             self.skipTest(f"No display: {type(exc).__name__}")
-        import app.main as dt
         from app.storage import store
         from gui.app import App
         import gui.pages  # Register pages, without starting a GUI on import.
@@ -101,10 +104,10 @@ probe=tk.Tk();probe.update();probe.destroy()
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.addCleanup(patch.stopall)
-        patch.object(dt, "CONFIG_PATH", store.data_path(self.temp.name, "config.json")).start()
+        patch.object(input_scope, "CONFIG_PATH", store.data_path(self.temp.name, "config.json")).start()
         patch.dict("os.environ", {"DEEPSEEK_API_KEY": "", "DEADLOCK_TEST_NO_NETWORK": "1"}).start()
         patch('app.game_data.service.application_root', return_value=self.temp.name).start()
-        patch.object(dt, "translator_is_running", return_value=False).start()
+        patch.object(desktop, "translator_is_running", return_value=False).start()
         self.app = App(self.temp.name)
         def close_root():
             try:
@@ -263,11 +266,10 @@ probe=tk.Tk();probe.update();probe.destroy()
     def test_dictionary_review_link_embeds_real_editor_and_accepts_transactionally(self):
         from app.storage import store
         path=store.data_path(self.temp.name,'pending.json')
-        import app.main as dt
         store.atomic_write_json(store.data_path(self.temp.name,'runtime.json'),dict(review_session_id='fixture-session'))
         store.save_collection(path,{'together':dict(original='together',translation='一起',source='api',status='pending',
             version_id=fingerprint(dict(query=QueryKey.from_text('together').as_dict(),translation='一起')),
-            quality_checks=dt._translation_quality_report('together','一起',{}),request_ids=['request'],
+            quality_checks=chat_policy._translation_quality_report('together','一起',{}),request_ids=['request'],
             display_receipt=dict(session_id='a'*32,identity=['b'*32,1,1],request_id='request',at=1))})
         self.app.open_page('dictionary');d=self.app.dictionary
         d.tabs['review'].invoke();self.app.root.update()
@@ -285,8 +287,7 @@ probe=tk.Tk();probe.update();probe.destroy()
         path = store.data_path(self.temp.name, 'pending.json')
         rows = {status: dict(original=status, translation='译文', source='api', status=status)
                 for status in ('pending', 'accepted', 'rejected', 'archived')}
-        import app.main as dt
-        rows['pending'].update(version_id=fingerprint(dict(query=QueryKey.from_text('pending').as_dict(),translation='译文')),quality_checks=dt._translation_quality_report('pending','译文',{}),request_ids=['request'],
+        rows['pending'].update(version_id=fingerprint(dict(query=QueryKey.from_text('pending').as_dict(),translation='译文')),quality_checks=chat_policy._translation_quality_report('pending','译文',{}),request_ids=['request'],
             display_receipt=dict(session_id='a'*32,identity=['b'*32,1,1],request_id='request',at=1))
         store.atomic_write_json(store.data_path(self.temp.name,'runtime.json'),dict(review_session_id='fixture-session'))
         store.save_collection(path, rows)

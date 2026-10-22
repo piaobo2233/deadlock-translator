@@ -1,9 +1,10 @@
 """Semantic changes cannot be swallowed by temporal OCR association."""
 
+import app.recognition.live as live_state
+
 import unittest
 from dataclasses import FrozenInstanceError, replace
 from unittest.mock import Mock, patch
-import app.main as dt
 from app.runtime.messages import ChatCandidate, DisplayMessage
 from app.runtime.processor import TranslationProcessor
 from app.runtime.events import RuntimeHealth
@@ -88,16 +89,16 @@ class ExactConfirmationTests(unittest.TestCase):
         bid = self.confirm("wait 10")
         identity = self.tracker.snapshot_of(bid)
         message = DisplayMessage("", "wait 10", "等十秒", "team", self.now, self.box, bid, identity=identity)
-        with patch.dict(dt._LIVE, {"con": self.tracker}):
-            self.assertIsNotNone(dt.live_message_box(message))
-            self.assertIsNone(dt.live_message_box(message._replace(text="wait 100")))
+        with patch.dict(live_state._LIVE, {"con": self.tracker}):
+            self.assertIsNotNone(live_state.live_message_box(message))
+            self.assertIsNone(live_state.live_message_box(message._replace(text="wait 100")))
             self.tracker.feed("wait 100", box=self.box)
-            self.assertIsNone(dt.live_message_box(message))
+            self.assertIsNone(live_state.live_message_box(message))
         # Even a reused numeric ID in another capture cannot validate this snapshot.
         other = Consensus(threshold=1, clock=lambda: self.now)
         other.feed("wait 10", box=self.box)
-        with patch.dict(dt._LIVE, {"con": other}), patch.object(dt, "live_box", return_value=self.box):
-            self.assertIsNone(dt.live_message_box(message))
+        with patch.dict(live_state._LIVE, {"con": other}), patch.object(live_state, "live_box", return_value=self.box):
+            self.assertIsNone(live_state.live_message_box(message))
 
     def test_one_noisy_read_hides_old_then_two_exact_reads_restore_without_reemit(self):
         bid = self.confirm("wait 10")
@@ -121,9 +122,9 @@ class ExactConfirmationTests(unittest.TestCase):
         candidate = ChatCandidate("", identity.original, "team", self.box, bid, identity=identity)
         processor = Mock()
         pipeline = TranslationPipeline(lambda: iter(()), processor, log=lambda text: None,
-            is_current=lambda item: dt.live_message_box(item) is not None)
+            is_current=lambda item: live_state.live_message_box(item) is not None)
         self.addCleanup(pipeline.stop)
-        with patch.dict(dt._LIVE, {"con": self.tracker}):
+        with patch.dict(live_state._LIVE, {"con": self.tracker}):
             work = pipeline._work(candidate)
             self.assertTrue(work.control.current())
             self.tracker.feed("wait 100", box=self.box)

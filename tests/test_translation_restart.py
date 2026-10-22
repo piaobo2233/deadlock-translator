@@ -1,5 +1,7 @@
 """Actual interpreter restart checks, isolated files and HTTP forbidden."""
 
+import app.translation.desktop_engine as desktop_translation
+
 import json
 import os
 from pathlib import Path
@@ -13,35 +15,7 @@ from app.storage import store
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PROBE = r'''
-import json
-import sys
-from unittest.mock import Mock
-
-def deny_network(event, args):
-    if event in ("socket.connect", "socket.getaddrinfo"):
-        raise AssertionError("Network forbidden in restart probe")
-
-sys.addaudithook(deny_network)
-import app.main as dt
-from app.translation.client import ApiResponse
-from app.translation.learning import LearnedGlossary
-
-path, mode, text = sys.argv[1:]
-engine = dt.Translator("fake-key", "https://invalid.example", "fake-model", False,
-                       learning=LearnedGlossary(path), allow_popup=False)
-engine.client.request = Mock(side_effect=AssertionError("HTTP forbidden after restart"))
-if mode == "seed":
-    engine.client.request = Mock(return_value=ApiResponse(
-        text="一起行动", usage={"prompt_tokens": 10, "completion_tokens": 2}))
-if mode == "missing":
-    engine.offline = True
-result = engine.translate_result(text)
-print("RESTART_PROBE:" + json.dumps({
-    "text": result.text, "source": result.source, "status": result.status.value,
-    "attempts": result.api_attempts, "requests": engine.client.request.call_count,
-}, ensure_ascii=True))
-'''
+PROBE = 'import app.translation.desktop_engine as desktop_translation\n\nimport json\nimport sys\nfrom unittest.mock import Mock\n\ndef deny_network(event, args):\n    if event in ("socket.connect", "socket.getaddrinfo"):\n        raise AssertionError("Network forbidden in restart probe")\n\nsys.addaudithook(deny_network)\nfrom app.translation.client import ApiResponse\nfrom app.translation.learning import LearnedGlossary\n\npath, mode, text = sys.argv[1:]\nengine = desktop_translation.Translator("fake-key", "https://invalid.example", "fake-model", False,\n                       learning=LearnedGlossary(path), allow_popup=False)\nengine.client.request = Mock(side_effect=AssertionError("HTTP forbidden after restart"))\nif mode == "seed":\n    engine.client.request = Mock(return_value=ApiResponse(\n        text="一起行动", usage={"prompt_tokens": 10, "completion_tokens": 2}))\nif mode == "missing":\n    engine.offline = True\nresult = engine.translate_result(text)\nprint("RESTART_PROBE:" + json.dumps({\n    "text": result.text, "source": result.source, "status": result.status.value,\n    "attempts": result.api_attempts, "requests": engine.client.request.call_count,\n}, ensure_ascii=True))\n'
 
 
 class TranslationRestartTests(unittest.TestCase):

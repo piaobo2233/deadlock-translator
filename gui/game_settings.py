@@ -1,4 +1,6 @@
 """Game controls, region diagnostics and the current-session reader."""
+
+import app.platform.desktop as desktop
 import queue
 import threading
 import time
@@ -151,7 +153,6 @@ def build_region_tools(parent,app):
     from gui.region_editor import RegionEditor
     from app.recognition.region import region_details, experimental_aspect
     from app.runtime.config_application import application_state
-    import app.main as dt
     th=app.th
     status=text(parent,th,'',small=True,muted=True,wraplength=820,justify='left')
     status.pack(anchor='w',fill='x',pady=8)
@@ -190,11 +191,11 @@ def build_region_tools(parent,app):
         cfg=p._load_config(app.root_dir);saved=cfg.get('capture_calibration',{});screen=r.screen_size()
         try:
             info=region_details(cfg,screen)
-            active=application_state(app.root_dir,'capture_calibration',saved,running=dt.translator_is_running())
+            active=application_state(app.root_dir,'capture_calibration',saved,running=desktop.translator_is_running())
             if info['fallback_reason']:message=info['fallback_reason']
             elif saved:
                 if active=='applied':
-                    message=('当前采集正在使用此区域' if dt.game_in_foreground() else
+                    message=('当前采集正在使用此区域' if desktop.game_in_foreground() else
                              '区域已收到采集确认；游戏不在前台时暂停采集')
                 elif active=='failed':message='区域已保存，采集切换失败；请查看诊断'
                 else:message='区域已保存，等待同尺寸游戏画面及采集确认'

@@ -1,36 +1,41 @@
 """Fail-closed startup policy; mock Win32, never touch the live mutex."""
 
+import app.bootstrap as bootstrap
+
+import app.config.service as config_service
+import app.platform.desktop as desktop
+import app.translation.desktop_engine as desktop_translation
+
 import contextlib
 import io
 import sys
 import unittest
 from unittest.mock import Mock, patch
 
-import app.main as dt
 from app.platform import single_instance as instance
 
 
 class SingleInstanceTests(unittest.TestCase):
     def test_guard_exception_never_allows_startup(self):
         with patch("ctypes.WinDLL", side_effect=OSError("private path")):
-            self.assertEqual(dt.single_instance_guard(), (None, False))
+            self.assertEqual(desktop.single_instance_guard(), (None, False))
 
     def test_null_mutex_never_allows_startup(self):
         kernel = Mock()
         kernel.CreateMutexW.return_value = None
         kernel.GetLastError.return_value = 0
         with patch("ctypes.WinDLL", return_value=kernel):
-            self.assertEqual(dt.single_instance_guard(), (None, False))
+            self.assertEqual(desktop.single_instance_guard(), (None, False))
 
     def test_main_stops_before_translation_on_guard_failure(self):
         with patch.object(sys, "argv", ["deadlock_translate.py", "--headless"]), \
-                patch.object(dt, "load_config", return_value={}), \
-                patch.object(dt, "single_instance_guard", return_value=(None, False)), \
-                patch.object(dt, "_notify_user") as notify, \
-                patch.object(dt, "Translator") as translator, \
-                patch.object(dt, "upgrade_config_file") as upgrade, \
+                patch.object(config_service, "load_config", return_value={}), \
+                patch.object(desktop, "single_instance_guard", return_value=(None, False)), \
+                patch.object(desktop, "_notify_user") as notify, \
+                patch.object(desktop_translation, "Translator") as translator, \
+                patch.object(config_service, "upgrade_config_file") as upgrade, \
                 contextlib.redirect_stdout(io.StringIO()) as output:
-            self.assertEqual(dt.main(), 3)
+            self.assertEqual(bootstrap.main(), 3)
         self.assertIn("无法确认", notify.call_args.args[0])
         self.assertNotIn("已经在运行", notify.call_args.args[0])
         translator.assert_not_called()
@@ -40,10 +45,10 @@ class SingleInstanceTests(unittest.TestCase):
 
     def test_settings_entry_bypasses_failed_guard(self):
         with patch.object(sys, "argv", ["deadlock_translate.py", "--settings", "--headless"]), \
-                patch.object(dt, "load_config", return_value={}), \
-                patch.object(dt, "single_instance_guard", side_effect=AssertionError("Guard used")), \
+                patch.object(config_service, "load_config", return_value={}), \
+                patch.object(desktop, "single_instance_guard", side_effect=AssertionError("Guard used")), \
                 patch("gui.app.run", return_value=0) as run:
-            self.assertEqual(dt.main(), 0)
+            self.assertEqual(bootstrap.main(), 0)
         self.assertEqual(run.call_args.kwargs["initial"], "settings")
 
     def test_success_and_duplicate_keep_owned_handles(self):
@@ -70,11 +75,11 @@ class SingleInstanceTests(unittest.TestCase):
 
     def test_headless_duplicate_does_not_show_popup(self):
         with patch.object(sys, "argv", ["deadlock_translate.py", "--headless"]), \
-                patch.object(dt, "load_config", return_value={}), \
-                patch.object(dt, "single_instance_guard", return_value=(42, False)), \
+                patch.object(config_service, "load_config", return_value={}), \
+                patch.object(desktop, "single_instance_guard", return_value=(42, False)), \
                 patch("ctypes.windll.user32.MessageBoxTimeoutW") as popup, \
                 contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(dt.main(), 2)
+            self.assertEqual(bootstrap.main(), 2)
         popup.assert_not_called()
 
 

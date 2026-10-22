@@ -114,7 +114,6 @@ def build_translation(parent, app):
     runbar=panel(inner,th);runbar.pack(anchor='w',pady=(8,0))
     starting=[None,0.]
     def run_action():
-        import app.main as dt
         from app.runtime.panel_instance import request_exit
         word,why,color=p.status_of(app.root_dir)
         if word!='未运行':

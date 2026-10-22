@@ -1,4 +1,6 @@
 """Real-Tk checks for the first-run guide: save, skip, mask, failure, no silent requests."""
+
+import app.platform.desktop as desktop
 import gc
 import json
 import tempfile
@@ -27,7 +29,6 @@ class OnboardingUiTests(unittest.TestCase):
             probe.destroy()
         except Exception as exc:
             self.skipTest(f"No display: {type(exc).__name__}")
-        import app.main as dt
         from gui.app import App
         import gui.pages  # noqa: F401  register pages
 
@@ -35,7 +36,7 @@ class OnboardingUiTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.addCleanup(patch.stopall)
         patch.dict("os.environ", {"DEEPSEEK_API_KEY": ""}).start()
-        patch.object(dt, "translator_is_running", return_value=False).start()
+        patch.object(desktop, "translator_is_running", return_value=False).start()
         self.root = Path(self.temp.name)
         self.config = store.data_path(self.root, "config.json")
         self.app = App(self.temp.name)

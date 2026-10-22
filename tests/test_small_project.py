@@ -1,8 +1,11 @@
 """Approved small-project policies on real stores, fake HTTP only."""
+
+import app.storage as storage_module
+
+import app.translation.desktop_engine as desktop_translation
 import tempfile,unittest
 from pathlib import Path
 from unittest.mock import Mock,patch
-import app.main as dt
 from app.storage import store
 from app.storage.review_queue import ReviewQueue
 from app.translation.learning import LearnedGlossary
@@ -15,7 +18,7 @@ class ReviewCandidateTests(unittest.TestCase):
         self.root=Path(self.temp.name);self.path=self.root/'glossary.json'
         self.queue=ReviewQueue(self.root/'pending.json',self.path)
     def engine(self,online=True,learn=False):
-        e=dt.Translator('fixture-key','https://invalid.local','fixture',not online,
+        e=desktop_translation.Translator('fixture-key','https://invalid.local','fixture',not online,
             hard_offline=False,realtime_learn=learn,learning=LearnedGlossary(str(self.path)),allow_popup=False)
         e.client.request=Mock(return_value=ApiResponse(text='一起行动',finish_reason='stop',usage={'prompt_tokens':2,'completion_tokens':2}))
         return e
@@ -91,7 +94,7 @@ class ReviewCandidateTests(unittest.TestCase):
         self.assertTrue(self.queue.decide(row['key'],'reject',token=row['token'],formal_token=row['formal_token']).saved)
         self.assertEqual(e.translate_result('move together').reason_code,'inactive')
         self.assertEqual(e.client.request.call_count,1)
-        self.assertTrue(dt.store.update_glossary_file(str(self.path),lambda rows:rows.update({'move together':store.glossary_entry('一起前进',source='user')})))
+        self.assertTrue(storage_module.store.update_glossary_file(str(self.path),lambda rows:rows.update({'move together':store.glossary_entry('一起前进',source='user')})))
         self.assertEqual(e.translate_result('move together').text,'一起前进')
     def test_retired_learning_does_not_send_when_ordinary_online_is_off(self):
         e=self.engine(online=False,learn=True)

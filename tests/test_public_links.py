@@ -7,6 +7,20 @@ from scripts.check_public import check_links
 
 
 class PublicLinkTests(unittest.TestCase):
+    def test_templates_resolve_links_at_their_exported_location(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            template = root / 'docs/releases/ARCHITECTURE-public.md'
+            template.parent.mkdir(parents=True)
+            template.write_text('[development](DEVELOPMENT.md)', encoding='utf-8')
+            (root / 'docs/DEVELOPMENT.md').write_text('Development', encoding='utf-8')
+            check_links(root)
+            (root / 'docs/DEVELOPMENT.md').unlink()
+            # A same-named file beside the template cannot hide a missing export target.
+            (root / 'docs/releases/DEVELOPMENT.md').write_text('Wrong location', encoding='utf-8')
+            with self.assertRaisesRegex(ValueError, 'Invalid local document targets'):
+                check_links(root)
+
     def test_upstream_readme_links_do_not_require_vendoring_upstream_sources(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

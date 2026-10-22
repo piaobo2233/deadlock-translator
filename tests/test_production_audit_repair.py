@@ -1,5 +1,7 @@
 """Audit regressions: disposable stores, synthetic owners and mock HTTP only."""
 
+import app.translation.desktop_engine as desktop_translation
+
 from concurrent.futures import ThreadPoolExecutor
 import os
 from pathlib import Path
@@ -9,7 +11,6 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-import app.main as dt
 from app.platform.logging import Tee
 from app.runtime.pipeline import TranslationPipeline
 from app.storage import store
@@ -29,7 +30,7 @@ class AuditRepairTests(unittest.TestCase):
         self.path = str(self.root / 'glossary.json')
 
     def engine(self):
-        engine = dt.Translator('fake', 'https://invalid.example', 'test', False,
+        engine = desktop_translation.Translator('fake', 'https://invalid.example', 'test', False,
                                learning=LearnedGlossary(self.path), allow_popup=False)
         engine.client.request = Mock(return_value=ApiResponse(text='一起行动',
                                       usage=dict(prompt_tokens=10, completion_tokens=2)))
@@ -101,7 +102,7 @@ class AuditRepairTests(unittest.TestCase):
     def test_atomic_replacement_with_same_size_and_mtime_revokes_l0(self):
         repo = LearnedGlossary(self.path)
         repo.learn('wait me', '等等我')
-        engine = dt.Translator('fake', 'https://invalid.example', 'test', False,
+        engine = desktop_translation.Translator('fake', 'https://invalid.example', 'test', False,
                                learning=repo, allow_popup=False)
         engine.client.request = Mock(side_effect=AssertionError('HTTP forbidden'))
         self.assertEqual(engine.translate_result('wait me').text, '等等我')

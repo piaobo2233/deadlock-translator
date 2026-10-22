@@ -6,13 +6,12 @@
 
 本组测试钉住：非法值必须报出来，合法值仍然照常生效且**不产生噪声**。
 """
+
+import app.config.service as config_service
 import contextlib
 import io
 import unittest
 from unittest.mock import Mock
-
-import app.main as dt
-
 
 class LiveConfigVisibilityTests(unittest.TestCase):
     def overlay(self):
@@ -24,7 +23,7 @@ class LiveConfigVisibilityTests(unittest.TestCase):
     def apply(self, config):
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            applied = dt.apply_live_config(config, overlay=self.view, translator=None)
+            applied = config_service.apply_live_config(config, overlay=self.view, translator=None)
         return applied, output.getvalue()
 
     def setUp(self):

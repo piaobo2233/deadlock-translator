@@ -1,4 +1,8 @@
 """Actual native helper and production generator; desktop frames are replayed."""
+
+import app.translation.builtins as translation_builtins_module
+
+import app.recognition.capture as recognition_capture
 from pathlib import Path
 import queue
 import subprocess
@@ -9,7 +13,6 @@ import unittest
 from unittest.mock import patch
 
 import numpy as np
-import app.main as dt
 import app.recognition.ocr as ocr
 from app.recognition.resident import ResidentReader, native_library
 from app.runtime.pipeline import TranslationPipeline
@@ -83,7 +86,7 @@ class ResidentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder, \
                 patch.object(ocr,'set_user_words',side_effect=lambda words,**kwargs:
                     set_words(words,path=str(Path(folder)/'words.txt'))):
-            source=dt.iter_ocr_source(interval=0,threshold=3,glossary=dt.DEFAULT_GLOSSARY,
+            source=recognition_capture.iter_ocr_source(interval=0,threshold=3,glossary=translation_builtins_module.DEFAULT_GLOSSARY,
                 verbose=False,only_in_game=False,allow_popup=False,message_snapshots=True,
                 frame_provider=lambda:next(frames,None),screen_size=(1920,1080),
                 multilingual=True,capture_owner=own)

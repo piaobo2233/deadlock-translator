@@ -1,4 +1,6 @@
 """Real storage/restart boundaries; HTTP is always a stub."""
+
+import app.translation.desktop_engine as desktop_translation
 import json
 import os
 from pathlib import Path
@@ -34,7 +36,7 @@ class PersistentLearningTests(unittest.TestCase):
         self.path = self.root / 'glossary.json'
 
     def engine(self, *, translate=True, learn=True, hard=False):
-        engine = dt.Translator('stub-key', 'https://invalid.example', 'stub', not translate,
+        engine = desktop_translation.Translator('stub-key', 'https://invalid.example', 'stub', not translate,
             hard_offline=hard, realtime_learn=learn, allow_popup=False,
             learning=LearnedGlossary(str(self.path)))
         engine.client.request = Mock(return_value=ApiResponse(text='一起行动',
@@ -74,15 +76,7 @@ class PersistentLearningTests(unittest.TestCase):
     def test_new_interpreter_reuses_paid_learning_with_zero_http(self):
         engine = self.engine()
         self.assertTrue(engine.translate_result('together').save_receipt.saved)
-        code = '''import json,sys
-import app.main as dt
-from app.translation.learning import LearnedGlossary
-e=dt.Translator('stub','https://invalid.example','different-model',True,hard_offline=False,realtime_learn=True,allow_popup=False,learning=LearnedGlossary(sys.argv[1]))
-def forbidden(**kwargs): raise AssertionError('Paid again')
-e.client.request=forbidden
-r=e.translate_result(' TOGETHER ')
-print(json.dumps(dict(text=r.text,source=r.source,attempts=r.api_attempts)))
-'''
+        code = "import app.translation.desktop_engine as desktop_translation\nimport json,sys\nimport app.main as dt\nfrom app.translation.learning import LearnedGlossary\ne=desktop_translation.Translator('stub','https://invalid.example','different-model',True,hard_offline=False,realtime_learn=True,allow_popup=False,learning=LearnedGlossary(sys.argv[1]))\ndef forbidden(**kwargs): raise AssertionError('Paid again')\ne.client.request=forbidden\nr=e.translate_result(' TOGETHER ')\nprint(json.dumps(dict(text=r.text,source=r.source,attempts=r.api_attempts)))\n"
         result = subprocess.run([sys.executable,'-X','utf8','-c',code,str(self.path)],cwd=Path(dt.__file__).resolve().parents[1],
                                 env=dict(os.environ,DEEPSEEK_API_KEY=''),capture_output=True,text=True,timeout=20)
         self.assertEqual(result.returncode,0,result.stderr)

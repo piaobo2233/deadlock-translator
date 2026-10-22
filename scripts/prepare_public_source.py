@@ -17,15 +17,8 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 from app.config.repository import ConfigRepository
 from app.storage import store
+from scripts.public_documents import TEMPLATES
 
-TEMPLATES = {
-    'README.md': 'README-public.md',
-    'docs/DEVELOPMENT.md': 'DEVELOPMENT-public.md',
-    'docs/TESTING.md': 'TESTING-public.md',
-    'docs/CHANGELOG.md': 'CHANGELOG-public.md',
-    'docs/README.md': 'INDEX-public.md',
-    'docs/CONTRIBUTING.md': 'CONTRIBUTING-public.md',
-}
 PRIVATE_PARTS = {'data', 'backups', '.git', '.temp', 'truth', 'truth_candidates', 'archive',
                  'plans', 'reviews', '__pycache__'}
 

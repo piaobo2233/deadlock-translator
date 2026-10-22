@@ -1,12 +1,13 @@
 """Request accounting and storage fault contracts, using only disposable data."""
 
+import app.translation.desktop_engine as desktop_translation
+
 from pathlib import Path
 import tempfile
 import time
 import unittest
 from unittest.mock import Mock, patch
 
-import app.main as dt
 from app.storage import store
 from app.storage.usage import UsageStats, cost_info, empty_bucket
 from app.translation.client import ApiResponse
@@ -23,7 +24,7 @@ class ConsumptionTests(unittest.TestCase):
         self.ledger.start_session()
 
     def engine(self, **kwargs):
-        engine = dt.Translator("fake-key", "https://invalid.example", "fake", False,
+        engine = desktop_translation.Translator("fake-key", "https://invalid.example", "fake", False,
                                glossary={"gg": "打得好"}, usage=self.ledger,
                                allow_popup=False, **kwargs)
         engine.RETRY_BACKOFF = (0, 0)
@@ -63,7 +64,7 @@ class ConsumptionTests(unittest.TestCase):
             with self.subTest(tokens=tokens):
                 ledger = UsageStats(str(Path(self.temp.name) / f"case{len(tokens)}.json"))
                 ledger.start_session()
-                engine = dt.Translator("fake", "https://invalid.example", "fake", False,
+                engine = desktop_translation.Translator("fake", "https://invalid.example", "fake", False,
                                        usage=ledger, allow_popup=False)
                 engine.client.request = Mock(return_value=ApiResponse(text="一起行动", usage=tokens))
                 engine.translate_result("together")

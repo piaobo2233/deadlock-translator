@@ -1,4 +1,7 @@
 """Calibration contracts with synthetic pixels and disposable configuration."""
+
+import app.recognition.capture as recognition_capture
+import app.recognition.live as live_state
 import tempfile
 import threading
 import unittest
@@ -107,7 +110,6 @@ class CalibrationTests(unittest.TestCase):
 
     def test_real_ocr_crop_receipt_waits_for_pixels_and_carries_offset(self):
         import numpy as np
-        import app.main as dt
         from app.recognition import ocr
         cfg=dict(capture_preset='auto',capture_calibration=calibration())
         stop=threading.Event();ready=Mock();seen=[]
@@ -116,8 +118,8 @@ class CalibrationTests(unittest.TestCase):
             stop.set();return []
         with patch.object(ocr,'set_tesseract',return_value='fixture'), \
              patch.object(ocr,'set_user_words',return_value=''),patch.object(ocr,'find_bubbles',side_effect=detect), \
-             patch.object(dt,'is_paused',return_value=False),patch.dict(dt._LIVE,{},clear=True):
-            list(dt.iter_ocr_source(interval=0,glossary={},only_in_game=False,verbose=False,stop_event=stop,
+             patch.object(live_state,'is_paused',return_value=False),patch.dict(live_state._LIVE,{},clear=True):
+            list(recognition_capture.iter_ocr_source(interval=0,glossary={},only_in_game=False,verbose=False,stop_event=stop,
                 frame_provider=lambda:np.full((1080,1920,3),20,dtype=np.uint8),screen_size=(1920,1080),
                 capture_config=cfg,capture_ready=ready))
         ready.assert_called_once()

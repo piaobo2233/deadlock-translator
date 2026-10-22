@@ -1,11 +1,12 @@
 """Transport contracts tested with response fixtures, never a live endpoint."""
 
+import app.translation.desktop_engine as desktop_translation
+
 import json
 import unittest
 import urllib.error
 from unittest.mock import Mock, patch
 
-import app.main as dt
 from app.translation.client import ChatCompletionClient, parse_response
 
 
@@ -135,7 +136,7 @@ class ApiClientTests(unittest.TestCase):
 
     def test_engine_counts_tokens_on_failed_response_and_retry(self):
         usage = Mock()
-        engine = dt.Translator("test", "https://invalid.example", "test", False,
+        engine = desktop_translation.Translator("test", "https://invalid.example", "test", False,
                                allow_popup=False, usage=usage)
         engine.RETRY_BACKOFF = (0, 0)
         from app.translation.client import ApiResponse

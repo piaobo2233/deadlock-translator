@@ -9,14 +9,13 @@
 
 本组测试钉住：失败必须计数、必须报出来、60 秒节流、成功路径不受影响。
 """
+
+import app.storage.chatlog as chat_logs
 import contextlib
 import io
 from pathlib import Path
 import tempfile
 import unittest
-
-import app.main as dt
-
 
 class ChatLogFailureVisibilityTests(unittest.TestCase):
     def setUp(self):
@@ -25,7 +24,7 @@ class ChatLogFailureVisibilityTests(unittest.TestCase):
         # 把"文件"做成目录 → open(path, "a") 必然失败
         self.target = Path(self.temp.name) / "chatlog.jsonl"
         self.target.mkdir()
-        self.log = dt.ChatLog(str(self.target))
+        self.log = chat_logs.ChatLog(str(self.target))
 
     def add(self, text):
         output = io.StringIO()
@@ -47,7 +46,7 @@ class ChatLogFailureVisibilityTests(unittest.TestCase):
 
     def test_successful_write_does_not_count_failures(self):
         good = Path(self.temp.name) / "ok.jsonl"
-        log = dt.ChatLog(str(good))
+        log = chat_logs.ChatLog(str(good))
         with contextlib.redirect_stdout(io.StringIO()):
             log.add("hello there", "translated", source="glossary", out="译文")
         self.assertEqual(log.failures, 0)

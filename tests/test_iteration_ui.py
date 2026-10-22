@@ -1,4 +1,7 @@
 """Real Tk session reader and correction controls on disposable data."""
+
+import app.translation.desktop_engine as desktop_translation
+import app.translation.policy as chat_policy
 import gc
 from pathlib import Path
 import tempfile
@@ -6,7 +9,6 @@ import time
 import unittest
 from unittest.mock import Mock, patch
 
-import app.main as dt
 from app.presentation.receipts import DrawEntry, DrawFrame
 from app.runtime.messages import DisplayMessage
 from app.runtime.session_view import SessionView
@@ -118,7 +120,7 @@ class SessionReaderTests(unittest.TestCase):
         from app.storage.review_queue import ReviewQueue
         queue = ReviewQueue(store.data_path(self.root,'pending.json'),store.data_path(self.root,'glossary.json'))
         queue.record('move together','一起行动',request_id='request-fixture',
-            quality_checks=dt._translation_quality_report('move together','一起行动',{}))
+            quality_checks=chat_policy._translation_quality_report('move together','一起行动',{}))
         queue.mark_displayed('move together',request_id='request-fixture',session_id='a'*32,
             identity=['a'*32,1,1],at=1,translation='一起行动')
         row = queue.items()[0]
@@ -147,7 +149,7 @@ class ReReviewRuntimeTests(unittest.TestCase):
     def test_running_l0_and_restarted_engine_cannot_revive_suspended_result(self):
         with tempfile.TemporaryDirectory() as folder:
             path = str(Path(folder)/'glossary.json')
-            engine = dt.Translator('fixture-key','https://invalid.local','fixture',False,
+            engine = desktop_translation.Translator('fixture-key','https://invalid.local','fixture',False,
                 hard_offline=False,learning=LearnedGlossary(path),allow_popup=False)
             engine.client.request = Mock(return_value=ApiResponse(text='一起行动',finish_reason='stop',
                 usage=dict(prompt_tokens=2,completion_tokens=2)))
@@ -165,7 +167,7 @@ class ReReviewRuntimeTests(unittest.TestCase):
             engine.client.request.reset_mock()
             self.assertFalse(engine.translate_result('move together').successful)
             engine.client.request.assert_not_called()
-            restarted = dt.Translator('fixture-key','https://invalid.local','fixture',False,
+            restarted = desktop_translation.Translator('fixture-key','https://invalid.local','fixture',False,
                 hard_offline=False,learning=LearnedGlossary(path),allow_popup=False)
             with patch.object(restarted.client,'request') as request:
                 self.assertFalse(restarted.translate_result('move together').successful)

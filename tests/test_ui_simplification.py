@@ -1,4 +1,12 @@
 """Confirmed simplification contracts using isolated storage and real Tk widgets."""
+
+import gui.overlay as overlay_ui
+
+import app.recognition.live as live_state
+
+import app.config.service as config_service
+import app.platform.desktop as desktop
+import app.translation.policy as chat_policy
 import gc
 import os
 from pathlib import Path
@@ -7,7 +15,6 @@ import time
 import unittest
 from unittest.mock import patch,Mock
 
-import app.main as dt
 from app.config.repository import ConfigRepository
 from app.recognition.region import (resolve_region,preset,RegionCapture,require_primary_client,
                                     six_nine,experimental_aspect)
@@ -25,7 +32,7 @@ class AdaptiveDisplayTests(unittest.TestCase):
     def test_invalid_newer_messages_cannot_hide_valid_older_one(self):
         view=overlay();view.max_messages=1
         messages=[DisplayMessage('','go','走','team',1,None,1),DisplayMessage('','wait','等','team',2,None,2)]
-        with patch.object(dt,'live_box',side_effect=lambda bid:(100,200,180,35) if bid==1 else None):
+        with patch.object(live_state,'live_box',side_effect=lambda bid:(100,200,180,35) if bid==1 else None):
             view.render(messages);view.root.after_idle.call_args.args[0]()
         self.assertEqual(view._draw_bubble.call_count,1)
         frame=view._display_observer.call_args.args[1]
@@ -34,18 +41,18 @@ class AdaptiveDisplayTests(unittest.TestCase):
 
     def test_manual_display_values_do_not_change_new_strategy(self):
         view=overlay();items=[DisplayMessage('','go','走','team',1,None,1)]
-        with patch.object(dt,'live_box',return_value=(100,200,180,35)):
+        with patch.object(live_state,'live_box',return_value=(100,200,180,35)):
             view.config=dict(width=100,max_messages=1,fade_seconds=1,fade_extension=1);view.render(items);first=view.label_rects[:]
             report={}
-            self.assertEqual(dt.apply_live_config(dict(width=900,max_messages=10,fade_seconds=60,fade_extension=30),overlay=view,report=report),[])
+            self.assertEqual(config_service.apply_live_config(dict(width=900,max_messages=10,fade_seconds=60,fade_extension=30),overlay=view,report=report),[])
             view.render(items)
         self.assertEqual(first,view.label_rects);self.assertEqual(report,{})
 
     def test_auto_width_changes_with_font_and_long_text_is_not_truncated(self):
-        view=overlay();view._wrap=lambda text,font,width,max_lines:dt.Overlay._wrap(view,text,font,width,max_lines)
+        view=overlay();view._wrap=lambda text,font,width,max_lines:overlay_ui.Overlay._wrap(view,text,font,width,max_lines)
         long='长句正文'*180
         view.root.winfo_screenwidth.return_value=3840;view.root.winfo_screenheight.return_value=2160
-        with patch.object(dt,'live_box',return_value=(100,200,180,35)):
+        with patch.object(live_state,'live_box',return_value=(100,200,180,35)):
             view.render([DisplayMessage('','long',long,'team',1,None,1)])
         output=''.join(c.kwargs.get('text','') for c in view.canvas.create_text.call_args_list)
         self.assertEqual(output,long);self.assertNotIn('…',output)
@@ -56,7 +63,7 @@ class PersistentEvidenceTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup);self.root=Path(self.temp.name)
         self.queue=ReviewQueue(self.root/'pending.json',self.root/'glossary.json')
-        self.queue.record('help me','帮帮我',request_id='r',quality_checks=dt._translation_quality_report('help me','帮帮我',{}))
+        self.queue.record('help me','帮帮我',request_id='r',quality_checks=chat_policy._translation_quality_report('help me','帮帮我',{}))
 
     def row(self):return self.queue.items()[0]
 
@@ -72,7 +79,7 @@ class PersistentEvidenceTests(unittest.TestCase):
         self.assertEqual(other.items()[0]['display_receipt'],receipt)
         row=other.items()[0]
         self.assertTrue(other.decide(row['key'],'reject',token=row['token'],formal_token=row['formal_token']).saved)
-        self.queue.record('help me','帮帮我',request_id='again',quality_checks=dt._translation_quality_report('help me','帮帮我',{}))
+        self.queue.record('help me','帮帮我',request_id='again',quality_checks=chat_policy._translation_quality_report('help me','帮帮我',{}))
         self.assertEqual(self.row()['status'],'rejected')
         self.assertEqual(self.row()['display_receipt'],receipt)
 
@@ -124,14 +131,14 @@ class CostAndRegionTests(unittest.TestCase):
     def test_pause_resume_channel_is_bound_to_real_owner(self):
         from app.runtime.panel_instance import begin_translator,request_exit,consume_action
         owner=begin_translator(self.root)
-        old=dt.is_paused()
+        old=live_state.is_paused()
         try:
             for action,want in (('pause',True),('resume',False)):
                 self.assertTrue(request_exit(self.root,action=action))
                 self.assertEqual(consume_action(self.root,owner),action)
-                dt.set_paused(want);self.assertEqual(dt.is_paused(),want)
+                live_state.set_paused(want);self.assertEqual(live_state.is_paused(),want)
             self.assertFalse(request_exit(self.root,action='new_match'))
-        finally:dt.set_paused(old)
+        finally:live_state.set_paused(old)
 
     def test_amount_states_and_seven_days_never_change_unit(self):
         self.assertEqual(_amount_text(dict(status='complete',amount=.0000002)),'小于 ¥0.0001')
@@ -173,7 +180,7 @@ class SimplifiedTkTests(unittest.TestCase):
         import gui.pages
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup);self.root=Path(self.temp.name)
         ConfigRepository(store.data_path(self.root,'config.json')).save(dict(translate_api=False))
-        self.patch=patch.object(dt,'translator_is_running',return_value=False);self.patch.start();self.addCleanup(self.patch.stop)
+        self.patch=patch.object(desktop,'translator_is_running',return_value=False);self.patch.start();self.addCleanup(self.patch.stop)
         self.app=App(str(self.root));self.errors=[]
         self.app.root.report_callback_exception=lambda *args:self.errors.append(str(args))
         self.addCleanup(self.close)

@@ -1,5 +1,7 @@
 """Event-controlled concurrency checks: fake clients, no paid API or user files."""
 
+import app.translation.desktop_engine as desktop_translation
+
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import tempfile
@@ -15,7 +17,6 @@ import os
 import subprocess
 
 import app.translation.glossary_ops as glossary_ops
-import app.main as dt
 from app.runtime.channels import BoundedChannel, ChannelClosed
 from app.runtime.events import RuntimeHealth
 from app.runtime.messages import ChatCandidate
@@ -43,7 +44,7 @@ class SchedulingTests(unittest.TestCase):
         self.stats = {}
 
     def engine(self, **kwargs):
-        engine = dt.Translator("fake-key", "https://invalid.example", "fake-model", False,
+        engine = desktop_translation.Translator("fake-key", "https://invalid.example", "fake-model", False,
                                allow_popup=False, **kwargs)
         engine.RETRY_BACKOFF = (0, 0)
         return engine

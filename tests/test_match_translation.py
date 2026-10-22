@@ -1,4 +1,13 @@
 """Real screenshot diagnostics and Tk drawing; no paid API or private data."""
+
+import app.translation.builtins as translation_builtins_module
+import gui.overlay as overlay_ui
+
+import app.recognition.capture as recognition_capture
+import app.recognition.live as live_state
+
+import app.platform.game_fonts as game_fonts
+import app.translation.desktop_engine as desktop_translation
 import ctypes
 from ctypes import wintypes
 import gc
@@ -13,7 +22,6 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import app.recognition.ocr as ocr
-import app.main as dt
 from app.presentation.layout import below_bubble
 from app.presentation.receipts import DisplayMonitor, DisplayState
 from app.recognition.selection import select_candidate
@@ -57,14 +65,14 @@ class MatchOcrTests(unittest.TestCase):
             for box in ocr.find_bubbles(image,screen=screen):
                 body=locate_body(image,box,scale=screen[1]/1440)
                 decision=select_candidate(ocr.ocr_variants(image,box,screen=screen,region=body),
-                                          dt.DEFAULT_GLOSSARY,dt.recognition_rules(),
+                                          translation_builtins_module.DEFAULT_GLOSSARY,recognition_capture.recognition_rules(),
                                           verify_body=lambda text: ocr.source_evidence(image,body,text))
                 results.append((body,decision))
         return results
 
     def test_real_short_words_reach_exact_local_translation_keys(self):
-        translator=dt.Translator('', 'https://invalid.local', 'fixture', True,
-                                 glossary=dt.DEFAULT_GLOSSARY, allow_popup=False)
+        translator=desktop_translation.Translator('', 'https://invalid.local', 'fixture', True,
+                                 glossary=translation_builtins_module.DEFAULT_GLOSSARY, allow_popup=False)
         seen=set()
         with patch.object(translator.client,'request',side_effect=AssertionError('Unexpected API')):
             for name in CASES:
@@ -80,7 +88,7 @@ class MatchOcrTests(unittest.TestCase):
                         key=decision.text.lower()
                         self.assertEqual(result.source,'cache' if key in seen else 'glossary')
                         seen.add(key)
-                        self.assertEqual(result.text,dt.DEFAULT_GLOSSARY[decision.text.lower()])
+                        self.assertEqual(result.text,translation_builtins_module.DEFAULT_GLOSSARY[decision.text.lower()])
                         self.assertFalse(result.network_participated)
         self.assertEqual(translator.api_attempts,0)
         self.assertEqual(seen,{'gg','push','afk'})
@@ -100,8 +108,8 @@ class MatchOcrTests(unittest.TestCase):
         images=iter((image,image))
         stop=Mock();stop.is_set.side_effect=[False,False,True]
         with patch.object(ocr,'set_user_words',return_value=''),patch.object(ocr,'_USER_WORDS',''), \
-             patch.object(dt,'is_paused',return_value=False),patch.dict(dt._LIVE,{},clear=True):
-            records=list(dt.iter_ocr_source(interval=0,threshold=2,glossary=dt.DEFAULT_GLOSSARY,
+             patch.object(live_state,'is_paused',return_value=False),patch.dict(live_state._LIVE,{},clear=True):
+            records=list(recognition_capture.iter_ocr_source(interval=0,threshold=2,glossary=translation_builtins_module.DEFAULT_GLOSSARY,
                 verbose=False,only_in_game=False,allow_popup=False,stop_event=stop,
                 message_snapshots=True,frame_provider=lambda:next(images),screen_size=screen))
         self.assertEqual([r.text.lower() for r in records],['push','afk'])
@@ -175,8 +183,8 @@ class MatchLayoutTests(unittest.TestCase):
 
 class MatchTkTests(unittest.TestCase):
     def setUp(self):
-        with patch.object(dt,'register_game_font',return_value=[]):
-            self.view=dt.Overlay(dict(width=300,font_size=18,max_messages=6))
+        with patch.object(game_fonts,'register_game_font',return_value=[]):
+            self.view=overlay_ui.Overlay(dict(width=300,font_size=18,max_messages=6))
         self.errors=[]
         self.view.root.report_callback_exception=lambda *args:self.errors.append(str(args))
         self.monitor=DisplayMonitor(RuntimeHealth(),notify=lambda text:None)
@@ -187,7 +195,7 @@ class MatchTkTests(unittest.TestCase):
         identity=self.tracker.snapshot_of(self.tracker.last_id)
         self.message=DisplayMessage('', 'afk', '挂机中', 'team', time.time(), self.source,
                                     identity.bubble_id,identity=identity)
-        self.live=patch.dict(dt._LIVE,{'con':self.tracker,'pulse':None},clear=True)
+        self.live=patch.dict(live_state._LIVE,{'con':self.tracker,'pulse':None},clear=True)
         self.live.start();self.addCleanup(self.live.stop)
         def close():
             self.view.root.update_idletasks()
@@ -199,12 +207,12 @@ class MatchTkTests(unittest.TestCase):
     def test_actual_tk_failure_retries_and_cannot_revive_a_changed_message(self):
         sw,sh=self.view.root.winfo_screenwidth(),self.view.root.winfo_screenheight()
         blocked=((0,265,sw,sh),(430,0,sw,sh))
-        with patch.object(dt,'live_obstacles',return_value=blocked):
+        with patch.object(live_state,'live_obstacles',return_value=blocked):
             self.view.render([self.message]);self.view.root.update()
         self.assertFalse(self.view.label_rects)
         self.assertEqual(self.monitor.layout_waiting,1)
         self.assertEqual(self.monitor.events[-1].reason,'layout_unavailable')
-        with patch.object(dt,'live_obstacles',return_value=()):
+        with patch.object(live_state,'live_obstacles',return_value=()):
             self.view.render([self.message]);self.view.root.update()
         self.assertEqual(self.monitor.layout_waiting,0)
         self.assertEqual(self.monitor.events[-1].state,DisplayState.TK_DRAWN)
@@ -219,7 +227,7 @@ class MatchTkTests(unittest.TestCase):
             with self.subTest(scaling=scaling):
                 self.view.root.tk.call('tk','scaling',scaling)
                 blocker=(250,265,430,320)
-                with patch.object(dt,'live_obstacles',return_value=(blocker,)):
+                with patch.object(live_state,'live_obstacles',return_value=(blocker,)):
                     self.view.render([self.message]);self.view.root.update()
                 entry=self.monitor.events[-1]
                 self.assertEqual(entry.state,DisplayState.TK_DRAWN)
@@ -237,7 +245,7 @@ class MatchTkTests(unittest.TestCase):
     def test_large_font_multiline_text_stays_inside_the_placed_bubble(self):
         self.view.font_size=36;self.view.width=250;self.view._build_fonts()
         message=self.message._replace(translated='请大家一起推进中路，等待队友到齐后再战斗。')
-        with patch.object(dt,'live_obstacles',return_value=()):
+        with patch.object(live_state,'live_obstacles',return_value=()):
             self.view.render([message]);self.view.root.update()
         entry=self.monitor.events[-1]
         self.assertEqual(entry.state,DisplayState.TK_DRAWN)
@@ -248,8 +256,8 @@ class MatchTkTests(unittest.TestCase):
         for x0,y0,x1,y1 in boxes:
             self.assertGreaterEqual(left+x0,entry.rect[0])
             self.assertGreaterEqual(top+y0,entry.rect[1])
-            self.assertLessEqual(left+x1,entry.rect[2]-dt.BUBBLE_SHADOW)
-            self.assertLessEqual(top+y1,entry.rect[3]-dt.BUBBLE_SHADOW)
+            self.assertLessEqual(left+x1,entry.rect[2]-overlay_ui.BUBBLE_SHADOW)
+            self.assertLessEqual(top+y1,entry.rect[3]-overlay_ui.BUBBLE_SHADOW)
         for before,after in zip(boxes,boxes[1:]):
             self.assertLessEqual(before[3],after[1]+1)
 

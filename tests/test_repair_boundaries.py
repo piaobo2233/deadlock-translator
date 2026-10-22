@@ -1,4 +1,9 @@
 """Review, rendering, nested backup and real process input-mode boundaries."""
+
+import app.bootstrap as bootstrap
+import gui.overlay as overlay_ui
+
+import app.recognition.live as live_state
 import contextlib
 import base64
 import hashlib
@@ -172,7 +177,7 @@ class RepairBoundaryTests(unittest.TestCase):
     def test_panel_page_is_retained_in_source_and_frozen_launch(self):
         for frozen in (False,True):
             with patch.object(sys,'frozen',frozen,create=True),patch('subprocess.Popen') as launch,contextlib.redirect_stdout(io.StringIO()):
-                self.assertTrue(dt.Overlay.open_window('--panel','test','cost'))
+                self.assertTrue(overlay_ui.Overlay.open_window('--panel','test','cost'))
                 args = launch.call_args.args[0]
                 self.assertEqual(args[args.index('--page')+1],'cost')
                 self.assertIn('--parent-pid',args)
@@ -203,7 +208,7 @@ class RepairBoundaryTests(unittest.TestCase):
         a=DisplayMessage('','a','⚠ missing','all',1,None,1,successful=False,reason_code='pending')
         b=a._replace(text='b',bubble_id=2,created_at=2)
         view=overlay()
-        with patch.object(dt,'live_message_box',return_value=(100,200,100,30)):
+        with patch.object(live_state,'live_message_box',return_value=(100,200,100,30)):
             view.render([a,b])
         view._draw_bubble.assert_not_called()
         self.assertEqual(view.label_rects, [])
@@ -211,7 +216,7 @@ class RepairBoundaryTests(unittest.TestCase):
         self.assertEqual(len(frame.entries),2)
         self.assertTrue(all(entry.rect is None and entry.reason == 'panel_only' for entry in frame.entries))
         view.root.after_idle.assert_not_called()
-        with patch.object(dt,'live_message_box',return_value=None): view.render([a,b])
+        with patch.object(live_state,'live_message_box',return_value=None): view.render([a,b])
         frame=view._display_observer.call_args.args[1]
         self.assertTrue(all(entry.reason == 'not_current' for entry in frame.entries))
 
@@ -258,16 +263,7 @@ class RepairBoundaryTests(unittest.TestCase):
             if once: args.append('--once')
             if not gui: args.append('--headless')
             if gui:
-                driver='''import sys
-import app.main as dt
-old=dt.Overlay.__init__
-def start(self,config):
- old(self,config)
- self.root.after(1600,lambda:(self.on_exit(),self.root.destroy()))
-dt.Overlay.__init__=start
-sys.argv=['scripts/run.py']+sys.argv[1:]
-raise SystemExit(dt.main())
-'''
+                driver="import app.bootstrap as bootstrap\nimport gui.overlay as overlay_ui\nimport sys\nimport app.main as dt\nold=overlay_ui.Overlay.__init__\ndef start(self,config):\n old(self,config)\n self.root.after(1600,lambda:(self.on_exit(),self.root.destroy()))\noverlay_ui.Overlay.__init__=start\nsys.argv=['scripts/run.py']+sys.argv[1:]\nraise SystemExit(bootstrap.main())\n"
                 command=[sys.executable,'-X','utf8','-c',driver,*args]
             else:
                 command=[sys.executable,'-X','utf8',str(self.root/'scripts/run.py'),*args]

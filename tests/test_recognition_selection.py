@@ -1,5 +1,13 @@
 """Deterministic selection policy tests; no Tesseract or paid API calls."""
 
+import app.translation.builtins as translation_builtins_module
+import app.translation.query as translation_query_module
+import app.translation.text as translation_text_module
+
+import app.recognition.capture as recognition_capture
+
+import app.translation.policy as chat_policy
+
 import unittest
 from unittest.mock import Mock
 from app.recognition.source import SourceEvidence
@@ -37,19 +45,18 @@ class RecognitionSelectionTests(unittest.TestCase):
         self.assertEqual(result.reason,'bad_ocr')
 
     def test_human_laughter_extension_passes_shared_gates_without_changing_query(self):
-        import app.main as dt
         variants = [('body7', '»b;lolll'), ('otsu3x13', '“brlolt'),
                     ('tight2x8', 'b;lolll'), ('gray2x', 'sbzlolll')]
-        decision = select_candidate(variants, dt.DEFAULT_GLOSSARY, dt.recognition_rules())
+        decision = select_candidate(variants, translation_builtins_module.DEFAULT_GLOSSARY, recognition_capture.recognition_rules())
         self.assertEqual(decision.text, 'b;lolll')
-        report = dt._translation_quality_report(decision.text, '哈哈', {})
+        report = chat_policy._translation_quality_report(decision.text, '哈哈', {})
         self.assertEqual(set(report['checks'].values()), {'pass'})
-        self.assertEqual(dt.normalize_query(decision.text), 'b;lolll')
-        self.assertNotEqual(dt.normalize_query('lolll'), dt.normalize_query('lol'))
+        self.assertEqual(translation_query_module.normalize_query(decision.text), 'b;lolll')
+        self.assertNotEqual(translation_query_module.normalize_query('lolll'), translation_query_module.normalize_query('lol'))
         for noise in ('eeeee', 'eooooeeeeeeeeeooe', 'rirrs', '»b;lolll',
                       'lolll | noise', 'loll1', 'lolllllllllllllll'):
             with self.subTest(noise=noise):
-                self.assertTrue(dt.is_obvious_garbage(noise, {}))
+                self.assertTrue(chat_policy.is_obvious_garbage(noise, {}))
 
     def test_empty_variants_have_no_ocr_reason(self):
         result = select_candidate([("gray", ""), ("otsu", "")], {}, rules())
@@ -114,8 +121,7 @@ class RecognitionSelectionTests(unittest.TestCase):
         self.assertEqual(seen, ["wait me"])
 
     def test_desktop_rules_preserve_previous_live_ranking(self):
-        import app.main as dt
-        glossary = dt.DEFAULT_GLOSSARY
+        glossary = translation_builtins_module.DEFAULT_GLOSSARY
         cases = [[], [("gray", "")], [("gray", "99")],
                  [("otsu", "push mid new"), ("gray", "push mid now")],
                  [("otsu", "sieme"), ("gray", "wait me"), ("tight", "vaitme")],
@@ -128,24 +134,24 @@ class RecognitionSelectionTests(unittest.TestCase):
                     if not raw:
                         continue
                     tried.append(raw)
-                    text = dt.fix_digit_confusion(raw, glossary)
+                    text = chat_policy.fix_digit_confusion(raw, glossary)
                     if text != raw:
                         tried.append(text)
-                    if not dt.is_chat_text(text, glossary) or dt.is_obvious_garbage(text, glossary):
+                    if not chat_policy.is_chat_text(text, glossary) or chat_policy.is_obvious_garbage(text, glossary):
                         continue
-                    tokens = dt.normalize_text(text).split()
+                    tokens = translation_text_module.normalize_text(text).split()
                     score = (sum(t in glossary for t in tokens),
-                             sum(t in dt.COMMON_WORDS for t in tokens), len(dt._WORDISH.findall(text)))
+                             sum(t in chat_policy.COMMON_WORDS for t in tokens), len(chat_policy._WORDISH.findall(text)))
                     if best is None or score > best[0]:
                         best = score, text, kind
                     if score[0] >= 3:
                         break
-                result = select_candidate(iter(variants), glossary, dt.recognition_rules())
+                result = select_candidate(iter(variants), glossary, recognition_capture.recognition_rules())
                 self.assertEqual(result.tried, tuple(tried))
                 self.assertEqual(result.accepted, best is not None)
                 if best is not None:
                     self.assertEqual((result.score, result.text, result.kind),
-                                     (best[0], dt.trim_tail(best[1], glossary), best[2]))
+                                     (best[0], translation_text_module.clean_ocr_text(best[1], glossary), best[2]))
 
     def test_lone_fallback_short_word_needs_corroboration(self):
         policy = rules(is_chat=lambda text, glossary: text in glossary)

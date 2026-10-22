@@ -34,6 +34,9 @@
     页面通过 `root_dir` 自己去调 `glossary_ops` / `memory_ops` / `usage` / `store`。
 """
 
+import app.platform.desktop as desktop
+import app.runtime.input_scope as input_scope
+
 import os
 import traceback
 import time
@@ -87,6 +90,8 @@ class App:
     """
 
     def __init__(self, root_dir, size=None):
+        from app.platform.desktop import initialize_desktop
+        initialize_desktop()
         self.root_dir = root_dir
         self.current = None
         self._page_failed = False
@@ -206,7 +211,6 @@ class App:
     def watch_application(self, key, value):
         """Saving and runtime acceptance are separate, session-bound facts."""
         import time
-        import app.main as dt
         from app.runtime.config_application import application_state
         self._application_generation += 1
         generation = self._application_generation
@@ -217,7 +221,7 @@ class App:
         def check():
             if generation != self._application_generation:
                 return
-            state = application_state(self.root_dir, key, value, running=dt.translator_is_running())
+            state = application_state(self.root_dir, key, value, running=desktop.translator_is_running())
             labels = {'saved': ('已保存（翻译器未运行）', COLORS['muted']),
                       'applied': ('已保存，当前运行已应用', COLORS['ok']),
                       'failed': ('已保存，但当前运行应用失败；请查看诊断', COLORS['err']),
@@ -441,7 +445,6 @@ class App:
 
     def watch_application_fields(self, values, prefix=''):
         import time
-        import app.main as dt
         from app.runtime.config_application import application_state
         self._application_generation += 1
         generation = self._application_generation
@@ -451,7 +454,7 @@ class App:
         started = time.monotonic()
         def check():
             if generation != self._application_generation: return
-            states = [application_state(self.root_dir,k,v,running=dt.translator_is_running()) for k,v in values.items()]
+            states = [application_state(self.root_dir,k,v,running=desktop.translator_is_running()) for k,v in values.items()]
             if 'failed' in states:
                 status(prefix+'已保存，但当前运行应用失败（设置：诊断）', COLORS['err']); return
             if 'protected' in states:
@@ -615,7 +618,6 @@ def run(root_dir="", initial="home", *, parent_pid=0):
           ① 只有真要开窗口时才加载（命令行 --check 之类不背这个成本）
           ② 避免 app ↔ pages 的循环 import（pages 要 from gui.app import register）
     """
-    import app.main as dt
     from gui import pages                          # noqa: F401  触发注册
 
     known = registered()
@@ -623,7 +625,7 @@ def run(root_dir="", initial="home", *, parent_pid=0):
         # [!] 这里也**不回落** —— 传进来的页名不对就明说，别悄悄开首页。
         print(f"[error] 没有名为 {initial!r} 的页面，已注册：{known}")
         return 1
-    selected = root_dir or dt.APP_DIR
+    selected = root_dir or input_scope.APP_DIR
     # 首次启动引导只改默认首页；带 --page 的显式请求（托盘/命令行）照旧直达。
     from gui.onboarding import gate_initial_page
     initial = gate_initial_page(selected, initial)

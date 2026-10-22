@@ -1,10 +1,15 @@
 """Regressions from a match with no visible translations; no network or input."""
+
+import app.translation.builtins as translation_builtins_module
+
+import app.recognition.capture as recognition_capture
+import app.recognition.live as live_state
 import ast
 from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-import app.main as dt
+import gui.session as desktop_session
 from app.recognition.selection import select_candidate
 from app.recognition.tracking import Consensus
 from app.recognition.visual import Presence, VisualObservation
@@ -15,14 +20,14 @@ from tests.test_presentation import overlay
 def prune_history(history, now):
     # Exercise the nested production pump's actual eviction code without
     # starting capture, hotkeys, Tk, or the application's data stores.
-    tree = ast.parse(Path(dt.__file__).read_text(encoding='utf-8'))
+    tree = ast.parse(Path(desktop_session.__file__).read_text(encoding='utf-8'))
     pump = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
                 and n.name == 'pump_body')
     index = next(i for i, n in enumerate(pump.body) if isinstance(n, ast.Assign)
                  and any(isinstance(t, ast.Name) and t.id == 'fresh' for t in n.targets))
     code = ast.Module(body=pump.body[index:index + 2], type_ignores=[])
-    scope = dict(history=history, now=now, live_message_box=dt.live_message_box)
-    exec(compile(code, dt.__file__, 'exec'), scope)
+    scope = dict(history=history, now=now, live_message_box=live_state.live_message_box)
+    exec(compile(code, desktop_session.__file__, 'exec'), scope)
 
 
 class VisibilityRecoveryTests(unittest.TestCase):
@@ -40,7 +45,7 @@ class VisibilityRecoveryTests(unittest.TestCase):
         self.view = overlay()
 
     def render(self):
-        with patch.object(dt, 'live_message_box',
+        with patch.object(live_state, 'live_message_box',
                           side_effect=lambda message: self.tracker.box_for(message.identity)):
             prune_history(self.history, self.now)
             self.view.render([item.message for item in self.history])
@@ -75,21 +80,21 @@ class ShortChatAdmissionTests(unittest.TestCase):
         for text in ('i disagree', 'a miracle', 'u scared', 'i panicked',
                      'i misclicked', 'u lagging'):
             with self.subTest(text=text):
-                result = select_candidate([('body7', text)], dt.DEFAULT_GLOSSARY,
-                                          dt.recognition_rules())
+                result = select_candidate([('body7', text)], translation_builtins_module.DEFAULT_GLOSSARY,
+                                          recognition_capture.recognition_rules())
                 self.assertTrue(result.accepted, result)
                 self.assertEqual(result.text, text)
         for text in ('disagree', 'miracle', 'scared', 'panicked', 'misclicked', 'lagging',
                      'Shift', 'thank q', 'ee u', 'q z'):
             with self.subTest(rejected=text):
-                self.assertFalse(select_candidate([('body7', text)], dt.DEFAULT_GLOSSARY,
-                                                  dt.recognition_rules()).accepted)
+                self.assertFalse(select_candidate([('body7', text)], translation_builtins_module.DEFAULT_GLOSSARY,
+                                                  recognition_capture.recognition_rules()).accepted)
 
     def test_known_short_chat_is_accepted_without_rewriting_original(self):
         for text in ('thank u', 'THANK U', 'can u', 'i agree', 'r u ready'):
             with self.subTest(text=text):
-                result = select_candidate([('body7', text)], dt.DEFAULT_GLOSSARY,
-                                          dt.recognition_rules())
+                result = select_candidate([('body7', text)], translation_builtins_module.DEFAULT_GLOSSARY,
+                                          recognition_capture.recognition_rules())
                 self.assertTrue(result.accepted, result)
                 self.assertEqual(result.text, text)
 
@@ -97,8 +102,8 @@ class ShortChatAdmissionTests(unittest.TestCase):
         for text in ('thank', 'thank q', 'ee u', 'q z',
                      'good i a)', 'aoe | mame omw | exer', 'of =f. gauw'):
             with self.subTest(text=text):
-                self.assertFalse(select_candidate([('body7', text)], dt.DEFAULT_GLOSSARY,
-                                                  dt.recognition_rules()).accepted)
+                self.assertFalse(select_candidate([('body7', text)], translation_builtins_module.DEFAULT_GLOSSARY,
+                                                  recognition_capture.recognition_rules()).accepted)
 
 
 if __name__ == '__main__':

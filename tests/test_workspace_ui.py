@@ -1,4 +1,9 @@
 """Real Tk controls plus disposable storage transactions; no paid requests."""
+
+import gui.overlay as overlay_ui
+
+import app.platform.desktop as desktop
+import app.translation.policy as chat_policy
 import gc
 import json
 import tempfile
@@ -7,7 +12,6 @@ import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-import app.main as dt
 from app.storage import store
 from app.config.repository import ConfigRepository
 from gui.app import App
@@ -22,7 +26,7 @@ class WorkspaceTests(unittest.TestCase):
         self.glossary=store.data_path(self.root,'glossary.json')
         self.pending=store.data_path(self.root,'pending.json')
         store.atomic_write_json(self.config,dict(api_key='fixture-key',model='legacy-model',endpoint='https://custom.invalid/v1',builtins_enabled=False,unknown={'keep':1}))
-        self.running=patch.object(dt,'translator_is_running',return_value=False);self.running.start();self.addCleanup(self.running.stop)
+        self.running=patch.object(desktop,'translator_is_running',return_value=False);self.running.start();self.addCleanup(self.running.stop)
         self.app=App(str(self.root));self.errors=[]
         self.app.root.report_callback_exception=lambda *args:self.errors.append(str(args))
         def close():
@@ -33,7 +37,7 @@ class WorkspaceTests(unittest.TestCase):
         self.addCleanup(close)
 
     def seed(self):
-        quality=dt._translation_quality_report('help me','帮帮我',{})
+        quality=chat_policy._translation_quality_report('help me','帮帮我',{})
         store.atomic_write_json(store.data_path(self.root,'runtime.json'),dict(review_session_id='a'*32))
         from app.storage.requests import fingerprint
         from app.translation.query import QueryKey
@@ -565,7 +569,7 @@ class WorkspaceTests(unittest.TestCase):
         self.seed();d=self.dictionary();self.choose(d,'first');self.draft(d,'切页草稿')
         self.app.open_page('home');self.assertTrue(self.app.page_callbacks._pending)
         self.app.open_page('api');self.assertFalse(self.app.page_callbacks._pending)
-        with patch.object(dt.Overlay,'close_assistant') as close:
+        with patch.object(overlay_ui.Overlay,'close_assistant') as close:
             self.app.root.destroy();close.assert_not_called()
         self.assertFalse(self.app.page_callbacks._pending);self.assertFalse(self.app.window_callbacks._pending)
 
@@ -637,7 +641,7 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(store.read_json(self.config)['font_size'],int(float(scale.get())))
 
     def test_real_home_feedback_reads_waiting_and_drawn_counts_separately(self):
-        dt.translator_is_running.return_value=True
+        desktop.translator_is_running.return_value=True
         path=store.data_path(self.root,'runtime.json')
         data=dict(at=time.time(),game=True,game_foreground=True,ocr_confirmed=3,translated=2,
                   display_translation_drawn=1,display_layout_waiting=1)

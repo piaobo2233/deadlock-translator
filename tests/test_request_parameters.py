@@ -1,5 +1,7 @@
 """Verified-provider parameter policy; fake HTTP and disposable files only."""
 
+import app.translation.desktop_engine as desktop_translation
+
 from dataclasses import FrozenInstanceError
 import hashlib
 import json
@@ -8,7 +10,6 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-import app.main as dt
 from app.config.repository import ConfigRepository
 from app.storage import store
 from app.storage.requests import JournalError, fingerprint
@@ -34,7 +35,7 @@ class RequestParameterTests(unittest.TestCase):
         self.path = str(Path(self.temp.name) / "glossary.json")
 
     def engine(self, **kwargs):
-        return dt.Translator("fake-secret-not-real", OFFICIAL, "deepseek-v4-flash", False,
+        return desktop_translation.Translator("fake-secret-not-real", OFFICIAL, "deepseek-v4-flash", False,
                              learning=LearnedGlossary(self.path), allow_popup=False, **kwargs)
 
     def test_policy_is_immutable_and_returned_dicts_cannot_change_it(self):
@@ -74,7 +75,7 @@ class RequestParameterTests(unittest.TestCase):
         self.assertTrue(store.atomic_write_json(config_path, {"model":"deepseek-v4-flash", "endpoint":OFFICIAL}))
         before = Path(config_path).read_bytes()
         config = ConfigRepository(config_path).load(environment={"DEEPSEEK_API_KEY":"fake-secret-not-real"})
-        engine = dt.Translator(config["api_key"], config["endpoint"], config["model"], False,
+        engine = desktop_translation.Translator(config["api_key"], config["endpoint"], config["model"], False,
                                learning=LearnedGlossary(self.path), allow_popup=False)
         def inspect_prewrite(request, **kwargs):
             payload = json.loads(request.data)

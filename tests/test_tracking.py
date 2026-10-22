@@ -1,5 +1,9 @@
 """Deterministic identity/lifetime tests independent of screenshots and OCR."""
 
+import gui.overlay as overlay_ui
+
+import app.recognition.live as live_state
+
 import unittest
 from unittest.mock import Mock, patch
 
@@ -68,8 +72,7 @@ class TrackingTests(unittest.TestCase):
         self.assertIsNone(restarted.box_of(old_id))
 
     def test_overlay_does_not_fall_back_to_old_position(self):
-        import app.main as dt
-        overlay = dt.Overlay.__new__(dt.Overlay)
+        overlay = overlay_ui.Overlay.__new__(overlay_ui.Overlay)
         overlay.canvas = Mock()
         overlay.root = Mock()
         overlay.root.winfo_screenwidth.return_value = 1920
@@ -78,14 +81,13 @@ class TrackingTests(unittest.TestCase):
         overlay.settings_mode = False
         overlay.x, overlay.y = 0, 0
         overlay.bottom = 0
-        with patch.object(dt, "live_box", return_value=None):
+        with patch.object(live_state, "live_box", return_value=None):
             overlay.render([("", "go", "走", "team", self.a, 1)])
         overlay.root.withdraw.assert_called()
         overlay.canvas.create_text.assert_not_called()
 
     def test_source_metadata_is_preserved_without_floating_source_labels(self):
-        import app.main as dt
-        overlay = dt.Overlay.__new__(dt.Overlay)
+        overlay = overlay_ui.Overlay.__new__(overlay_ui.Overlay)
         overlay.canvas, overlay.root = Mock(), Mock()
         overlay.root.winfo_screenwidth.return_value = 1920
         overlay.root.winfo_screenheight.return_value = 1080

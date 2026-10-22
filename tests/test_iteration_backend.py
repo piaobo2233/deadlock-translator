@@ -1,4 +1,6 @@
 """Iteration contracts: public channels, re-review ownership and private diagnostics."""
+
+import app.translation.policy as chat_policy
 import io
 import json
 from pathlib import Path
@@ -7,7 +9,6 @@ import time
 import unittest
 from unittest.mock import patch
 
-import app.main as dt
 from app.platform import updates
 from app.runtime import diagnostics
 from app.storage import store
@@ -28,7 +29,7 @@ class IterationTests(unittest.TestCase):
     def processed(self, action='accept'):
         original, value = 'move together', '一起行动'
         self.queue.record(original, value, request_id='request-fixture',
-            quality_checks=dt._translation_quality_report(original, value, {}))
+            quality_checks=chat_policy._translation_quality_report(original, value, {}))
         self.queue.mark_displayed(original, request_id='request-fixture', session_id='a'*32,
             identity=['a'*32, 1, 1], at=1, translation=value)
         row = self.queue.items()[0]
@@ -40,12 +41,12 @@ class IterationTests(unittest.TestCase):
         return self.queue.reopen(row['key'], token=row['token'], formal_token=row['formal_token'])
 
     def test_number_words_pass_without_admitting_common_ui_words(self):
-        for word in dt.NUMBER_CHAT_WORDS:
-            self.assertTrue(dt.is_chat_text(word, {}), word)
-            self.assertTrue(dt.is_chat_text(word.upper()+'!', {}), word)
+        for word in chat_policy.NUMBER_CHAT_WORDS:
+            self.assertTrue(chat_policy.is_chat_text(word, {}), word)
+            self.assertTrue(chat_policy.is_chat_text(word.upper()+'!', {}), word)
         for noise in ('Shift', 'Man', 'was', 'we', 'Dean', 'ee ae', 'HimMmavuy'):
-            self.assertFalse(dt.is_chat_text(noise, {}), noise)
-        self.assertTrue(dt.is_chat_text('i disagree', {}))
+            self.assertFalse(chat_policy.is_chat_text(noise, {}), noise)
+        self.assertTrue(chat_policy.is_chat_text('i disagree', {}))
 
     def test_beta_numeric_order_and_exact_public_tags(self):
         self.assertGreater(updates.version_key('1.0.0-beta.10'), updates.version_key('1.0.0-beta.2'))

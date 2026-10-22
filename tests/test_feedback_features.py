@@ -1,4 +1,7 @@
 """Feedback acceptance boundaries; disposable storage, fake API and fake input."""
+
+import app.recognition.capture as recognition_capture
+import app.recognition.live as live_state
 import ctypes
 from pathlib import Path
 import tempfile
@@ -210,7 +213,6 @@ class RegionAndLanguageTests(unittest.TestCase):
         self.assertEqual(find.call_args.args[1],(0,0,450,180))
 
     def test_legacy_manual_capture_generator_samples_without_request(self):
-        import app.main as dt
         from app.recognition import ocr
         gate=RecognitionGate('manual')
         stop=threading.Event()
@@ -219,10 +221,10 @@ class RegionAndLanguageTests(unittest.TestCase):
                 patch.object(ocr,'set_user_words',return_value=''), \
                 patch.object(ocr,'find_bubbles') as find, \
                 patch.object(ocr,'ocr_variants') as read, \
-                patch.object(dt,'is_paused',return_value=False), \
-                patch.dict(dt._LIVE,{},clear=True):
+                patch.object(live_state,'is_paused',return_value=False), \
+                patch.dict(live_state._LIVE,{},clear=True):
             frames=Mock(return_value=None)
-            messages=list(dt.iter_ocr_source(glossary={},only_in_game=False,verbose=False,
+            messages=list(recognition_capture.iter_ocr_source(glossary={},only_in_game=False,verbose=False,
                 screen_size=(1920,1080),frame_provider=frames,stop_event=stop,recognition_gate=gate,
                 capture_config=dict(capture_region=dict(rect=[10,20,600,300],screen=[1920,1080]))))
             self.assertFalse(messages)

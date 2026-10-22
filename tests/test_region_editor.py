@@ -23,7 +23,7 @@ class RegionEditorTests(unittest.TestCase):
         self.root=Path(self.temp.name)
         self.repo=ConfigRepository(store.data_path(self.root,'config.json'))
         self.repo.save(dict(unknown={'keep':1},capture_preset='auto'))
-        self.running=patch('app.main.translator_is_running',return_value=False)
+        self.running=patch('app.platform.desktop.translator_is_running',return_value=False)
         self.running.start();self.addCleanup(self.running.stop)
         self.app=App(str(self.root));self.errors=[]
         self.app.root.report_callback_exception=lambda *args:self.errors.append(str(args))
@@ -144,8 +144,8 @@ class RegionEditorTests(unittest.TestCase):
         runtime=dict(pid=os.getpid(),at=time.time(),config_session=owner['token'],
                      config_application=dict(capture_calibration=result('capture_calibration',old)))
         target=store.data_path(self.root,'runtime.json');store.atomic_write_json(target,runtime)
-        with patch('app.main.translator_is_running',return_value=True), \
-             patch('app.main.game_in_foreground',return_value=True), \
+        with patch('app.platform.desktop.translator_is_running',return_value=True), \
+             patch('app.platform.desktop.game_in_foreground',return_value=True), \
              patch('gui.region.screen_size',return_value=(1920,1080)):
             self.app.game_settings['refresh']()
             self.assertIn('等待',self.app.game_settings['region_status'].cget('text'))

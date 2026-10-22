@@ -1,5 +1,7 @@
 """Durable request costs: disposable files, mock HTTP, no provider calls."""
 
+import app.translation.desktop_engine as desktop_translation
+
 import json
 from concurrent.futures import ThreadPoolExecutor
 import os
@@ -11,7 +13,6 @@ import threading
 import unittest
 from unittest.mock import Mock, patch
 
-import app.main as dt
 import app.translation.glossary_ops as glossary_ops
 from app.storage import store
 from app.storage.accounting import RequestAccounting
@@ -34,7 +35,7 @@ class RequestAccountingTests(unittest.TestCase):
         self.usage.start_session()
 
     def engine(self, usage=None, **kwargs):
-        engine = dt.Translator("fake-secret", "https://invalid.example", "test", False,
+        engine = desktop_translation.Translator("fake-secret", "https://invalid.example", "test", False,
                                usage=usage or self.usage, learning=LearnedGlossary(self.glossary),
                                price_in=1, price_out=2, allow_popup=False, **kwargs)
         engine.RETRY_BACKOFF = (0,)
@@ -500,28 +501,7 @@ class RequestAccountingTests(unittest.TestCase):
         engine.client.request.assert_not_called()
 
     def test_actual_process_crash_after_response_recovers_cost_without_stats_flush(self):
-        script = r'''
-import os, sys
-from unittest.mock import Mock
-def no_network(event, args):
-    if event in ("socket.connect", "socket.getaddrinfo"):
-        raise AssertionError("No real network")
-sys.addaudithook(no_network)
-import app.main as dt
-from app.storage.usage import UsageStats
-from app.translation.learning import LearnedGlossary
-from app.translation.client import ApiResponse
-from pathlib import Path
-folder = Path(sys.argv[1])
-usage = UsageStats(str(folder / "stats.json")); usage.start_session()
-engine = dt.Translator("fake", "https://invalid.example", "test", False,
-    learning=LearnedGlossary(str(folder / "glossary.json")), usage=usage,
-    price_in=1, price_out=2, allow_popup=False)
-engine.client.request = Mock(return_value=ApiResponse(text="一起行动",
-    usage={"prompt_tokens":100,"completion_tokens":20,"total_tokens":120}))
-engine.journal.qualified = lambda *a, **k: os._exit(17)
-engine.translate_result("together")
-'''
+        script = 'import app.translation.desktop_engine as desktop_translation\n\nimport os, sys\nfrom unittest.mock import Mock\ndef no_network(event, args):\n    if event in ("socket.connect", "socket.getaddrinfo"):\n        raise AssertionError("No real network")\nsys.addaudithook(no_network)\nfrom app.storage.usage import UsageStats\nfrom app.translation.learning import LearnedGlossary\nfrom app.translation.client import ApiResponse\nfrom pathlib import Path\nfolder = Path(sys.argv[1])\nusage = UsageStats(str(folder / "stats.json")); usage.start_session()\nengine = desktop_translation.Translator("fake", "https://invalid.example", "test", False,\n    learning=LearnedGlossary(str(folder / "glossary.json")), usage=usage,\n    price_in=1, price_out=2, allow_popup=False)\nengine.client.request = Mock(return_value=ApiResponse(text="一起行动",\n    usage={"prompt_tokens":100,"completion_tokens":20,"total_tokens":120}))\nengine.journal.qualified = lambda *a, **k: os._exit(17)\nengine.translate_result("together")\n'
         env = dict(os.environ, PYTHONPATH=str(ROOT))
         crashed = subprocess.run([sys.executable, "-X", "utf8", "-c", script, self.temp.name],
                                  cwd=ROOT, env=env, capture_output=True, timeout=15)

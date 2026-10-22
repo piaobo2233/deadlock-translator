@@ -1,5 +1,10 @@
 """Activity scheduling, visual lifetime and bounded OCR on offline images."""
 
+import app.translation.builtins as translation_builtins_module
+
+import app.recognition.capture as recognition_capture
+import app.recognition.live as live_state
+
 from pathlib import Path
 import threading
 import time
@@ -249,7 +254,6 @@ class CaptureAndWorkerTests(unittest.TestCase):
         self.assertEqual(variants[2][1], 'go')
 
     def test_production_generator_uses_distinct_frames_three_votes_and_worker_cap(self):
-        import app.main as main
         part = ocr.imread_unicode(str(Path(__file__).resolve().parents[1] /
                                      'verify/truth/body/portrait_go_context.png'))
         frame = np.full((1080, 1920, 3), (30, 25, 32), np.uint8)
@@ -280,9 +284,9 @@ class CaptureAndWorkerTests(unittest.TestCase):
                 patch.object(RecognitionCadence, 'ocr_due', due), \
                 patch.object(ocr, 'ocr_variants', side_effect=variants), \
                 patch.object(ocr, 'source_evidence', return_value=SourceEvidence(True, 'source_agrees')), \
-                patch.object(main, 'is_paused', return_value=False), \
-                patch.dict(main._LIVE, {}, clear=True):
-            source = main.iter_ocr_source(interval=.25, threshold=3, glossary=main.DEFAULT_GLOSSARY,
+                patch.object(live_state, 'is_paused', return_value=False), \
+                patch.dict(live_state._LIVE, {}, clear=True):
+            source = recognition_capture.iter_ocr_source(interval=.25, threshold=3, glossary=translation_builtins_module.DEFAULT_GLOSSARY,
                 verbose=False, only_in_game=False, allow_popup=False, message_snapshots=True,
                 visual_tracking=True, frame_provider=lambda: frame, screen_size=(1920, 1080),
                 capture_owner=own, recognition_gate=RecognitionGate('realtime'), stats=stats)
@@ -304,7 +308,6 @@ class CaptureAndWorkerTests(unittest.TestCase):
             self.assertTrue(all(owner.finished for owner in owners))
 
     def test_manual_mode_without_request_keeps_probe_slow_and_never_starts_ocr(self):
-        import app.main as main
         image = np.zeros((1080, 1920, 3), np.uint8)
         gate = RecognitionGate('manual')
         stop = threading.Event()
@@ -320,11 +323,11 @@ class CaptureAndWorkerTests(unittest.TestCase):
                 patch.object(ocr, 'close_receive_backend'), \
                 patch.object(ocr, '_RESIDENT', None), \
                 patch.object(ocr, 'ocr_variants') as read, \
-                patch.object(main, 'is_paused', return_value=False), \
-                patch.dict(main._LIVE, {}, clear=True):
+                patch.object(live_state, 'is_paused', return_value=False), \
+                patch.dict(live_state._LIVE, {}, clear=True):
             timer.start()
             try:
-                messages = list(main.iter_ocr_source(glossary={}, verbose=False, only_in_game=False,
+                messages = list(recognition_capture.iter_ocr_source(glossary={}, verbose=False, only_in_game=False,
                     allow_popup=False, message_snapshots=True, visual_tracking=True, stop_event=stop,
                     frame_provider=lambda: image, screen_size=(1920, 1080), recognition_gate=gate,
                     capture_owner=own))
@@ -337,7 +340,6 @@ class CaptureAndWorkerTests(unittest.TestCase):
             self.assertTrue(all(owner.finished for owner in owners))
 
     def test_real_native_ocr_still_confirms_three_frames_with_adaptive_capture(self):
-        import app.main as main
         executable = ocr.find_tesseract()
         if not executable or not any((Path(executable).parent / name).is_file()
                                      for name in ('libtesseract-5.5.dll', 'libtesseract-5.dll')):
@@ -352,12 +354,12 @@ class CaptureAndWorkerTests(unittest.TestCase):
         def own(owner):
             owners.append(owner)
             return owner.start() is not False
-        stats = main.new_capture_stats()
+        stats = recognition_capture.new_capture_stats()
         with patch.object(ocr, 'set_user_words', return_value=''), \
-                patch.object(main, 'is_paused', return_value=False), \
-                patch.dict(main._LIVE, {}, clear=True):
+                patch.object(live_state, 'is_paused', return_value=False), \
+                patch.dict(live_state._LIVE, {}, clear=True):
             timer.start()
-            source = main.iter_ocr_source(interval=.25, threshold=3, glossary=main.DEFAULT_GLOSSARY,
+            source = recognition_capture.iter_ocr_source(interval=.25, threshold=3, glossary=translation_builtins_module.DEFAULT_GLOSSARY,
                 verbose=False, only_in_game=False, allow_popup=False, message_snapshots=True,
                 visual_tracking=True, multilingual=True, frame_provider=lambda: frame,
                 screen_size=(1920, 1080), capture_owner=own, stop_event=stop, stats=stats)

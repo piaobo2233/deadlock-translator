@@ -1,4 +1,8 @@
 """Actual Windows/Tk processes; private program/data roots, no API requests."""
+
+import gui.overlay as overlay_ui
+
+import app.runtime.input_scope as input_scope
 import ctypes
 from ctypes import wintypes
 import os
@@ -93,10 +97,9 @@ class PanelInstanceTests(unittest.TestCase):
             self.assertEqual(helper.returncode,0,out+err)
             self.ready(page)
             self.assertEqual((self.state()['process']['pid'],self.state()['token']),(pid,token))
-        import app.main as dt
         from unittest.mock import patch
-        with patch.object(dt,'APP_DIR',str(self.program)),patch('subprocess.Popen') as create:
-            self.assertTrue(dt.Overlay.open_window('--panel','费用','cost'))
+        with patch.object(input_scope,'APP_DIR',str(self.program)),patch('subprocess.Popen') as create:
+            self.assertTrue(overlay_ui.Overlay.open_window('--panel','费用','cost'))
             create.assert_not_called()
         self.ready('cost');self.assertIsNone(first.poll())
 

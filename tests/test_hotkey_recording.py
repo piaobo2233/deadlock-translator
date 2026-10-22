@@ -1,4 +1,7 @@
 """Shortcut edits are reversible until explicit save, including native key fallback."""
+
+import app.platform.desktop as desktop
+import app.runtime.input_scope as input_scope
 import gc
 from pathlib import Path
 import tempfile
@@ -7,7 +10,6 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-import app.main as dt
 from app.storage import store
 from gui.app import App
 import gui.pages
@@ -20,8 +22,8 @@ class HotkeyRecordingTests(unittest.TestCase):
         self.config=store.data_path(self.root,'config.json')
         store.atomic_write_json(self.config,dict(send_hotkey='Ctrl+Alt+T',recognize_hotkey='Ctrl+Alt+R',auto_send=False))
         self.addCleanup(patch.stopall)
-        patch.object(dt,'CONFIG_PATH',self.config).start()
-        patch.object(dt,'translator_is_running',return_value=False).start()
+        patch.object(input_scope,'CONFIG_PATH',self.config).start()
+        patch.object(desktop,'translator_is_running',return_value=False).start()
         patch.dict('os.environ',{'DEEPSEEK_API_KEY':'','DEADLOCK_TEST_NO_NETWORK':'1'}).start()
         self.app=App(str(self.root));self.errors=[]
         self.app.root.report_callback_exception=lambda *args:self.errors.append(args)

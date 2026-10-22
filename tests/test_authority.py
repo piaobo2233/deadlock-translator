@@ -1,5 +1,8 @@
 """AI review compatibility and production authority, isolated and HTTP denied."""
 
+import app.translation.desktop_engine as desktop_translation
+import app.translation.memory as memory_store
+
 import hashlib
 import json
 from pathlib import Path
@@ -7,7 +10,6 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-import app.main as dt
 import app.translation.glossary_ops as glossary_ops
 import app.translation.memory_ops as memory_ops
 from app.storage import store
@@ -29,7 +31,7 @@ class AuthorityTests(unittest.TestCase):
         self.path = self.root / "glossary.json"
         self.review = self.root / "ai_review.json"
         self.repo = LearnedGlossary(self.path, {"gg": "打得好"})
-        self.engine = dt.Translator("fake", "https://invalid.example", "test", False,
+        self.engine = desktop_translation.Translator("fake", "https://invalid.example", "test", False,
                                     learning=self.repo, memory=Mock(), cache=Mock(), allow_popup=False)
         self.engine.client.request = Mock(side_effect=AssertionError("HTTP forbidden"))
 
@@ -233,7 +235,7 @@ class AuthorityTests(unittest.TestCase):
         self.write("memory", {"we": dict(translation="我们", source="api")})
         path = self.root / "translations.json"
         before = path.read_bytes()
-        memory = dt.TranslationMemory(str(path), audit_legacy=False)
+        memory = memory_store.TranslationMemory(str(path), audit_legacy=False)
         self.assertFalse(memory.dirty)
         self.assertTrue(memory.save())
         self.assertEqual(path.read_bytes(), before)

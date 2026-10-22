@@ -6,6 +6,11 @@ from pathlib import Path
 import re
 from urllib.parse import unquote, urlsplit
 
+if __package__:
+    from .public_documents import TEMPLATES
+else:
+    from public_documents import TEMPLATES
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -34,11 +39,14 @@ def check_links(root):
                        set((root / '.github').rglob('*.md')))
     checked = 0
     errors = []
+    template_targets = {root / 'docs/releases' / template: root / target
+                        for target, template in TEMPLATES.items()}
     for document in documents:
         # Preserve upstream license/NOTICE copies verbatim. Their README links
         # refer to the separately supplied upstream source, not our document tree.
         if document.is_relative_to(root / 'docs/licenses'):
             continue
+        effective_document = template_targets.get(document, document)
         text = document.read_text(encoding='utf-8-sig')
         text = re.sub(r'(?ms)^\s*(`{3,}|~{3,})[^\n]*\n.*?^\s*\1\s*$', '', text)
         parser = Links()
@@ -52,7 +60,7 @@ def check_links(root):
                 continue
             path = unquote(url.path)
             local = (root / path.lstrip('/') if path.startswith('/')
-                     else document.parent / path).resolve()
+                     else effective_document.parent / path).resolve()
             if not local.is_relative_to(root) or not local.exists():
                 errors.append(f'{document.relative_to(root)}: {target}')
             checked += 1

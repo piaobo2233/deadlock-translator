@@ -1,5 +1,13 @@
 """Pixel-only body isolation; do not infer teammate status from these images."""
 
+import app.translation.builtins as translation_builtins_module
+import ctypes
+
+import app.recognition.capture as recognition_capture
+import app.recognition.live as live_state
+
+import app.translation.policy as chat_policy
+
 import unittest
 from unittest.mock import Mock, patch
 from pathlib import Path
@@ -9,7 +17,6 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 import app.recognition.ocr as ocr
-import app.main as dt
 from app.vision.body import locate_body, _preserves_glyphs
 from app.recognition.selection import select_candidate
 
@@ -52,7 +59,7 @@ class BodyIsolationTests(unittest.TestCase):
                     body = locate_body(canvas, box, scale=.75)
                     with patch.object(ocr, "_USER_WORDS", ""):
                         decision = select_candidate(ocr.ocr_variants(canvas, box, screen=(1920, 1080),
-                                                    region=body), dt.DEFAULT_GLOSSARY, dt.recognition_rules())
+                                                    region=body), translation_builtins_module.DEFAULT_GLOSSARY, recognition_capture.recognition_rules())
                     if decision.accepted:
                         self.assertEqual(body.line_count, 1, body)
                         self.assertLess(body.rect[1] + body.rect[3], 205, body)
@@ -79,10 +86,10 @@ class BodyIsolationTests(unittest.TestCase):
                 variants.close()
         self.assertEqual(kind, "body7")
         self.assertEqual(text.lower(), "test789 push mid now")
-        self.assertTrue(dt.is_chat_text(text, dt.DEFAULT_GLOSSARY))
+        self.assertTrue(chat_policy.is_chat_text(text, translation_builtins_module.DEFAULT_GLOSSARY))
         # A separate existing mixed-alnum quality gate rejects test789. Do not
         # silently bypass it to turn an OCR-layer regression into acceptance.
-        self.assertTrue(dt.is_obvious_garbage(text, dt.DEFAULT_GLOSSARY))
+        self.assertTrue(chat_policy.is_obvious_garbage(text, translation_builtins_module.DEFAULT_GLOSSARY))
 
     def test_single_character_at_first_or_last_paragraph_line_is_retained(self):
         for lines in (("I", "push mid now"), ("push mid now", "I")):
@@ -136,7 +143,7 @@ class BodyIsolationTests(unittest.TestCase):
         image = scene(panel=True)
         with patch.object(ocr, "_USER_WORDS", ""):
             decision = select_candidate(ocr.ocr_variants(image, (0, 0, image.shape[1], image.shape[0]),
-                                       screen=(2560, 1440)), dt.DEFAULT_GLOSSARY, dt.recognition_rules())
+                                       screen=(2560, 1440)), translation_builtins_module.DEFAULT_GLOSSARY, recognition_capture.recognition_rules())
         self.assertEqual(decision.text.lower(), "go", decision)
 
     def test_real_portrait_frames_reach_the_actual_typed_capture_generator(self):
@@ -157,17 +164,17 @@ class BodyIsolationTests(unittest.TestCase):
         stop = Mock()
         stop.is_set.side_effect = [False, False, True]
         with patch.object(ImageGrab, "grab", side_effect=capture), \
-                patch.object(dt.ctypes.windll.user32, "GetSystemMetrics", side_effect=lambda axis: (1920,1080)[axis]), \
+                patch.object(ctypes.windll.user32, "GetSystemMetrics", side_effect=lambda axis: (1920,1080)[axis]), \
                 patch.object(ocr, "set_user_words", return_value=""), patch.object(ocr, "_USER_WORDS", ""), \
-                patch.object(dt, "is_paused", return_value=False), patch.dict(dt._LIVE, {}, clear=True):
-            messages = list(dt.iter_ocr_source(interval=0, threshold=2, glossary=dt.DEFAULT_GLOSSARY,
+                patch.object(live_state, "is_paused", return_value=False), patch.dict(live_state._LIVE, {}, clear=True):
+            messages = list(recognition_capture.iter_ocr_source(interval=0, threshold=2, glossary=translation_builtins_module.DEFAULT_GLOSSARY,
                 verbose=False, only_in_game=False, allow_popup=False, stop_event=stop, message_snapshots=True))
             self.assertEqual(len(messages), 1)
             self.assertEqual(messages[0].text, "go")
             self.assertEqual(messages[0].identity.original, "go")
             # Body ends before the independent old panel at screen y205.
             self.assertLess(messages[0].position[1] + messages[0].position[3], 205)
-            self.assertEqual(dt.live_message_box(messages[0]), messages[0].position)
+            self.assertEqual(live_state.live_message_box(messages[0]), messages[0].position)
 
 
 if __name__ == "__main__":

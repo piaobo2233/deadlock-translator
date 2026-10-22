@@ -1,4 +1,7 @@
 """Screenshot selection and live capture geometry; no real desktop capture or API."""
+
+import app.recognition.capture as recognition_capture
+import app.recognition.live as live_state
 import gc
 import threading
 import unittest
@@ -115,7 +118,6 @@ class RegionGeometryTests(unittest.TestCase):
 
     def test_running_ocr_source_uses_new_crop_on_next_geometry(self):
         import numpy as np
-        import app.main as dt
         from app.recognition import ocr
         config=dict(capture_region=dict(rect=[10,20,600,300],screen=[1920,1080]))
         clock=[0]
@@ -131,11 +133,11 @@ class RegionGeometryTests(unittest.TestCase):
                 stop.set()
             return []
         def factory(**geometry):
-            return dt.iter_ocr_source(interval=0,glossary={},only_in_game=False,verbose=False,
+            return recognition_capture.iter_ocr_source(interval=0,glossary={},only_in_game=False,verbose=False,
                 stop_event=stop,frame_provider=lambda:np.zeros((1080,1920,3),dtype=np.uint8),**geometry)
         with patch.object(ocr,'set_tesseract',return_value='fixture'), \
                 patch.object(ocr,'set_user_words',return_value=''),patch.object(ocr,'find_bubbles',side_effect=detect), \
-                patch.object(dt,'is_paused',return_value=False),patch.dict(dt._LIVE,{},clear=True):
+                patch.object(live_state,'is_paused',return_value=False),patch.dict(live_state._LIVE,{},clear=True):
             self.assertEqual(list(control.iter_source(factory,stop)),[])
         self.assertEqual(seen,[((280,590),(10,20)),((450,760),(40,50))])
 
@@ -143,26 +145,26 @@ class RegionGeometryTests(unittest.TestCase):
 class CaptureGuardTests(unittest.TestCase):
     def test_only_foreground_game_is_captured_and_geometry_is_stable(self):
         image=Image.new('RGB',(1920,1080),'white')
-        with patch('app.main.game_in_foreground',return_value=False),patch('PIL.ImageGrab.grab') as capture:
+        with patch('app.platform.desktop.game_in_foreground',return_value=False),patch('PIL.ImageGrab.grab') as capture:
             with self.assertRaises(region.CaptureError):
                 region.capture_game_frame()
             capture.assert_not_called()
-        with patch('app.main.game_in_foreground',return_value=True), \
+        with patch('app.platform.desktop.game_in_foreground',return_value=True), \
                 patch.object(region,'primary_game_screen',return_value=(1920,1080)), \
                 patch('PIL.ImageGrab.grab',return_value=image) as capture:
             self.assertIs(region.capture_game_frame(),image)
             capture.assert_called_once_with(bbox=(0,0,1920,1080))
-        with patch('app.main.game_in_foreground',side_effect=[True,False]), \
+        with patch('app.platform.desktop.game_in_foreground',side_effect=[True,False]), \
                 patch.object(region,'primary_game_screen',return_value=(1920,1080)),patch('PIL.ImageGrab.grab',return_value=image):
             with self.assertRaises(region.CaptureError):
                 region.capture_game_frame()
-        with patch('app.main.game_in_foreground',return_value=True), \
+        with patch('app.platform.desktop.game_in_foreground',return_value=True), \
                 patch.object(region,'primary_game_screen',side_effect=[(1920,1080),(2560,1440)]),patch('PIL.ImageGrab.grab',return_value=image):
             with self.assertRaises(region.CaptureError):
                 region.capture_game_frame()
 
     def test_black_frame_is_not_offered_as_an_editable_game_snapshot(self):
-        with patch('app.main.game_in_foreground',return_value=True), \
+        with patch('app.platform.desktop.game_in_foreground',return_value=True), \
                 patch.object(region,'primary_game_screen',return_value=(1920,1080)), \
                 patch('PIL.ImageGrab.grab',return_value=Image.new('RGB',(1920,1080),'black')):
             with self.assertRaises(region.CaptureError):

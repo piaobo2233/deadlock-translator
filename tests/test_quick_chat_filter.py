@@ -1,4 +1,8 @@
 """Native quick-chat filtering, crop boundaries and bounded OCR recovery."""
+
+import app.translation.builtins as translation_builtins_module
+
+import app.recognition.capture as recognition_capture
 import unittest
 from unittest.mock import Mock, patch
 
@@ -47,16 +51,15 @@ class QuickChatFilterTests(unittest.TestCase):
 
     def test_final_chinese_read_never_yields_a_local_glossary_guess(self):
         import numpy as np
-        import app.main as main
         from app.recognition.source import SourceEvidence
         part=synthetic_chat(('go',))
         frame=np.zeros((1440,2560,3),np.uint8)
         frame[220:220+part.shape[0],500:500+part.shape[1]]=part
         frames=iter((frame,frame))
-        stats=main.new_capture_stats()
+        stats=recognition_capture.new_capture_stats()
         with patch.object(ocr,'set_tesseract',return_value='fixture'), patch.object(ocr,'set_user_words',return_value=''), patch.object(ocr,'configure_receive_languages'), patch.object(ocr,'close_receive_backend'), patch.object(ocr,'_RESIDENT',None), patch.object(ocr,'ocr_variants',side_effect=lambda *a,**kw:iter((('grayblock6','REM'),))), patch.object(ocr,'source_evidence',return_value=SourceEvidence(False,'native_chinese','灵瓮就在那里！')) as evidence:
-            source=main.iter_ocr_source(interval=0,threshold=1,
-                glossary=dict(main.DEFAULT_GLOSSARY,rem='雷姆'),verbose=False,
+            source=recognition_capture.iter_ocr_source(interval=0,threshold=1,
+                glossary=dict(translation_builtins_module.DEFAULT_GLOSSARY,rem='雷姆'),verbose=False,
                 only_in_game=False,allow_popup=False,message_snapshots=True,
                 frame_provider=lambda:next(frames,None),screen_size=(2560,1440),stats=stats)
             self.assertEqual(list(source),[])

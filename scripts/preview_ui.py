@@ -1,5 +1,6 @@
 """Render every desktop page with disposable demo data, never real user files."""
 
+
 from pathlib import Path
 import argparse
 import sys
@@ -10,10 +11,11 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+import app.runtime.input_scope as input_scope
+
 
 def main():
     from PIL import ImageGrab
-    import app.main as dt
     from app.storage import store
     from gui import app as app_mod, pages
 
@@ -65,7 +67,7 @@ def main():
                 journal.response(original,rid,ApiResponse(text='演示译文',usage=tokens))
         errors = []
         with patch.dict("os.environ", {"DEEPSEEK_API_KEY": ""}), \
-                patch.object(dt, "CONFIG_PATH", config), \
+                patch.object(input_scope, "CONFIG_PATH", config), \
                 patch.object(pages, "status_of", return_value=("未运行", "截图使用演示数据，未连接游戏或 API", pages.COLORS["muted"])):
             app = app_mod.App(folder, size=options.size)
             app.th.label(app.bar,'演示数据',fg=pages.COLORS['muted'],font=app.th.font_small).pack(side='right',padx=12)

@@ -10,20 +10,22 @@
   ② **没有丢弃时输出逐字不变** —— 本项目对"日常运行输出一个字节都不变"有硬要求，
      不能因为加诊断就把所有日志都改样。
 """
+
+import app.recognition.capture as recognition_capture
+import app.runtime.reporting as reporting
 import unittest
 from pathlib import Path
 from unittest.mock import Mock
 
-import app.main as dt
 
 
 def line(stats):
-    return dt.format_stats(stats, Mock(stats={}), None, tag="t")
+    return reporting.format_stats(stats, Mock(stats={}), None, tag="t")
 
 
 class VisualDropVisibilityTests(unittest.TestCase):
     def test_capture_stats_carries_the_three_drop_reasons(self):
-        stats = dt.new_capture_stats()
+        stats = recognition_capture.new_capture_stats()
         for name in ("visual_drop_confirmation_expired",
                      "visual_drop_confirmation_not_visible",
                      "visual_drop_no_current_box"):
@@ -31,7 +33,7 @@ class VisualDropVisibilityTests(unittest.TestCase):
             self.assertEqual(stats[name], 0)
 
     def test_summary_is_byte_identical_when_nothing_was_dropped(self):
-        stats = dt.new_capture_stats()
+        stats = recognition_capture.new_capture_stats()
         self.assertNotIn("视觉门丢弃", line(stats))
 
     def test_all_three_drop_sites_are_wired_to_the_recorder(self):
@@ -41,7 +43,7 @@ class VisualDropVisibilityTests(unittest.TestCase):
             而"计数器是 0"会被误读成"没有丢弃"。这里按源码断言钉住调用点，
             与项目里 `_save_static_ui` / `usage_stats.save()` 的守卫同一个手法。
         """
-        source = Path(dt.__file__).read_text(encoding="utf-8")
+        source = Path(recognition_capture.__file__).read_text(encoding="utf-8")
         self.assertIn("def note_visual_drop(reason):", source)
         for reason in ("confirmation_expired", "confirmation_not_visible", "no_current_box"):
             self.assertIn(f'note_visual_drop("{reason}")', source,
@@ -50,7 +52,7 @@ class VisualDropVisibilityTests(unittest.TestCase):
         self.assertEqual(source.count("note_visual_drop("), 4)
 
     def test_summary_reports_the_counts_when_something_was_dropped(self):
-        stats = dt.new_capture_stats()
+        stats = recognition_capture.new_capture_stats()
         stats["visual_drop_confirmation_expired"] = 3
         stats["visual_drop_confirmation_not_visible"] = 2
         stats["visual_drop_no_current_box"] = 1

@@ -1,11 +1,12 @@
 """Closing is confirmed by the existing assistant shutdown chain, not by a click."""
+
+import gui.overlay as overlay_ui
 import unittest
 from unittest.mock import Mock,patch
-import app.main as dt
 import app.platform.launcher as launcher
 class ClosePreferenceTests(unittest.TestCase):
     def test_incomplete_save_keeps_overlay_alive_and_success_closes_it(self):
-        overlay=dt.Overlay.__new__(dt.Overlay);overlay.root=Mock()
+        overlay=overlay_ui.Overlay.__new__(overlay_ui.Overlay);overlay.root=Mock()
         overlay.on_exit=Mock(return_value=False)
         self.assertFalse(overlay.close_assistant())
         overlay.root.destroy.assert_not_called()
