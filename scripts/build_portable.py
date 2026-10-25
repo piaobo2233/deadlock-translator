@@ -42,6 +42,11 @@ def copy_licenses(destination):
             distribution = metadata.distribution(name)
         except metadata.PackageNotFoundError:
             continue
+        package_metadata = distribution.read_text('METADATA')
+        if package_metadata:
+            target = destination / name / 'METADATA'
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(package_metadata, encoding='utf-8')
         for entry in distribution.files or ():
             if not any(word in entry.name.lower() for word in ('license', 'copying', 'notice')):
                 continue
@@ -174,6 +179,9 @@ def main():
         bundle = work / 'dist' / EXE_NAME
         shutil.copy2(ROOT / 'LICENSE', bundle / 'LICENSE')
         shutil.copy2(ROOT / 'docs/THIRD-PARTY-NOTICES.md', bundle / 'THIRD-PARTY-NOTICES.md')
+        sources_notice = ROOT / 'docs/releases/third-party-sources.md'
+        if sources_notice.is_file():
+            shutil.copy2(sources_notice, bundle / 'THIRD-PARTY-SOURCES.md')
         shutil.copy2(ROOT / 'docs/guides/首版测试与分享.md', bundle / '先读我.md')
         (bundle / 'VERSION').write_text(args.version + '\n', encoding='utf-8')
         (bundle / 'DISTRIBUTION.json').write_text(json.dumps(distribution, indent=2) + '\n', encoding='utf-8')

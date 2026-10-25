@@ -1,0 +1,25 @@
+{
+  "version": "1.0.1",
+  "assets": [
+    {
+      "name": "LockLingo-1.0.1-setup.exe",
+      "bytes": 78157457,
+      "sha256": "fc73a8ba5001499ff5b954dc65a374e97de973f9a19ce58168901b122811c39c"
+    },
+    {
+      "name": "LockLingo-1.0.1-windows-x64.zip",
+      "bytes": 113679206,
+      "sha256": "8dd2a4f9ca5831d19005ffcd7504e237a83b81c0134baa571d0a2da150b57540"
+    },
+    {
+      "name": "LockLingo-1.0.1-ocr-sources.zip",
+      "bytes": 305840453,
+      "sha256": "802414911c958ca09b1551fc302ecbc75064a46ba6ce04390bca95b16da60415"
+    },
+    {
+      "name": "LockLingo-1.0.1-third-party-sources.zip",
+      "bytes": 272097860,
+      "sha256": "00cc6682372790f1c14ee9f18761c199959e842f341d5827662104f451ef478d"
+    }
+  ]
+}

@@ -45,6 +45,8 @@ python scripts/build_portable.py --version <与VERSION一致的新版本>
 python scripts/build_installer.py --archive dist/LockLingo-<版本>-windows-x64.zip --version <版本>
 ```
 
+若独立源码副本路径较深，给安装器构建命令增加 `--work-dir <可写的短路径>`；Inno 编译器读取深层许可文件可能遇到路径长度上限。1.0.1 发行包另保留 `licenses/<组件>/METADATA`，对应源码及替换方式见[源码说明](releases/third-party-sources.md)。
+
 构建会执行材料门槛；不要绕过检查或覆盖已发布产物。`BUILD-SOURCE.json`记录源码输入，`manifest.json`记录包内字节。许可和源码提供的待核实项见[材料复核](releases/v1.0.0-material-review.md)，这些材料在后续再分发前须处理。
 
 ## 验证与导出

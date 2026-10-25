@@ -138,6 +138,8 @@ def main():
     parser.add_argument("--version", required=True)
     parser.add_argument("--output", type=Path, default=ROOT / "dist")
     parser.add_argument("--iscc", default="", help="ISCC.exe 路径；默认从已知位置探测")
+    parser.add_argument("--work-dir", type=Path, default=ROOT / '.temp/installer-build',
+                        help="解包工作目录；深层源码副本可指定短路径以兼容编译器路径上限")
     args = parser.parse_args()
     if not args.version or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9.-]*", args.version):
         parser.error("版本号只能含字母、数字、点和连字符")
@@ -155,7 +157,7 @@ def main():
     setup_path = args.output / (setup_name + ".exe")
     if setup_path.exists():
         parser.error("安装包已存在，保留旧证据并换一个版本号：" + str(setup_path))
-    scratch = ROOT / ".temp/installer-build"
+    scratch = args.work_dir
     scratch.mkdir(parents=True, exist_ok=True)
     report = dict(archive=str(args.archive.resolve()), archive_sha256=digest(args.archive),
                   version=args.version, iscc=iscc)
