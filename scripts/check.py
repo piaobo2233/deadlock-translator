@@ -11,6 +11,7 @@ import re
 
 ROOT = Path(__file__).resolve().parents[1]
 WINDOWS_PUBLIC_TESTS = (
+    'test_maintenance', 'test_realtime_scheduling',
     'test_updates', 'test_source_launcher', 'test_installer_build', 'test_portable_build',
     'test_public_export', 'test_check_runner', 'test_check_scope', 'test_tray_lifecycle',
     'test_close_preferences', 'test_composer', 'test_workspace_ui', 'test_onboarding',

@@ -413,6 +413,7 @@ def build_recognition_settings(parent, app):
 def build_settings(parent, app):
     heading(parent,app.th,'设置')
     app.updater.build(parent)
+    app.maintenance.build(parent)
     from gui.game_resources import build
     build(parent, app, inspect=False)
     build_preferences(parent,app)

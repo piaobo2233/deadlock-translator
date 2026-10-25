@@ -115,6 +115,8 @@ class App:
         self._build_chrome()
         from gui.updates import Updater
         self.updater = Updater(self)
+        from gui.maintenance import Maintenance
+        self.maintenance = Maintenance(self)
         from gui.continuous import ContinuousWorkspace
         from gui.interactions import InteractionController
         self.workspace = ContinuousWorkspace(self, _PAGES)

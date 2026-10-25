@@ -138,6 +138,17 @@ class QuickChatFilterTests(unittest.TestCase):
         reader.read.assert_not_called()
         reader.close.assert_not_called()
 
+    def test_expired_variant_jobs_keep_resident_reader_ready_for_next_frame(self):
+        reader = Mock()
+        with patch.object(ocr, '_RESIDENT', reader), patch.object(ocr.time, 'monotonic', return_value=10.), \
+                patch.object(ocr, '_read_ocr') as cli:
+            self.assertEqual(ocr._read_preferred(None, 7, deadline=9.), '')
+            self.assertEqual(ocr._read_fallback(None, ocr._mode_config(7), deadline=9., resident=True), '')
+            self.assertEqual(ocr._read_script(None, 7, 'rus', deadline=9.), '')
+        reader.read.assert_not_called()
+        reader.close.assert_not_called()
+        cli.assert_not_called()
+
     def test_recovery_is_explicit_and_rate_limited(self):
         reader=Mock()
         with patch.object(ocr,'_RESIDENT',None), patch.object(ocr,'_RESIDENT_SETTINGS',('cmd','dir','model','words')), patch.object(ocr,'_RESIDENT_RECOVERY_AT',30.), patch.object(ocr.time,'monotonic',return_value=29.), patch('app.recognition.resident.ResidentReader',return_value=reader) as factory:

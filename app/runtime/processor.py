@@ -11,6 +11,7 @@ import threading
 
 from app.runtime.events import PipelineStage
 from app.runtime.messages import ChatCandidate, DisplayMessage
+from app.runtime.timing import RECEIVE_TIMEOUT
 from app.translation.results import TranslationResult, TranslationStatus
 from app.translation.query import QueryKey
 from app.recognition.languages import native_chinese
@@ -238,5 +239,5 @@ class TranslationProcessor:
                               result.request_id if result is not None else "",
                               result.reason_code if result is not None else '',
                               c.identity.first_seen_at if c.identity and c.identity.clock_domain == 'monotonic' else None,
-                              c.identity.first_seen_at + 4.0 if c.identity and c.identity.clock_domain == 'monotonic'
+                              c.identity.first_seen_at + RECEIVE_TIMEOUT if c.identity and c.identity.clock_domain == 'monotonic'
                               and c.identity.first_seen_at is not None else None)

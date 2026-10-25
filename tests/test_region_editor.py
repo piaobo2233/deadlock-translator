@@ -25,6 +25,8 @@ class RegionEditorTests(unittest.TestCase):
         self.repo.save(dict(unknown={'keep':1},capture_preset='auto'))
         self.running=patch('app.platform.desktop.translator_is_running',return_value=False)
         self.running.start();self.addCleanup(self.running.stop)
+        updates=patch('app.platform.updates.fetch_cached',return_value=None)
+        updates.start();self.addCleanup(updates.stop)
         self.app=App(str(self.root));self.errors=[]
         self.app.root.report_callback_exception=lambda *args:self.errors.append(str(args))
         self.app.open_page('recognition');self.app.root.update()
@@ -44,6 +46,29 @@ class RegionEditorTests(unittest.TestCase):
                             'imported_screenshot',**kwargs)
         self.app.game_settings['editor'][0]=editor
         self.app.root.update();return editor
+
+    def test_capture_restores_visible_editor_and_releases_input_on_cancel(self):
+        controls = self.app.game_settings
+        self.app.root.geometry('1100x800+20+20')
+        self.app.root.update()
+        with patch('gui.region.CAPTURE_DELAY_MS', 1), patch(
+                'gui.region.capture_game_frame', return_value=Image.new('RGB', (2560, 1440), 'white')):
+            controls['begin']('capture')
+            self.wait(lambda: controls['state']['busy'])
+        editor = controls['editor'][0]
+        self.app.root.update()
+        self.assertTrue(editor.window.winfo_viewable())
+        self.assertEqual(self.app.root.state(), 'normal')
+        self.assertEqual(self.app.root.grab_current(), editor.window)
+        # External desktop windows may cover a test runner; assert the stack
+        # within our application, where the old shade covered this dialog.
+        stack = self.app.root.tk.call('wm', 'stackorder', self.app.root._w)
+        self.assertEqual(str(stack[-1]), editor.window._w)
+        self.assertTrue(editor.save_button.winfo_viewable())
+        editor.escape()
+        self.app.root.update()
+        self.assertIsNone(self.app.root.grab_current())
+        self.assertFalse(editor.alive)
 
     def test_import_without_game_saves_original_pixels_pending_match_and_merges_other_edits(self):
         path=self.root/'original.png';Image.new('RGB',(2560,1440),'white').save(path)

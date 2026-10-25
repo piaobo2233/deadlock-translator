@@ -68,6 +68,26 @@ class ForegroundHotkeyTests(unittest.TestCase):
 
 
 class ReceiveTests(unittest.TestCase):
+    def test_live_response_after_four_seconds_is_delivered_without_artificial_wait(self):
+        from app.runtime.timing import RECEIVE_TIMEOUT
+        now = [10.]
+        identity = ConfirmedMessage('a' * 32, 1, 1, 'wait for me',
+                                    QueryKey.from_text('wait for me'), 10., 'monotonic', 8.)
+        candidate = ChatCandidate('', identity.original, 'all', (0, 0, 180, 40), 1, identity=identity)
+        pipe = TranslationPipeline(lambda: (), Mock(), task_timeout=RECEIVE_TIMEOUT, clock=lambda: now[0])
+        work = pipe._work(candidate)
+        # OCR consumed 2 s; a valid response 5 s after first sight must survive.
+        now[0] = 13.
+        self.assertTrue(work.control.active())
+        msg = DisplayMessage('', candidate.text, '等我', 'all', 0, candidate.position, 1, identity=identity)
+        pipe._publish(work, msg)
+        self.assertEqual(pipe.outbox.qsize(), 1)
+        now[0] = 21.
+        self.assertFalse(work.control.active())
+        gone = TranslationPipeline(lambda: (), Mock(), task_timeout=RECEIVE_TIMEOUT,
+                                   clock=lambda: 11., is_current=lambda _: False)
+        self.assertFalse(gone._work(candidate).control.active())
+
     def test_receive_languages_and_mixed_bodies(self):
         for value in ('hola equipo', 'precisamos de ajuda', 'attendez moi', 'Wir brauchen Hilfe',
                       'où êtes vous', 'não agora', 'danke', 'gracias', 'wait for me',

@@ -90,16 +90,9 @@ class RegionEditor:
         app.interactions.hide_hint()
         root = app.root
         self.previous_focus = root.focus_get()
-        self.shade = self.tk.Toplevel(root)
-        self.shade.withdraw()
-        self.shade.overrideredirect(True)
-        self.shade.transient(root)
-        self.shade.configure(bg='#000000')
-        self.shade.attributes('-alpha', .55)
         self.window = win = self.tk.Toplevel(root)
         win.withdraw()
         win.transient(root)
-        win.overrideredirect(True)
         win._page_key = 'recognition'
         win.title('设置识别范围')
         root.update_idletasks()
@@ -110,7 +103,6 @@ class RegionEditor:
                 return
             x, y = root.winfo_rootx(), root.winfo_rooty()
             w, h = root.winfo_width(), root.winfo_height()
-            self.shade.geometry(f'{w}x{h}+{x}+{y}')
             ew, eh = min(width, max(380,w-32)), min(height, max(300,h-32))
             win.geometry(f'{ew}x{eh}+{x+(w-ew)//2}+{y+(h-eh)//2}')
         self.position_binding = root.bind('<Configure>', position, add='+')
@@ -217,16 +209,15 @@ class RegionEditor:
         win.bind('<Configure>', fit_layout, add='+')
         self.save_state()
         self.schedule_render()
-        self.shade.deiconify()
         win.deiconify()
-        win.lift(self.shade)
+        win.lift()
         win.grab_set()
         self.canvas.focus_set()
 
     def _destroy(self, event):
         if event.widget is self.window:
             self.app.root.unbind('<Configure>', self.position_binding)
-            self.shade.destroy()
+            self.window.grab_release()
             self.alive = False; self.task += 1
             self.image = None; self.small_image = None
             self.photo = None; self.local_photo = None

@@ -306,9 +306,10 @@ def main() -> int:
         translator, is_chinese=chat_policy.is_chinese, chatlog=chatlog, matchlog=matchlog,
         stats=stats, health=runtime_health, evidence_log=evidence_log,
         require_evidence=not bool(args.simulate))
+    from app.runtime.timing import RECEIVE_TIMEOUT
     pipeline = TranslationPipeline(
         make_source, processor, health=runtime_health, paused=live_state.is_paused,
-        stop_event=capture_stop, reliable=args.once and not args.replay_realtime, task_timeout=4.0,
+        stop_event=capture_stop, reliable=args.once and not args.replay_realtime, task_timeout=RECEIVE_TIMEOUT,
         is_current=lambda candidate: (bool(args.simulate) or bool(args.replay) or
                    (not config.get("only_in_game", True) or desktop.game_in_foreground()))
                    and (region_capture is None or region_capture.current())

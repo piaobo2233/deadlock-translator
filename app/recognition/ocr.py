@@ -304,6 +304,8 @@ def _preferred_read(gray, mode, *, deadline=None):
 
 
 def _read_preferred(gray, mode, *, deadline=None):
+    if deadline is not None and time.monotonic() >= deadline:
+        return ''
     timeout = OCR_TIMEOUT if deadline is None else max(.001, min(OCR_TIMEOUT, deadline-time.monotonic()))
     if _RESIDENT is not None:
         try:
@@ -874,6 +876,8 @@ def _mode_config(mode):
 
 
 def _read_script(image, mode, language, *, deadline=None):
+    if deadline is not None and time.monotonic() >= deadline:
+        return ''
     timeout = OCR_TIMEOUT if deadline is None else max(.001, min(OCR_TIMEOUT, deadline-time.monotonic()))
     if _RESIDENT is not None:
         try:
@@ -887,6 +891,8 @@ def _read_script(image, mode, language, *, deadline=None):
 
 
 def _read_fallback(image, config, *, deadline=None, resident=False):
+    if deadline is not None and time.monotonic() >= deadline:
+        return ''
     timeout = OCR_TIMEOUT if deadline is None else max(.001, min(OCR_TIMEOUT, deadline-time.monotonic()))
     with measure_stage('fallback'):
         if resident and _RESIDENT is not None:
