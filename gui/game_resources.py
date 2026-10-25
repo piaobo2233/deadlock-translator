@@ -1,3 +1,4 @@
+from gui.appearance import help_text
 """Window-owned background game-data preparation; workers never touch Tk."""
 import queue
 import threading
@@ -24,7 +25,7 @@ class GameResources:
 
     def build(self, parent, *, inspect=True):
         area = section(parent, self.app.th, '游戏资料')
-        text(area, self.app.th, '从本机游戏安装资源准备官方中英文名称，用于明确术语匹配和句子参考；'
+        help_text(area, self.app.th, '从本机游戏安装资源准备官方中英文名称，用于明确术语匹配和句子参考；'
              '同时准备中文快捷消息，用于识别过滤。无需联网，资料保存在独立缓存。'
              '游戏更新或来源变化后请手动重新准备，成功后重启助手生效；普通聊天、通用词库与个人记忆仍可使用。', small=True, muted=True,
              wraplength=780, justify='left').pack(anchor='w')
@@ -150,7 +151,7 @@ class GameResources:
             if self.app.current in {'settings', 'dictionary'}:
                 self.inspect()
         dictionary = getattr(self.app, 'dictionary', None)
-        if self.app.current == 'dictionary' and dictionary is not None:
+        if dictionary is not None and dictionary.parent.winfo_exists():
             dictionary.resources_changed()
         self.app.window_callbacks.schedule(200, self.poll)
 

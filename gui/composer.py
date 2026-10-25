@@ -2,88 +2,31 @@
 import queue
 import threading
 
-from gui.appearance import panel, text
+from gui.appearance import panel, text, section
 from gui.theme import COLORS as C
 from app.translation.manual import ManualTranslator
 
 
-def _rounded_outline(canvas, width, height, *, fill, border):
-    radius = 10
-    canvas.create_polygon(
-        1+radius, 1, width-radius, 1, width, 1, width, 1+radius,
-        width, height-radius, width, height, width-radius, height,
-        1+radius, height, 1, height, 1, height-radius, 1, 1+radius, 1, 1,
-        smooth=True, splinesteps=24, fill=fill, outline=border,
-        tags='decoration')
-
-
 def _text_field(parent, th, title, *, preview=False):
-    """Small print-style corners around a native, selectable Tk text widget."""
-    import tkinter.font as tkfont
-    fill = C['paper'] if preview else '#23221D'
-    font = ('Cambria', 16) if preview else (th.font[0], 13)
-    frame = th.tk.Canvas(parent, bg=C['bg'], width=1, highlightthickness=0,
-                         takefocus=0)
+    """Reference label above a dark native field; selection and editing stay native."""
+    text(parent,th,title).pack(anchor='w',pady=(0,6))
+    frame=panel(parent,th,bg=C['soft'],border=True)
     frame.pack(fill='x')
-    editor = th.tk.Text(frame, height=2, width=1, wrap='word', font=font,
-                        relief='flat', bd=0, highlightthickness=0,
-                        bg=fill, fg=C['ink'] if preview else C['fg'],
-                        insertbackground=C['fg'], selectbackground=C['accent'],
-                        selectforeground=C['ink'], padx=10, pady=9,
-                        state='disabled' if preview else 'normal', undo=not preview)
-    header = 30
-    frame.configure(height=header + editor.winfo_reqheight() + 7)
-    window = frame.create_window(7, header, window=editor, anchor='nw')
-    tag_font = (th.font[0], 11, 'bold')
-    tag_width = tkfont.Font(root=parent, font=tag_font).measure(title) + 30
-
-    def draw(_event=None):
-        frame.delete('decoration')
-        width, height = frame.winfo_width()-1, frame.winfo_height()-1
-        border = C['accent'] if str(editor.tk.call('focus')) == str(editor) else '#B9A580'
-        _rounded_outline(frame, width, height, fill=fill, border=border)
-        frame.create_rectangle(7, 2, tag_width, header-1,
-                               fill='#D3C09B', outline='', tags='decoration')
-        frame.create_line(7, header-1, tag_width, header-1,
-                          fill=border, tags='decoration')
-        frame.create_text(17, header/2, anchor='w', text=title,
-                          fill=C['ink'], font=tag_font, tags='decoration')
-        frame.itemconfigure(window, width=max(1, width-14))
-        frame.tag_lower('decoration')
-
-    frame.bind('<Configure>', draw)
-    editor.bind('<FocusIn>', draw, add='+')
-    editor.bind('<FocusOut>', draw, add='+')
+    editor=th.tk.Text(frame,height=2 if preview else 3,width=1,wrap='word',font=th.font,
+        relief='flat',bd=0,highlightthickness=0,bg=C['soft'],fg=C['fg'],
+        insertbackground=C['fg'],selectbackground=C['accent'],selectforeground=C['ink'],
+        padx=12,pady=10,state='disabled' if preview else 'normal',undo=not preview)
+    editor.pack(fill='both',expand=True,padx=1,pady=1)
+    editor.bind('<FocusIn>',lambda _e:frame.configure(highlightbackground=C['accent']),add='+')
+    editor.bind('<FocusOut>',lambda _e:frame.configure(highlightbackground=C['border']),add='+')
     return editor
 
 
 def _action_button(parent, th, title, command, *, primary=False):
-    frame = th.tk.Canvas(parent, bg=C['bg'], highlightthickness=0, takefocus=0)
-    frame.pack(side='left', padx=(0 if primary else 12, 0))
-    button = th.button(frame, title, command, kind='primary' if primary else 'default')
-    button.configure(font=(th.font[0], 12, 'bold' if primary else 'normal'),
-                     width=12 if primary else 11, pady=6, highlightthickness=0)
-    frame.configure(width=button.winfo_reqwidth()+10, height=button.winfo_reqheight()+10)
-    frame.create_window(5, 5, anchor='nw', window=button)
-
-    def draw(_event=None):
-        frame.delete('decoration')
-        focused = str(button.tk.call('focus')) == str(button)
-        _rounded_outline(frame, frame.winfo_width()-1, frame.winfo_height()-1,
-                         fill=button.cget('bg'), border=C['accent'] if primary or focused else '#B9A580')
-        if focused:
-            frame.create_line(14, frame.winfo_height()-7, frame.winfo_width()-14,
-                              frame.winfo_height()-7, fill=C['ink'] if primary else C['accent'],
-                              tags='decoration')
-        frame.tag_lower('decoration')
-
-    frame.bind('<Configure>', draw)
-    button.bind('<Enter>', draw, add='+')
-    button.bind('<Leave>', draw, add='+')
-    button.bind('<FocusIn>', draw, add='+')
-    button.bind('<FocusOut>', draw, add='+')
+    button=th.button(parent,title,command,kind='primary' if primary else 'default')
+    button.configure(width=12)
+    button.pack(side='left',padx=(0,12))
     return button
-
 
 def fingerprint(app):
     from gui.pages import _load_config
@@ -95,8 +38,7 @@ def fingerprint(app):
 def build_composer(parent, app):
     from gui.pages import _load_config
     th = app.th
-    body = panel(parent, th)
-    body.pack(fill='x')
+    body = section(parent, th, '输入与预览')
     source = _text_field(body, th, '输入原文')
     row = panel(body, th)
     row.pack(fill='x', pady=12)

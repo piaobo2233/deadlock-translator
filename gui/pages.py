@@ -119,7 +119,12 @@ def _save(key, value, app):
     if not isinstance(raw, dict) or raw.get(key) != value:
         app.set_status('保存失败：写后核对不一致', COLORS['err'])
         return False
-    if key == 'builtins_enabled' and app.current == 'dictionary':
+    if key in {'send_target','translate_api','api_key','model','endpoint'}:
+        composer=getattr(app,'composer',None)
+        if composer:composer['view']['render']()
+        api=getattr(app,'api_controls',None)
+        if api and 'refresh_summary' in api:api['refresh_summary']()
+    if key == 'builtins_enabled':
         refresh = getattr(app,'_refresh_dictionary',None)
         if callable(refresh):
             refresh()
@@ -147,8 +152,8 @@ def _row(parent, th, label, hint="", app=None):
         所以是**移到底栏**，不是删掉。
     """
     c = COLORS
-    row = th.tk.Frame(parent, bg=c["bg"])
-    row.pack(fill="x", pady=(0, th.t["sp_s"]))
+    row = th.tk.Frame(parent, bg=c["bg"],pady=9,padx=4)
+    row.pack(fill="x", pady=(0, 1))
     holder = th.tk.Frame(row, bg=c["bg"])
     holder.pack(side="right")
     left = th.tk.Frame(row, bg=c["bg"])
@@ -157,20 +162,12 @@ def _row(parent, th, label, hint="", app=None):
     name = th.label(left, label, bg=c["bg"], fg=c["fg"], font=th.font)
     name.pack(fill="x", anchor="w")
 
-    if hint and not app:
-        # 没给 app（旧调用）就还按老样子在行内显示
-        th.label(left, str(hint).replace("**", ""), bg=c["bg"], fg=c["muted"],
-                 font=th.font_small, wraplength=260, justify="left").pack(
-            fill="x", anchor="w")
-    elif hint and app:
-        # 悬停 → 底栏显示说明；离开 → 恢复丝印
-        for w in (row, left, name):
-            w.bind("<Enter>", lambda _e, h=hint: app.show_hint(h))
-            w.bind("<Leave>", lambda _e: app.show_hint(""))
+    from gui.interactions import setting_row
+    setting_row(row,hint)
     return row, holder
 
 
-def _switch(app, holder, key, config, *, show_state=True):
+def _switch(app, holder, key, config, *, show_state=False):
     """开 / 关。**一个勾选框，没有「确认」「应用」。**
 
     [!] 必须用 `ttk.Checkbutton`，**不能用 plain `tk.Checkbutton`**。
@@ -186,7 +183,7 @@ def _switch(app, holder, key, config, *, show_state=True):
     def toggle():
         if not _save(key, bool(var.get()), app):
             var.set(bool(_load_config(app.root_dir).get(key)))
-    button=th.ttk.Checkbutton(holder, variable=var, command=toggle, style="GoldSwitch.TCheckbutton")
+    button=th.ttk.Checkbutton(holder, variable=var, command=app.workspace.owned(holder,toggle), style="GoldSwitch.TCheckbutton")
     button.pack()
     if show_state:
         def state(*_):button.configure(text='开' if var.get() else '关')
@@ -199,10 +196,10 @@ def _switch(app, holder, key, config, *, show_state=True):
 def _choice(app, holder, key, config, options, width=10):
     th, c = app.th, COLORS
     var = th.tk.StringVar(value=str(config.get(key, "")))
-    box = th.ttk.Combobox(holder, textvariable=var, values=list(options),
+    box = th.combobox(holder, textvariable=var, values=list(options),
                           state="readonly", width=width)
     box.pack()
-    box.bind("<<ComboboxSelected>>", lambda _e: _save(key, var.get(), app))
+    box.bind("<<ComboboxSelected>>", app.workspace.owned(holder,lambda _e: _save(key, var.get(), app)))
     return var
 
 
@@ -212,7 +209,8 @@ def _number(app, holder, key, config, lo, hi, step, unit=""):
     box = th.tk.Frame(holder, bg=c["bg"])
     box.pack()
     shown = th.label(box, "", bg=c["bg"], fg=c["muted"], font=th.font_small)
-    shown.pack(anchor="e", pady=(0, 3))
+    shown.pack(side='right',padx=(12,0))
+    shown.configure(width=4,anchor='e')
 
     def fmt(v):
         return f"{int(float(v))}{unit}" if step >= 1 else f"{float(v):g}{unit}"
@@ -231,13 +229,12 @@ def _number(app, holder, key, config, lo, hi, step, unit=""):
         shown.configure(text=fmt(value))
         if pending["id"]:
             try:
-                app.root.after_cancel(pending["id"])
+                app.page_callbacks.cancel(pending["id"])
             except Exception:
                 pass
-        pending["id"] = app.after_page(400, commit)
+        pending["id"] = app.after_page(400, app.workspace.owned(holder,commit))
 
-    th.ttk.Scale(box, from_=lo, to=hi, orient="horizontal", variable=var,
-                 command=moved, length=140, style='Gold.Horizontal.TScale').pack()
+    th.scale(box, from_=lo, to=hi, variable=var,command=moved,length=210).pack(side='left')
     return var
 
 

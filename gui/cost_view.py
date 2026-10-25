@@ -127,24 +127,26 @@ def detail_rows(consumption):
 
 
 def build_cost(parent, app, load_config=None, money=None, priced=None):
-    from gui.appearance import heading, panel, text
+    from gui.appearance import heading, panel, text, module
     from gui.usage_charts import UsageChart, visible_models
     from app.brand import apply_window_icon
     th=app.th; c=COLORS
     header=heading(parent,th,'API 用量',compact=True)
-    extra_header_height=max(0,int(header.winfo_children()[0].cget('height'))-72)
+    extra_header_height=0
     selected=th.tk.IntVar(parent, value=7)
     ledger=usage.UsageStats(store.data_path(app.root_dir,'stats.json'))
     values={}; titles={}; buttons={}; detail_window=[None]
-    summary=panel(parent,th);summary.pack(fill='x',pady=(0,10))
+    summary=module(parent,th,'费用概览')
     for index,(key,title) in enumerate((('day','今日费用'),('session','最近运行'),('total','累计费用'))):
         summary.columnconfigure(index,weight=1,uniform='fee')
         cell=panel(summary,th);cell.grid(row=0,column=index,sticky='ew',padx=(0,12))
         titles[key]=text(cell,th,title,small=True,muted=True);titles[key].pack(anchor='w')
-        values[key]=th.label(cell,'—',font=('Cambria',21,'bold'))
+        values[key]=th.label(cell,'—',font=th.font_big)
         values[key].pack(anchor='w',pady=(2,0))
     th.hairline(parent,pady=(0,9))
-    toolbar=panel(parent,th);toolbar.pack(fill='x',pady=(0,6))
+    trend_area=module(parent,th,'费用走势')
+    toolbar=panel(trend_area,th);toolbar.pack(fill='x',pady=(0,6))
+    toolbar._hover_row=True
     th.label(toolbar,'费用走势',font=th.font_heading).pack(side='left')
     refresh_button=th.link(toolbar,'刷新',lambda:refresh());refresh_button.pack(side='left',padx=(10,0))
     total_label=text(toolbar,th,'',small=True,muted=True);total_label.pack(side='right',padx=(10,0))
@@ -155,17 +157,18 @@ def build_cost(parent, app, load_config=None, money=None, priced=None):
         button=th.button(toolbar,f'近 {days} 天',lambda days=days:change(days))
         button.configure(padx=8,pady=3)
         button.pack(side='right',padx=(6,0));buttons[days]=button
-    inspect=text(parent,th,'指向图表或聚焦后按左右键，查看具体数值',small=True,muted=True)
+    inspect=text(trend_area,th,'指向图表或聚焦后按左右键，查看具体数值',small=True,muted=True)
     # Preserve room for the bottom actions when the DPI-aware title band grows.
     # At 100% the band is still 72px and the approved chart stays 145px tall.
-    trend=UsageChart(parent,th,mode='trend',inspect=lambda value:inspect.configure(text=value),
+    trend=UsageChart(trend_area,th,mode='trend',inspect=lambda value:inspect.configure(text=value),
                      height=max(100,145-extra_header_height))
     trend.pack(fill='x')
     inspect.pack(fill='x',pady=(4,4))
-    metrics=text(parent,th,'',small=True,wraplength=800,justify='left')
+    metrics=text(trend_area,th,'',small=True,wraplength=800,justify='left')
     metrics.pack(fill='x',pady=(0,6))
-    th.label(parent,'模型费用',font=th.font_heading).pack(anchor='w',pady=(0,5))
-    models=UsageChart(parent,th,mode='models',inspect=lambda value:inspect.configure(text=value),height=82)
+    model_area=module(parent,th,'模型费用')
+    th.label(model_area,'模型费用',font=th.font_heading).pack(anchor='w',pady=(0,5))
+    models=UsageChart(model_area,th,mode='models',inspect=lambda value:inspect.configure(text=value),height=82)
     models.pack(fill='x')
     bottom=panel(parent,th);bottom.pack(fill='x',pady=(8,0))
     quality=text(bottom,th,'',small=True,muted=True,wraplength=700,justify='left')
@@ -233,7 +236,7 @@ def build_cost(parent, app, load_config=None, money=None, priced=None):
                 (' · 部分已知' if info['status']=='partial' else '')) if available else '记录不可用')
             for value,button in buttons.items():
                 active=value==days
-                button.configure(bg=c['accent'] if active else c['bg'],fg=c['ink'] if active else c['fg'])
+                button.set_selected(active)
             trend.set_rows(snapshot['trend'],available=available)
             models.set_rows(visible_models(snapshot.get('models',{})),available=available)
             fee=bucket.get('request_cost',{})

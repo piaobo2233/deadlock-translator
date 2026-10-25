@@ -13,19 +13,19 @@ import queue
 import sys
 import time
 
-BUBBLE_BORDER = "#0C0C0C"
+BUBBLE_BORDER = "#252820"
 
 
-TEXT_COLOR = "#0C0C0C"
+TEXT_COLOR = "#20231E"
 
 
 NAME_COLOR = "#3A3730"
 
 
-BUBBLE_ALLY_TOP, BUBBLE_ALLY_BOTTOM = "#F2EFE8", "#D8D4CB"   # 友方：浅暖白
+BUBBLE_ALLY_TOP, BUBBLE_ALLY_BOTTOM = "#EFEBD9", "#E2DDCA"   # 友方：暖纸色
 
 
-BUBBLE_ALL_TOP, BUBBLE_ALL_BOTTOM = "#F7EFE4", "#DCCFC0"     # 全体：偏暖米
+BUBBLE_ALL_TOP, BUBBLE_ALL_BOTTOM = "#F2E9D5", "#E5D9C3"     # 全体：偏暖米
 
 
 MAGIC_COLOR = "#010203"                                       # 透明色键，别乱改
@@ -37,7 +37,7 @@ BUBBLE_X = 4            # 气泡左边距（右边留 3px 给硬阴影）
 BUBBLE_SHADOW = 3       # box-shadow: 3px 3px 0
 
 
-BUBBLE_RADIUS = 3       # border-radius: 3px
+BUBBLE_RADIUS = 4       # 小圆角，保留游戏聊天的紧凑轮廓
 
 
 TEXT_FONT_SIZE = -15    # 负号 = 像素单位。游戏就是 font-size: 15px
@@ -135,7 +135,7 @@ class Overlay:
         """字号可调，所以字体对象要能重建。Tk 字号传负数 = 像素单位。"""
         import tkinter.font as tkfont
 
-        self.font_text = tkfont.Font(family=self.family_text, size=-self.font_size)
+        self.font_text = tkfont.Font(family=self.family_text, size=-self.font_size, weight='bold')
         self.line_height = max(1, int(self.font_text.metrics('linespace')))
 
 
@@ -199,19 +199,12 @@ class Overlay:
 
     def _draw_bubble(self, x, y, w, h, top_color, bottom_color, tag,
                      pointer=False):
-        """气泡 = 硬阴影 + 垂直渐变 + 1px 黑边，照抄游戏原版。
-
-        [!] 2026-10-07 美化，对照 verify/truth/match_bubble.png（游戏原版气泡）：
-            ① 原来的「左侧 4px 强调条」**删掉了** —— 游戏气泡上没有这条竖色条，
-               它是整个 UI 里最扎眼的一处违和。
-            ② 指向原气泡的尾巴从「细线小三角」改成**实心黑粗箭头** ——
-               游戏原版就是一块粗黑的箭头顶在气泡上缘（见那张素材）。
-        """
+        """暖纸底、细墨边和内沿高光；装饰不超出既有定位/排除矩形。"""
         r = BUBBLE_RADIUS
         # box-shadow: 3px 3px 0px #0C0C0C
         self._round_rect(x + BUBBLE_SHADOW, y + BUBBLE_SHADOW,
                          x + w + BUBBLE_SHADOW, y + h + BUBBLE_SHADOW,
-                         r, fill=BUBBLE_BORDER, outline="", tags=tag)
+                         r, fill="#131810", outline="", tags=tag)
         # 渐变底（圆角区域用中间色兜住）
         mid = self._lerp(top_color, bottom_color, 0.5)
         self._round_rect(x, y, x + w, y + h, r, fill=mid, outline="", tags=tag)
@@ -225,16 +218,20 @@ class Overlay:
         # border: 1px solid #0C0C0C
         self._round_rect(x, y, x + w, y + h, r,
                          fill="", outline=BUBBLE_BORDER, width=1, tags=tag)
+        self.canvas.create_line(x + r + 1, y + 2, x + w - r - 1, y + 2,
+            fill=self._lerp(top_color, '#FFFFFF', .45), tags=tag)
+        self.canvas.create_line(x + r + 1, y + h - 2, x + w - r - 1, y + h - 2,
+            fill=self._lerp(bottom_color, BUBBLE_BORDER, .12), tags=tag)
         # Crowded rows use a left-pointing arrow toward this row's source.
         if pointer == 'left':
             cy = y + h / 2
             self.canvas.create_polygon(x - 6, cy, x + 1, cy - 6, x + 1, cy + 6,
-                fill=BUBBLE_BORDER, outline=BUBBLE_BORDER, tags=tag)
+                fill=mid, outline=BUBBLE_BORDER, tags=tag)
         elif pointer:
             cx = x + 22
             self.canvas.create_polygon(
-                cx, y - 6, cx - 12, y + 1, cx + 13, y + 1,
-                fill=BUBBLE_BORDER, outline=BUBBLE_BORDER, tags=tag)
+                cx, y - 6, cx - 8, y + 1, cx + 8, y + 1,
+                fill=top_color, outline=BUBBLE_BORDER, tags=tag)
 
     def _wrap(self, text: str, font, max_px: int, max_lines: int = 3):
         lines, cur = [], ""

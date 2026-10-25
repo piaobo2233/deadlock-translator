@@ -1,3 +1,4 @@
+from gui.appearance import help_text
 """Window-owned update work: workers emit messages; only Tk drains the queue."""
 import os
 from pathlib import Path
@@ -28,7 +29,7 @@ class Updater:
         self.controls = None
         self.can_install = update_install.installed(self.root)
         self.job = None
-        self.badge = app.th.link(app.nav, '', lambda: app.open_page('settings'))
+        self.badge = app.th.link(app.bar, '', lambda: app.open_page('settings'))
         receipt = store.read_json(self.root / '.temp/updates/last-result.json', {})
         if isinstance(receipt, dict):
             self.message = str(receipt.get('message', ''))
@@ -210,7 +211,7 @@ class Updater:
         if self.release and self.state.get('skipped') != self.release.version and time.time() >= deferred:
             self.badge.configure(text='● 新版本 ' + self.release.version)
             if not self.badge.winfo_manager():
-                self.badge.pack(side='bottom', fill='x', padx=12, pady=8)
+                self.badge.pack(side='right', padx=12, pady=8)
         else:
             self.badge.pack_forget()
         if not self.controls or not self.controls['frame'].winfo_exists():
@@ -232,12 +233,40 @@ class Updater:
             c['notes'].configure(state='disabled')
         for name in ('install', 'later', 'skip'):
             c[name].configure(state='normal' if release and not self.busy else 'disabled')
-            if release:
-                if not c[name].winfo_manager():
-                    c[name].pack(side='left', padx=(0, 8), before=c['website'])
-            else:
-                c[name].pack_forget()
         c['install'].configure(text='下载并重启更新' if self.can_install else '打开官方下载页')
+        self.layout_actions()
+
+    def layout_actions(self, event=None):
+        c = self.controls
+        if not c or not c['actions'].winfo_exists():
+            return
+        width = max(1, c['actions'].winfo_width())
+        layout = []
+        row, used = 0, 0
+        for name in ('check', 'install', 'later', 'skip', 'website'):
+            button = c[name]
+            if name in ('install', 'later', 'skip') and not self.release:
+                continue
+            needed = button.winfo_reqwidth()+8
+            if used and used+needed > width:
+                row, used = row+1, 0
+            layout.append((name, row))
+            used += needed
+        layout = tuple(layout)
+        # Polling updates status every 200 ms. Unmapping unchanged buttons
+        # interrupts their native enter/leave events and liquid animation.
+        if c.get('action_layout') == layout:
+            return
+        c['action_layout'] = layout
+        for name in ('check', 'install', 'later', 'skip', 'website'):
+            c[name].pack_forget()
+        for frame in c['action_rows']:
+            frame.pack_forget()
+        for name, row in layout:
+            frame = c['action_rows'][row]
+            if not frame.winfo_manager():
+                frame.pack(fill='x')
+            c[name].pack(in_=frame, side='left', padx=(0, 8), pady=(0, 6))
 
     def build(self, parent):
         from gui.workspace import section, text, panel
@@ -258,7 +287,8 @@ class Updater:
         notes.pack(side='left', fill='x', expand=True)
         actions = panel(area, th)
         actions.pack(fill='x', pady=(10, 0))
-        controls = dict(frame=area, status=status, notes=notes, wrap=wrap, actions=actions)
+        controls = dict(frame=area, status=status, notes=notes, wrap=wrap, actions=actions,
+                        action_rows=[th.frame(actions) for _ in range(5)])
         for name, label, command in (
                 ('check', '检查更新', lambda: self.check(manual=True)),
                 ('install', '下载并重启更新', self.install),
@@ -266,9 +296,9 @@ class Updater:
                 ('skip', '跳过此版本', lambda: self.defer(skip=True)),
                 ('website', '官方下载页', self.website)):
             button = th.button(actions, label, command)
-            button.pack(side='left', padx=(0, 8))
             controls[name] = button
-        text(area, th, '安装版支持一键更新；源码版和便携版请手动更新。更新备份仅保存在本机，含个人配置，请勿分享。',
+        help_text(area, th, '安装版支持一键更新；源码版和便携版请手动更新。更新备份仅保存在本机，含个人配置，请勿分享。',
              small=True, muted=True, wraplength=780, justify='left').pack(anchor='w', pady=(10, 0))
         self.controls = controls
+        actions.bind('<Configure>', self.layout_actions, add='+')
         self.repaint()

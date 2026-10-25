@@ -110,78 +110,37 @@ class App:
         self._application_generation = 0
         self.root.bind("<Destroy>", self._on_destroy, add="+")
         self.root.configure(bg=COLORS["bg"])
+        from gui.material import style_caption
+        self.window_callbacks.schedule(0,lambda:style_caption(self.root))
         self._build_chrome()
         from gui.updates import Updater
         self.updater = Updater(self)
-        # Settings has window-owned workers and no page heartbeat. Construct its
-        # native widgets once, before mapping, instead of recreating them on click.
-        self._settings_page = None
-        self._settings_error = None
-        if 'settings' in _PAGES:
-            try:
-                self._prepare_settings()
-            except Exception as exc:
-                # Report on opening Settings through the visible error/retry path.
-                self._settings_error = exc
-
-    def _prepare_settings(self):
-        if self._settings_page is not None:
-            return
-        frame = self.th.tk.Frame(self.canvas, bg=COLORS['panel'], padx=28, pady=24)
-        frame.bind('<Configure>', self._page_configure)
-        try:
-            _PAGES['settings']['builder'](frame, self)
-        except Exception:
-            frame.destroy()
-            raise
-        self._settings_page = frame
-        self._guard_settings_focus(frame)
-        self._settings_resources = self.game_resources.controls
-
-    def _guard_settings_focus(self, parent):
-        # Cached settings must not take focus while another page is active.
-        for child in parent.winfo_children():
-            if 'takefocus' in child.keys():
-                original = str(child.cget('takefocus'))
-                if original != '0':
-                    def eligible(name, original=original):
-                        if self.current != 'settings':
-                            return 0
-                        if original in ('', '1'):
-                            return original
-                        return self.root.tk.call('eval', original, name)
-                    child.configure(takefocus=eligible)
-            self._guard_settings_focus(child)
+        from gui.continuous import ContinuousWorkspace
+        from gui.interactions import InteractionController
+        self.workspace = ContinuousWorkspace(self, _PAGES)
+        self.th.workspace = self.workspace
+        self.nav.bind('<Configure>', self.workspace.fit_nav, add='+')
+        self.interactions = InteractionController(self)
+        self.canvas.configure(yscrollcommand=self.workspace.on_scroll)
+        self._building_key = None
+        self._callback_page = None
+        from gui.game_resources import GameResources
+        self.game_resources = GameResources(self)
 
     def _fit_page_background(self):
-        # A separate opaque background covers inactive controls below short
-        # pages. Leave page heights natural so dynamic contents still resize.
-        heights = [self.canvas.winfo_height(), self._content_page.winfo_reqheight()]
-        if self._settings_page is not None:
-            heights.append(self._settings_page.winfo_reqheight())
-        self.canvas.itemconfigure(self._background_win, height=max(heights))
-
-    def _show_page(self, settings=False):
-        self.page = self._settings_page if settings else self._content_page
-        if not settings and self._settings_page is not None:
-            focused = str(self.root.tk.call('focus'))
-            if focused.startswith(str(self._settings_page) + '.'):
-                target = self.nav_buttons.get(self.current)
-                (target['button'] if target else self.canvas).focus_set()
-        # One Canvas window owns the visible page. Replacing its widget unmaps
-        # the outgoing subtree before exposing the next, instead of keeping two
-        # native pages mapped and relying on their repaint/stacking order.
-        if self.canvas.itemcget(self._win, 'window') != str(self.page):
-            self.canvas.itemconfigure(self._win, window=self.page)
-        self._page_background.lift()
-        self.page.lift()
-
-    def _clear_page(self):
-        for child in self._content_page.winfo_children():
-            child.destroy()
+        height = max(self.canvas.winfo_height(), self.page.winfo_reqheight())
+        self.canvas.itemconfigure(self._background_win, height=height)
 
     def _on_destroy(self, event):
         if event.widget is self.root:
+            interactions = getattr(self, 'interactions', None)
+            if interactions:
+                interactions.cancel_animation()
+                interactions.hide_hint()
+            workspace = getattr(self, 'workspace', None)
+            if workspace and workspace._follow_pending is not None:
+                self.root.after_cancel(workspace._follow_pending)
+                workspace._follow_pending = None
             draft = getattr(self, '_composer_draft', None)
             if draft is not None:
                 draft['generation'] += 1
@@ -191,13 +150,25 @@ class App:
                 self._coordinator.close()
 
     def after_page(self, delay, callback):
-        return self.page_callbacks.schedule(delay, callback)
+        owner = getattr(self, '_building_key', None) or getattr(self, '_callback_page', None) or self.current
+        def owned():
+            previous = self._callback_page
+            self._callback_page = owner
+            try:
+                callback()
+            finally:
+                self._callback_page = previous
+        return self.page_callbacks.schedule(delay, owned, owner=owner)
 
     # ------------------------------------------------------------ 状态栏
     def set_status(self, text, color="", *, page=None):
         """底部一行状态。保存成功/失败用它，**不弹窗**（§50）。"""
-        page = page or self.current
+        page = page or getattr(self, '_building_key', None) or getattr(self, '_callback_page', None) or self.current
         self._page_status[page] = (text, color)
+        feedback = getattr(self, 'workspace', None)
+        feedback = feedback.feedback.get(page) if feedback else None
+        if feedback is not None and feedback.winfo_exists():
+            feedback.configure(text=text, fg=color or COLORS['muted'])
         if page != self.current:
             return
         try:
@@ -214,7 +185,7 @@ class App:
         from app.runtime.config_application import application_state
         self._application_generation += 1
         generation = self._application_generation
-        page = self.current
+        page = getattr(self, '_callback_page', None) or self.current
         def status(*args):
             self.set_status(*args, page=page)
         started = time.monotonic()
@@ -238,58 +209,61 @@ class App:
 
     # ------------------------------------------------------------ 外框
     def _build_chrome(self):
-        """Approved charcoal shell with print-orange tabs and restrained city art."""
+        """A shared dark backdrop and worn navigation strip from the video reference."""
         th,c=self.th,COLORS
-        self.bar=th.tk.Frame(self.root,bg=c['panel'])
+        self.bar=th.tk.Frame(self.root,bg=c['shell'])
         self.bar.pack(fill='x')
-        logo=th.tk.Frame(self.bar,bg=c['panel'],width=42,height=42)
-        logo.pack(side='left',padx=(20,12),pady=11);logo.pack_propagate(False)
+        logo=th.tk.Frame(self.bar,bg=c['shell'],width=48,height=48)
+        logo.pack(side='left',padx=(26,12),pady=24);logo.pack_propagate(False)
+        def fit_header(event):
+            if event.widget is self.root:
+                logo.pack_configure(pady=24 if event.width>=1100 else 16)
+        self.root.bind('<Configure>',fit_header,add='+')
         self.brand_mark=None
         try:
             from app.brand import mark_path
             path=mark_path()
             if path:
-                self.brand_mark=th.tk.PhotoImage(master=self.root,file=path)
-                th.tk.Label(logo,image=self.brand_mark,bg=c['panel'],bd=0).pack(expand=True)
+                from PIL import Image, ImageTk
+                with Image.open(path) as source:
+                    self.brand_mark=ImageTk.PhotoImage(source.resize((44,44),Image.Resampling.LANCZOS),master=self.root)
+                th.tk.Label(logo,image=self.brand_mark,bg=c['shell'],bd=0).pack(expand=True)
         except Exception:
             self.brand_mark=None
         if self.brand_mark is None:
             th.label(logo,'D',bg=c['card_hi'],fg=c['accent'],font=('Cambria',20)).pack(expand=True)
         from app import brand
-        th.label(self.bar,brand.PRODUCT,font=th.display_font(17)).pack(side='left')
-        th.label(self.bar,brand.SUBTITLE,bg=c['panel'],fg=c['muted'],
-                 font=th.font_small).pack(side='left',padx=(10,0))
+        th.label(self.bar,brand.NAME_CN,bg=c['shell'],font=th.display_font(18)).pack(side='left')
+
         self._install_close_handler()
-        self.global_status=th.label(self.bar,'',font=th.font_small,fg=c['ok'])
+        self.global_status=th.label(self.bar,'',bg=c['shell'],font=th.font_small,fg=c['ok'])
         self.global_status.pack(side='right',padx=18)
         self.back_btn=th.link(self.bar,'← 返回',self.go_back)
         self.title_label=th.label(self.bar,'')  # Internal compatibility diagnostics.
-        th.hairline(self.root)
-        self.body=th.tk.Frame(self.root,bg=c['panel'])
+        self.body=th.tk.Frame(self.root,bg=c['shell'])
         self.body.pack(fill='both',expand=True)
-        self.nav=th.tk.Frame(self.body,bg=c['soft'],width=185)
+        self.nav=th.tk.Frame(self.body,bg=c['shell'],width=225)
         self.nav.pack(side='left',fill='y');self.nav.pack_propagate(False)
-        th.tk.Frame(self.nav,bg=c['soft'],height=20).pack(fill='x')
+        th.tk.Frame(self.nav,bg=c['shell'],height=12).pack(fill='x')
         self.nav_buttons={}
         for key,label in (('home','接收翻译'),('send','发言翻译'),('dictionary','词库'),
                           ('recognition','识别与显示'),('api','翻译接口'),('cost','API 用量'),('settings','设置')):
             self.nav_buttons[key]=self._make_nav_button(self.nav,key,label)
-        bottom=th.tk.Frame(self.nav,bg=c['soft']);bottom.pack(side='bottom',fill='x',padx=24,pady=20)
-        th.label(bottom,'本地优先',bg=c['soft'],fg=c['ok'],font=th.font_small).pack(anchor='w')
-        from gui.decoration import CityArt
-        CityArt(self.nav,th,height=1).pack(fill='both',expand=True)
-        th.tk.Frame(self.body,bg=c['border'],width=1).pack(side='left',fill='y')
-        content=th.tk.Frame(self.body,bg=c['panel']);content.pack(side='left',fill='both',expand=True)
-        self.canvas=th.tk.Canvas(content,bg=c['panel'],highlightthickness=0)
+        bottom=th.tk.Frame(self.nav,bg=c['shell']);bottom.pack(side='bottom',fill='x',padx=24,pady=14)
+        self.nav_footer=bottom
+        th.label(bottom,'本地优先',bg=c['shell'],fg=c['muted'],font=th.font_small).pack(anchor='w')
+
+        content=th.tk.Frame(self.body,bg=c['shell']);content.pack(side='left',fill='both',expand=True)
+        self.canvas=th.tk.Canvas(content,bg=c['shell'],highlightthickness=0,yscrollincrement=20)
         self.scroll=th.ttk.Scrollbar(content,orient='vertical',command=self.canvas.yview)
         # Keep the native scrollbar mapped. Showing it on entering a long page
         # both shrinks the viewport and triggers costly native/theme redraws.
         self.scroll.pack(side='right',fill='y')
         self.scroll.state(['disabled'])
         self.canvas.configure(yscrollcommand=self.scroll.set)
-        self._page_background=th.tk.Frame(self.canvas,bg=c['panel'])
+        self._page_background=th.tk.Frame(self.canvas,bg=c['shell'])
         self._background_win=self.canvas.create_window((0,0),window=self._page_background,anchor='nw')
-        self.page=th.tk.Frame(self.canvas,bg=c['panel'],padx=28,pady=24)
+        self.page=th.tk.Frame(self.canvas,bg=c['shell'],padx=14,pady=12)
         self._content_page=self.page
         self._win=self.canvas.create_window((0,0),window=self.page,anchor='nw')
         self.canvas.pack(side='left',fill='both',expand=True)
@@ -304,13 +278,12 @@ class App:
         self._page_configure=inner
         self.page.bind('<Configure>',inner);self.canvas.bind('<Configure>',viewport)
         self.canvas.bind_all('<MouseWheel>',self._wheel)
-        th.hairline(self.root)
-        self.footer=th.tk.Frame(self.root,bg=c['soft']);self.footer.pack(fill='x')
+        self.footer=th.tk.Frame(self.root,bg=c['shell']);self.footer.pack(fill='x')
         self.SILK='助手未运行，设置可独立查看'
-        self.footer_right=th.label(self.footer,self.SILK,bg=c['soft'],fg=c['muted'],font=th.font_small)
-        self.footer_right.pack(side='left',padx=22,pady=10)
-        self.status=th.label(self.footer,'',bg=c['soft'],fg=c['ok'],font=th.font_small,wraplength=560,justify='right')
-        self.status.pack(side='right',padx=22,pady=10)
+        self.footer_right=th.label(self.footer,self.SILK,bg=c['shell'],fg=c['muted'],font=th.font_small)
+        self.footer_right.pack(side='left',padx=22,pady=7)
+        self.status=th.label(self.footer,'',bg=c['shell'],fg=c['ok'],font=th.font_small,wraplength=560,justify='right')
+        self.status.pack(side='right',padx=22,pady=7)
         def heartbeat():
             from gui.pages import status_of
             word,why,color=status_of(self.root_dir)
@@ -324,22 +297,33 @@ class App:
 
     def _make_nav_button(self,parent,key,label):
         th,c=self.th,COLORS
-        row=th.tk.Frame(parent,bg=c['soft'],height=48)
-        row.pack(fill='x',padx=12,pady=4);row.pack_propagate(False)
-        rail=th.tk.Frame(row,bg=c['soft'],width=3);rail.pack(side='left',fill='y',pady=12)
-        button=th.tk.Button(row,text=label,command=lambda:self.open_page(key),bg=c['soft'],fg=c['fg'],
-            activebackground=c['card_hi'],activeforeground=c['accent'],font=th.font,relief='flat',bd=0,
-            anchor='w',padx=13,cursor='hand2',highlightthickness=0)
-        button.pack(side='left',fill='both',expand=True)
-        return dict(row=row,rail=rail,button=button)
+        row=th.tk.Frame(parent,bg=c['shell'],height=46)
+        row.pack(fill='x',padx=12,pady=2);row.pack_propagate(False)
+        paint=th.tk.Canvas(row,bg=c['shell'],highlightthickness=0,takefocus=0)
+        paint.place(x=0,y=0,relwidth=1,relheight=1)
+        rail=th.tk.Frame(row,bg=c['shell'],width=3)
+        button=th.tk.Button(row,text=label,command=lambda:self.open_page(key),bg=c['shell'],fg=c['fg'],
+            activebackground=c['card_hi'],activeforeground=c['accent'],font=th.font_nav,relief='flat',bd=0,
+            anchor='w',padx=2,cursor='hand2',highlightthickness=0)
+        button.place(x=20,y=4,relwidth=1,width=-38,relheight=1,height=-8)
+        parts=dict(row=row,rail=rail,button=button,paint=paint)
+        from gui.material import paint_navigation
+        def hover(value):
+            parts['hover']=value
+            paint_navigation(parts,key==self.current)
+        for target in (row,button,paint):
+            target.bind('<Enter>',lambda e:hover(True),add='+')
+            target.bind('<Leave>',lambda e:hover(False),add='+')
+        button.bind('<FocusIn>',lambda e:hover(True),add='+')
+        button.bind('<FocusOut>',lambda e:hover(False),add='+')
+        row.bind('<Configure>',lambda _e:paint_navigation(parts,key==self.current))
+        paint.bind('<Button-1>',lambda _e:self.open_page(key))
+        return parts
 
     def _refresh_nav(self):
+        from gui.material import paint_navigation
         for key,parts in self.nav_buttons.items():
-            active=key==self.current;bg=COLORS['accent'] if active else COLORS['soft']
-            parts['row'].configure(bg=bg);parts['rail'].configure(bg=COLORS['accent'] if active else bg)
-            parts['button'].configure(bg=bg,fg=COLORS['ink'] if active else COLORS['fg'],
-                activebackground=COLORS['accent_dim'] if active else COLORS['card_hi'],
-                activeforeground=COLORS['ink'] if active else COLORS['fg'])
+            paint_navigation(parts,key==self.current)
 
     def show_hint(self, text=""):
         """把一行设置的说明显示在**底栏右侧**（鼠标悬停时），不悬停就显示丝印。
@@ -372,83 +356,23 @@ class App:
             self._fail(key, UnknownPage(key))
             return False
         key = {'ingame':'recognition'}.get(key, key)
-        if key == self.current and not self._page_failed:
-            return True
 
-        requested = time.perf_counter()
-        dictionary = getattr(self, 'dictionary', None)
-        if self.current == 'send':
-            self.composer['remember']()
-        if self.current == 'dictionary' and dictionary is not None:
-            dictionary.remember()
-        self.canvas.yview_moveto(0)
-        spec = _PAGES[key]
-        if remember and self.current is not None:
-            self._history.append(self.current)
-            self._history = self._history[-64:]
-        self.current = key
-        self._page_feedback = None
-        self._page_failed = False
-        self._refresh_nav()
-
-        self.page_callbacks.cancel_all()
-        started = time.perf_counter()
-        if key == 'settings' and self._settings_page is not None:
-            # Detach the outgoing native subtree before destroying its controls.
-            self._show_page(True)
-        self._clear_page()
-        destroyed = time.perf_counter()
         try:
-            self.page = self._content_page
-            if key == 'settings':
-                if self._settings_error is not None:
-                    error, self._settings_error = self._settings_error, None
-                    raise error
-                self._prepare_settings()
-                self.page = self._settings_page
-                self.refresh_preferences()
-                self.updater.repaint()
-                self.game_resources.controls = self._settings_resources
-                self.game_resources.repaint()
-                self.game_resources.inspect()
-            else:
-                spec["builder"](self.page, self)
-            self._show_page(key=='settings')
-        except Exception as exc:                      # 页面自己炸了
-            self._fail(key, exc)
+            result = self.workspace.open(key, remember=remember)
+            self._callback_page = None
+            return result
+        except Exception as exc:
+            self._page_failed = True
+            self.set_status('界面构建失败：'+str(exc), COLORS['err'])
+            traceback.print_exc()
             return False
-
-        built = time.perf_counter()
-
-        # 标题 / 返回按钮 / 窗口尺寸
-        is_home = (key == "home")
-        self.title_label.configure(text=spec["title"])
-        self.set_status(*self._page_status.get(key, ('', '')))
-        if is_home or not self._history:
-            self.back_btn.pack_forget()
-        else:
-            self.back_btn.pack_forget()
-
-        self._resize(spec)
-        elapsed = time.perf_counter()
-        from app.runtime.diagnostics import record
-        def settled():
-            if self.current == key and not self._page_failed:
-                # Tk's idle milestone is separate from callback time and does
-                # not claim that Windows has presented the final screen pixels.
-                record(self.root_dir, 'navigation', 'completed', page=key, code='layout',
-                    destroy_ms=(destroyed-started)*1000, build_ms=(built-destroyed)*1000,
-                    layout_ms=(elapsed-built)*1000, elapsed_ms=(elapsed-requested)*1000,
-                    idle_ms=(time.perf_counter()-requested)*1000)
-        self.window_callbacks.schedule('idle', settled)
-        return True
 
     def watch_application_fields(self, values, prefix=''):
         import time
         from app.runtime.config_application import application_state
         self._application_generation += 1
         generation = self._application_generation
-        page = self.current
+        page = getattr(self, '_callback_page', None) or self.current
         def status(*args):
             self.set_status(*args, page=page)
         started = time.monotonic()
@@ -484,14 +408,17 @@ class App:
                 return
             widget = event.widget
             while widget is not None and widget is not self.page:
-                if widget.winfo_class() in {'Text', 'Listbox', 'Treeview', 'TCombobox', 'Spinbox', 'TSpinbox'}:
+                if widget.winfo_class() in {'TCombobox', 'Spinbox', 'TSpinbox'}:
                     return
-                if widget is not self.canvas and widget.winfo_class() == 'Canvas':
-                    return
+                if widget.winfo_class() in {'Text', 'Listbox', 'Treeview', 'Canvas'} and widget is not self.canvas:
+                    first, last = widget.yview()
+                    if not ((event.delta > 0 and first <= 0) or (event.delta < 0 and last >= 1)):
+                        return
                 widget = getattr(widget, 'master', None)
             if widget is None and event.widget is not self.canvas:
                 return
-            self.canvas.yview_scroll(-1 if event.delta > 0 else 1, "units")
+            steps = max(1, abs(event.delta)//120)
+            self.canvas.yview_scroll((-3 if event.delta > 0 else 3)*steps, "units")
         except Exception:
             pass
 
@@ -548,23 +475,10 @@ class App:
         """页面打不开：**写日志 + 界面上红字**，绝不用别的页面顶上。"""
         detail = f"页面 {key!r} 打不开：{type(exc).__name__}: {exc}"
         self._page_failed = True
-        dictionary = getattr(self, 'dictionary', None)
-        if self.current == 'dictionary' and dictionary is not None:
-            dictionary.remember()
         print(f"[error] {detail}")
-        self.page_callbacks.cancel_all()
         if not isinstance(exc, UnknownPage):
             traceback.print_exc()
-        try:
-            self._clear_page()
-            self._show_page()
-            self.th.label(self.page, detail, bg=COLORS["bg"],
-                          fg=COLORS["err"], font=self.th.font_small,
-                          wraplength=400, justify="left").pack(anchor="w")
-            self.title_label.configure(text="打不开")
-            self.back_btn.pack(side="left")
-        except Exception:
-            pass
+        self.set_status(detail, COLORS['err'])
 
     # ------------------------------------------------------------ 生命周期
     def bring_to_front(self):

@@ -8,14 +8,20 @@ KEY_URL = 'https://platform.deepseek.com/api_keys'
 DOCS_URL = 'https://api-docs.deepseek.com/zh-cn/'
 
 
-def build_help(parent, app, config, provider):
-    from gui.workspace import fold
+def configuration_summary(config):
     from gui.secret_entry import SOURCE_LABELS
-    state = text(parent, app.th,
-        '联网翻译：'+('开' if config['translate_api'] else '关')+' · 密钥：'+SOURCE_LABELS[config.key_source]+
-        '。保存不联网；只有点击测试才发送可能计费的请求。', small=True, muted=True,
-        wraplength=720, justify='left')
-    state.pack(anchor='w', pady=(0, 8))
+    return ('联网翻译：'+('开' if config['translate_api'] else '关')+' · 密钥：'+SOURCE_LABELS[config.key_source]+
+            '。保存不联网；只有点击测试才发送可能计费的请求。')
+
+
+def build_help(parent, app, config, provider, *, state=None):
+    from gui.workspace import fold
+    if state is None:
+        state = text(parent, app.th,
+            configuration_summary(config), small=True, muted=True,
+            wraplength=720, justify='left')
+        state.pack(anchor='w',fill='x',pady=(0,8))
+        state.bind('<Configure>',lambda event:state.configure(wraplength=max(180,event.width-8)))
     def open_url(url):
         try:
             if not webbrowser.open(url):raise OSError('browser unavailable')
@@ -36,7 +42,7 @@ def build_help(parent, app, config, provider):
             else:key.pack_forget();docs.pack_forget()
         provider.trace_add('write',refresh);refresh()
     button, body, toggle = fold(parent, app, '接口配置步骤与官方入口', build)
-    if config.key_source == 'none':toggle()
+    if config.key_source == 'none' and app.current == 'onboarding':toggle()
     return state
 
 

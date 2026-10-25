@@ -143,8 +143,8 @@ class ScrollbarDragTests(unittest.TestCase):
             slider = sliders[len(sliders) // 2]
             bar.event_generate('<ButtonPress-1>', x=x, y=slider)
             root.update()
-            bar.event_generate('<B1-Motion>', x=x, y=bar.winfo_height() - 20, state=0x100)
-            bar.event_generate('<ButtonRelease-1>', x=x, y=bar.winfo_height() - 20)
+            bar.event_generate('<B1-Motion>', x=x, y=bar.winfo_height() - 2, state=0x100)
+            bar.event_generate('<ButtonRelease-1>', x=x, y=bar.winfo_height() - 2)
             root.update()
             self.assertGreater(cards.canvas.yview()[0], .8)
             self.assertIn('99', cards.buttons)

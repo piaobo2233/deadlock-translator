@@ -192,7 +192,8 @@ class SimplifiedTkTests(unittest.TestCase):
     def labels(self):
         def walk(w):
             for child in w.winfo_children():yield child;yield from walk(child)
-        return [str(w.cget('text')) for w in walk(self.app.page) if 'text' in w.keys()]
+        parent=self.app.workspace.frames.get(self.app.current,self.app.page)
+        return [str(w.cget('text')) for w in walk(parent) if 'text' in w.keys()]
 
     def test_real_navigation_groups_and_removed_controls(self):
         self.assertTrue(self.app.open_page('home'));self.app.root.update()

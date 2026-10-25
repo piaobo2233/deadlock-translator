@@ -13,29 +13,45 @@ def text(parent, th, value, *, small=False, muted=False, **kw):
 
 
 def heading(parent, th, title, subtitle='', *, compact=False):
-    from gui.decoration import CityArt
+    # Page identity lives in the fixed navigation; keep this action/status holder.
     box=panel(parent,th)
-    box.pack(fill='x',pady=(0,10 if compact else 16))
-    tags={'接收翻译':'INCOMING TRANSLATION','发言翻译':'OUTGOING TRANSLATION',
-          '词库':'GLOSSARY','识别与显示':'RECOGNITION & DISPLAY','翻译接口':'TRANSLATION API',
-          'API 用量':'API USAGE','设置':'SETTINGS','首次设置':'WELCOME'}
-    CityArt(box,th,title=title,eyebrow=tags.get(title,'LOCKLINGO'),height=72 if compact else 86).pack(fill='x')
-    if subtitle:
-        box.subtitle=text(box,th,subtitle,small=True,muted=True,wraplength=650,justify='left')
-        box.subtitle.pack(anchor='w',pady=(6,0))
-        box.bind('<Configure>',lambda event:box.subtitle.configure(wraplength=max(event.width,100)))
+    box.pack(fill='x')
+    box.subtitle=help_text(box,th,subtitle,small=True,muted=True)
     return box
 
 
+def module(parent, th, title):
+    from gui.material import MaterialFrame
+    wrap=MaterialFrame(parent,bg=C['bg'],padx=20,pady=16)
+    wrap._hover_module=True
+    wrap.pack(fill='x',pady=(0,10))
+    workspace=getattr(th,'workspace',None)
+    if workspace:workspace.register_section(wrap,title)
+    return wrap
+
+
 def section(parent,th,title):
-    th.hairline(parent,pady=(22,18))
-    th.label(parent,title,font=th.font_heading).pack(anchor='w',pady=(0,14))
-    body=panel(parent,th);body.pack(fill='x')
+    wrap=module(parent,th,title)
+    th.label(wrap,title,font=th.font_heading).pack(anchor='w',pady=(0,10))
+    th.hairline(wrap,pady=(0,10))
+    body=panel(wrap,th);body.pack(fill='x')
     return body
 
 
+def help_text(parent, th, value, **kw):
+    """Retain existing explanatory copy as row/module help, without layout height."""
+    from gui.interactions import help_for
+    label=text(parent,th,value,**kw)
+    sources=getattr(parent,'_help_sources',[])
+    sources.append(label)
+    parent._help_sources=sources
+    help_for(parent,lambda:'\n'.join(str(w.cget('text')) for w in sources if w.winfo_exists() and w.cget('text')))
+    label.pack=lambda *args,**kwargs:None
+    return label
+
+
 def bordered_button(parent,th,title,command,**pack):
-    border=panel(parent,th,border=True)
+    border=panel(parent,th)
     border.pack(**pack)
     button=th.button(border,title,command)
     button.configure(highlightthickness=0)
@@ -44,7 +60,7 @@ def bordered_button(parent,th,title,command,**pack):
 
 
 def placeholder(entry,variable,th,value):
-    hint=th.label(entry.master,value,bg=C['panel'],fg=C['muted'],font=th.font_small)
+    hint=th.label(entry.master,value,bg=C['soft'],fg=C['muted'],font=th.font_small)
     def update(*_):
         if not entry.winfo_exists():return
         # Combobox popdowns are Tcl windows without a Python Widget object.
@@ -88,6 +104,9 @@ class EntryCards:
         self.canvas.yview(*args);self._render()
 
     def _wheel(self,event):
+        first,last=self.canvas.yview()
+        if (event.delta>0 and first<=0) or (event.delta<0 and last>=1):
+            return
         self.canvas.yview_scroll(-35 if event.delta>0 else 35,'units');self._render()
         return 'break'
 
@@ -131,7 +150,7 @@ class EntryCards:
             original=row.get('original') or key
             title=original if len(original)<=48 else original[:47]+'…'
             button=self.th.tk.Button(top,text=title,command=lambda k=key:self.choose(k),bg=C['panel'],fg=C['fg'],
-                activebackground=C['card_hi'],activeforeground=C['accent'],font=self.th.font_mono,
+                activebackground=C['card_hi'],activeforeground=C['accent'],font=self.th.font,
                 relief='flat',bd=0,padx=0,pady=0,anchor='w',justify='left',highlightthickness=0,cursor='hand2')
             button.pack(side='left',fill='x',expand=True)
             translation=str(row.get('translation',''))

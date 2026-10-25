@@ -246,7 +246,29 @@ class UpdateUiTests(unittest.TestCase):
         controls = self.updater.controls
         for name in ('check', 'install', 'later', 'skip', 'website'):
             button = controls[name]
-            self.assertLessEqual(button.winfo_x() + button.winfo_width(), controls['actions'].winfo_width(), name)
+            self.assertTrue(button.winfo_ismapped(), name)
+            self.assertLessEqual(button.winfo_rootx() + button.winfo_width(),
+                                 controls['actions'].winfo_rootx() + controls['actions'].winfo_width(), name)
+        self.assertTrue(self.updater.badge.winfo_ismapped())
+        self.assertLessEqual(self.updater.badge.winfo_rootx() + self.updater.badge.winfo_width(),
+                             self.app.root.winfo_rootx() + self.app.root.winfo_width())
+
+    def test_poll_keeps_hover_buttons_mapped_and_leaving_drains_green(self):
+        root=self.app.root
+        root.update()
+        root.focus_force();root.focus_set();root.update()
+        unmapped=[]
+        for name in ('check','website'):
+            button=self.updater.controls[name]
+            button.bind('<Unmap>',lambda event:unmapped.append(str(event.widget)),add='+')
+            button.event_generate('<Enter>')
+            root.after(180,root.quit);root.mainloop()
+            self.assertGreater(button._amount,.5,name)
+            button.event_generate('<Leave>')
+            root.after(420,root.quit);root.mainloop()
+            self.assertEqual(button._amount,0.,name)
+            self.assertIsNone(button._job,name)
+        self.assertFalse(unmapped,'Unchanged update controls must stay mapped during polling')
 
 
 if __name__ == '__main__':

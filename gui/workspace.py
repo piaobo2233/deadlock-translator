@@ -1,3 +1,4 @@
+from gui.appearance import help_text
 """Task pages using existing configuration, translation and storage services."""
 import csv
 import json
@@ -7,7 +8,7 @@ import app.translation.glossary_ops as glossary_ops
 from app.storage import store
 from app.storage.review_queue import ReviewQueue
 from gui.theme import COLORS as C
-from gui.appearance import EntryCards, panel, text, heading, section, bordered_button, placeholder
+from gui.appearance import EntryCards, panel, text, heading, section, module, bordered_button, placeholder
 
 MODELS = ('deepseek-flash', 'deepseek-v4-pro')
 SOURCE_NAMES = {'api':'API 翻译','builtin':'内置词表','user':'我的词条','user_corrected':'人工审核','import':'导入'}
@@ -32,8 +33,9 @@ def fold(parent, app, title, build):
         else:
             body.pack_forget()
         app.refresh_layout()
-    button = th.link(parent, '▸ ' + title, toggle)
-    button.pack(anchor='w', pady=8)
+    button = th.button(parent, '▸  ' + title, toggle,kind='disclosure')
+    button.configure(anchor='w',padx=4)
+    button.pack(fill='x', pady=4)
     return button, body, toggle
 
 
@@ -82,9 +84,10 @@ def build_translation(parent, app):
     import time
     th=app.th
     heading(parent,th,'接收翻译',compact=True)
-    hero=panel(parent,th,bg=C['soft']);hero.pack(fill='x',pady=(0,22))
-    inner=panel(hero,th,bg=C['soft']);inner.pack(fill='both',padx=20,pady=17)
-    status=th.label(inner,'',bg=C['soft'],fg=C['ok'],font=th.font_heading);status.pack(anchor='w')
+    hero=module(parent,th,'运行状态')
+    inner=panel(hero,th);inner.pack(fill='both')
+    status=th.label(inner,'',fg=C['fg'],font=th.font_heading);status.pack(anchor='w')
+    th.hairline(inner,pady=(8,10))
     note=text(inner,th,'',small=True,muted=True,wraplength=820,justify='left');note.pack(anchor='w',pady=(5,0))
     diagnostic = {}
     def build_diagnostics(body):
@@ -130,21 +133,24 @@ def build_translation(parent, app):
             run_button.configure(state='disabled')
             app.set_status('已请求启动，等待后台心跳确认',C['muted'])
         except OSError as exc:app.set_status('启动失败：'+str(exc),C['err'])
-    run_button=th.button(runbar,'启动',run_action,kind='primary');run_button.pack(side='left')
+    run_button=th.button(runbar,'启动',run_action,kind='primary');run_button.configure(width=9);run_button.pack(side='left')
     for label, page in (('测试识别','recognition'),('配置接口','api'),('诊断与反馈','settings')):
-        th.link(runbar,label,lambda page=page:app.open_page(page)).pack(side='left',padx=(8,0))
+        th.button(runbar,label,lambda page=page:app.open_page(page)).pack(side='left',padx=(8,0))
     app.run_controls=dict(button=run_button,action=run_action)
     from gui.receive_messages import ReceiveMessages
     app.receive_messages = ReceiveMessages(parent, app)
-    online=panel(parent,th);online.pack(fill='x')
+    receive_options=section(parent,th,'接收选项')
+    online=panel(receive_options,th);online.pack(fill='x')
+    from gui.interactions import setting_row
+    setting_row(online)
     controls=panel(online,th);controls.pack(side='right')
     config=p._load_config(app.root_dir)
     online_var=p._switch(app,controls,'translate_api',config)
     th.label(online,'联网翻译',font=th.font_heading).pack(anchor='w')
     from gui.game_settings import language_control
-    language_control(parent,app,'receive_target','收到的消息译成',config)
-    text(parent,th,'修改后重启助手生效',small=True,muted=True).pack(anchor='w')
-    button,body,toggle=fold(parent, app, '诊断详情', build_diagnostics)
+    language_control(receive_options,app,'receive_target','收到的消息译成',config)
+    text(receive_options,th,'修改后重启助手生效',small=True,muted=True).pack(anchor='w')
+    button,body,toggle=fold(receive_options, app, '诊断详情', build_diagnostics)
     app.diagnostic_controls=dict(button=button,body=body,toggle=toggle)
     def tick():
         word,why,color=p.status_of(app.root_dir)
@@ -206,6 +212,7 @@ def build_api_settings(parent, app):
     from gui.secret_entry import bind_secret_entry, SOURCE_LABELS
     th = app.th
     heading(parent,th,'翻译接口')
+    parent=section(parent,th,'接口配置')
     config=p._load_config(app.root_dir)
     draft=getattr(app,'_api_draft',None)
     if draft is None:
@@ -214,37 +221,46 @@ def build_api_settings(parent, app):
     from app.config.providers import DEEPSEEK, PROVIDERS
     provider = th.tk.StringVar(value=PROVIDERS[draft['provider']]
         if draft['endpoint'] == DEEPSEEK['endpoint'] else PROVIDERS['custom'])
-    from gui.api_help import build_help
-    build_help(parent,app,config,provider)
-    text(parent,th,'服务商',small=True,muted=True).pack(anchor='w')
-    provider_box=th.ttk.Combobox(parent,textvariable=provider,values=tuple(PROVIDERS.values()),state='readonly',font=th.font)
-    provider_box.pack(fill='x',pady=(6,12))
-    fields=panel(parent,th);fields.pack(fill='x')
-    fields.columnconfigure(0,weight=1,uniform='api');fields.columnconfigure(1,weight=1,uniform='api')
-    model_field,key_field=panel(fields,th),panel(fields,th)
-    model_field.grid(row=0,column=0,sticky='nsew',padx=(0,18));key_field.grid(row=0,column=1,sticky='nsew')
-    text(model_field,th,'模型',small=True,muted=True).pack(anchor='w',pady=(0,6))
+    from gui.api_help import build_help, configuration_summary
+    help_state=text(parent,th,configuration_summary(config),small=True,muted=True,justify='left')
+    help_state.pack(fill='x',pady=(0,12))
+    help_state.bind('<Configure>',lambda e:help_state.configure(wraplength=max(180,e.width-8)))
+    def field_row(label,hint=''):
+        row,holder=p._row(parent,th,label,hint,app)
+        holder.configure(width=400,height=44);holder.pack_propagate(False)
+        def fit(e):
+            holder.configure(width=max(220,min(420,int(e.width*.48))))
+            holder.pack_configure(padx=(0,max(0,int(e.width*.12)-20)))
+        row.bind('<Configure>',fit)
+        th.hairline(parent,pady=(0,2))
+        return holder
+    provider_field=field_row('服务商','预设会填入对应的模型与接口地址；保存后才会应用。')
+    provider_box=th.combobox(provider_field,textvariable=provider,values=tuple(PROVIDERS.values()),state='readonly',font=th.font)
+    provider_box.pack(fill='both',expand=True)
+    model_field=field_row('模型','可选择预设或填写服务商支持的完整模型名称。')
     model=th.tk.StringVar(value=draft['model'])
     options=tuple(dict.fromkeys((*MODELS,config['model'])))
-    box=th.ttk.Combobox(model_field,textvariable=model,values=options,state='normal',font=th.font)
-    box.pack(fill='x',ipady=5)
-    text(key_field,th,'API Key',small=True,muted=True).pack(anchor='w',pady=(0,6))
+    box=th.combobox(model_field,textvariable=model,values=options,state='normal',font=th.font)
+    box.pack(fill='both',expand=True)
+    key_field=field_row('API Key','留空不修改已保存的密钥；保存不联网。')
     key=th.tk.StringVar(value=draft['key'])
-    border,entry=th.entry(key_field,key,show='•');border.pack(fill='x')
-    hint=text(key_field,th,'',small=True,muted=True);hint.pack(anchor='w',pady=(6,0))
-    text(key_field,th,'留空不修改你已保存的密钥',small=True,muted=True).pack(anchor='w',pady=(4,0))
+    border,entry=th.entry(key_field,key,show='•');border.pack(fill='both',expand=True)
+    hint=text(parent,th,'',small=True,muted=True);hint.pack(anchor='e',pady=(2,8))
     bind_secret_entry(entry,key,lambda value:p._save('api_key',value,app),source=config.key_source,hint=hint,
                       invalid=lambda:app.set_status('保存失败：不能保存掩码',C['err']),autosave=False)
+    build_help(parent,app,config,provider,state=help_state)
     advanced=panel(parent,th)
     advanced_open=[provider.get()==PROVIDERS['custom']]
     def toggle_advanced():
         advanced_open[0]=not advanced_open[0]
         show_advanced()
-    advanced_button=th.link(parent,'高级设置 ▸',toggle_advanced)
-    advanced_button.pack(anchor='w',pady=(12,6))
+    advanced_button=th.button(parent,'▸  高级设置',toggle_advanced,kind='disclosure')
+    advanced_button.configure(anchor='w',padx=4)
+    advanced_button.pack(fill='x',pady=(4,6))
+    syncing=[False]
     def show_advanced():
         opened=advanced_open[0] or provider.get()==PROVIDERS['custom']
-        advanced_button.configure(text='高级设置 ▾' if opened else '高级设置 ▸')
+        advanced_button.configure(text='▾  高级设置' if opened else '▸  高级设置')
         if opened:advanced.pack(fill='x',after=advanced_button)
         else:advanced.pack_forget()
     text(advanced,th,'接口地址 · 完整 chat/completions 地址',small=True,muted=True).pack(anchor='w',pady=(0,6))
@@ -272,6 +288,7 @@ def build_api_settings(parent, app):
         dirty.configure(text='已保存',fg=C['ok'])
         latest = p._load_config(app.root_dir)
         hint.configure(text=SOURCE_LABELS[latest.key_source])
+        help_state.configure(text=configuration_summary(latest))
         if latest.key_source == 'environment':
             app.watch_application_fields({k:v for k,v in patch.items() if k!='provider'}, prefix='运行密钥仍由环境变量优先提供；接口')
         else:
@@ -282,12 +299,15 @@ def build_api_settings(parent, app):
     dirty=text(actions,th,'未保存' if draft['dirty'] else '',small=True,muted=True)
     dirty.pack(side='right')
     def changed(*_):
+        if syncing[0]:return
         draft.update(model=model.get(),endpoint=endpoint.get(),key=key.get(),
             provider=next(k for k,v in PROVIDERS.items() if v==provider.get()),dirty=True)
         app._api_revision=getattr(app,'_api_revision',0)+1
+        composer=getattr(app,'composer',None)
+        if composer:composer['view']['render']()
         app._application_generation+=1
         dirty.configure(text='未保存',fg=C['warn'])
-        app.set_status('未保存',C['warn'])
+        app.set_status('未保存',C['warn'],page='api')
     for variable in (provider,model,key,endpoint):variable.trace_add('write',changed)
     from gui.game_settings import connection_button
     connection_button(actions,app,lambda:dict(p._load_config(app.root_dir),endpoint=endpoint.get().strip(),
@@ -297,6 +317,23 @@ def build_api_settings(parent, app):
     app._page_feedback=feedback
     app.api_controls=dict(key=key,entry=entry,model=model,box=box,save=save,hint=hint,
                           endpoint=endpoint,provider=provider,select_provider=select_provider,dirty=dirty)
+    def sync_api():
+        latest=p._load_config(app.root_dir)
+        if not draft['dirty']:
+            draft.update(provider=latest.get('provider','deepseek'),model=latest['model'],
+                         endpoint=latest['endpoint'],key='')
+        syncing[0]=True
+        try:
+            provider.set(PROVIDERS[draft['provider']] if draft['endpoint']==DEEPSEEK['endpoint'] else PROVIDERS['custom'])
+            model.set(draft['model']);endpoint.set(draft['endpoint']);key.set(draft['key'])
+        finally:
+            syncing[0]=False
+        dirty.configure(text='未保存' if draft['dirty'] else '')
+        hint.configure(text=SOURCE_LABELS[latest.key_source])
+        show_advanced()
+        help_state.configure(text=configuration_summary(latest))
+    app.api_controls['sync']=sync_api
+    app.api_controls['refresh_summary']=lambda:help_state.configure(text=configuration_summary(p._load_config(app.root_dir)))
     # Existing budgets stay effective; no price guesses and no silent reset.
     if config.get('budget_session') or config.get('budget_daily'):
         area=section(parent,th,'已有费用保护')
@@ -330,7 +367,7 @@ def build_preferences(parent, app):
     row,holder=p._row(preferences,th,'关闭窗口时')
     labels={'exit':'退出助手','tray':'收起到托盘'}
     action=th.tk.StringVar(value=labels[config.get('close_action','exit')])
-    chooser=th.ttk.Combobox(holder,textvariable=action,values=tuple(labels.values()),state='readonly',width=14,font=th.font)
+    chooser=th.combobox(holder,textvariable=action,values=tuple(labels.values()),state='readonly',width=14,font=th.font)
     chooser.pack()
     def choose(_event=None):
         value=next(key for key,label in labels.items() if label==action.get())
@@ -345,7 +382,7 @@ def build_preferences(parent, app):
             var.set(launcher.is_autostart_enabled())
     app.refresh_preferences=refresh
     area=section(parent,th,'首次设置')
-    text(area,th,'重新打开安装后的接口填写引导；不会清空已有配置，也不会自动启用联网翻译。',
+    help_text(area,th,'重新打开安装后的接口填写引导；不会清空已有配置，也不会自动启用联网翻译。',
          small=True,muted=True,wraplength=820,justify='left').pack(anchor='w')
     th.button(area,'重新运行首次设置',lambda:app.open_page('onboarding')).pack(anchor='w',pady=8)
     from gui.feedback import build
@@ -358,8 +395,9 @@ def build_recognition_settings(parent, app):
     th=app.th
     heading(parent,th,'识别与显示')
     config=p._load_config(app.root_dir)
-    build_recognition(parent,app)
-    build_region_tools(parent,app)
+    region=section(parent,th,'识别范围')
+    build_recognition(region,app)
+    build_region_tools(region,app)
     display=section(parent,th,'译文显示')
     p._render_spec(app,display,('font_size',),config)
     try:
@@ -385,6 +423,7 @@ class Dictionary:
         from gui import pages as p
         self.app, self.th, self.parent = app, app.th, parent
         th = self.th
+        parent=module(parent,th,'词条与审核')
         self.gpath = store.data_path(app.root_dir, 'glossary.json')
         self.config_path = store.data_path(app.root_dir, 'config.json')
         self.service = ReviewQueue(store.data_path(app.root_dir,'pending.json'),self.gpath)
@@ -399,24 +438,48 @@ class Dictionary:
         if self.state['tab'] not in {'formal', 'review', 'processed'}:
             self.state.update(tab='formal', selected=None)
         head=heading(parent,th,'词库','修改常用译文，或停用当前选中的词条。')
+        th.label(head,'词库',font=th.font_heading).pack(anchor='w',pady=(0,8))
         self.subtitle=head.subtitle
-        self.resource_status = self.subtitle
-        self.add_button=th.button(head,'＋ 添加词条',self.add,kind='primary')
-        self.add_button.pack(side='right',before=head.winfo_children()[0])
-        tabs=panel(parent,th);tabs.pack(fill='x')
+        self.resource_status = text(head,th,'',small=True,muted=True,wraplength=700)
+        self.resource_status.pack(fill='x',pady=(0,10))
+        self.resource_status.bind('<Configure>',lambda e:self.resource_status.configure(wraplength=max(180,e.width)))
+        self.subtitle = self.resource_status
+        tabbar=panel(parent,th);tabbar.pack(fill='x')
+        tabs=panel(tabbar,th);tabs.pack(side='left')
         self.tabs={};self.tab_rails={}
         for name,label in (('formal','使用中的词库'),('review','待审核'),('processed','已处理')):
-            wrap=panel(tabs,th);wrap.pack(side='left',padx=(0,26))
-            button=th.link(wrap,label,lambda n=name:self.pick(n));button.configure(font=th.font,pady=8)
+            wrap=panel(tabs,th);wrap.pack(side='left',padx=(0,14))
+            button=th.button(wrap,label,lambda n=name:self.pick(n),kind='disclosure');button.configure(font=th.font,pady=9,padx=8)
             button.pack(fill='x');self.tabs[name]=button
             rail=panel(wrap,th,bg=C['border'],height=2);rail.pack(fill='x');self.tab_rails[name]=rail
-        th.hairline(parent,pady=(0,18))
+        tools=panel(parent,th);tools.pack(fill='x',pady=(8,10))
+        self.add_button=th.button(tools,'＋ 添加词条',self.add,kind='primary')
+        self.add_button.pack(side='left',padx=(0,12))
+        self.import_button=th.link(tools,'导入',self.import_file);self.import_button.pack(side='left')
+        th.link(tools,'导出',self.export_file).pack(side='left',padx=(8,0))
+        builtin=panel(tools,th);builtin.pack(side='right')
+        text(builtin,th,'内置词表',small=True).pack(side='left',padx=(0,8))
+        self.builtins=p._switch(app,builtin,'builtins_enabled',p._load_config(app.root_dir))
+        # Share a toolbar only when its measured contents fit. Small windows
+        # keep a separate row, with every action still reachable.
+        def arrange_tools(event=None):
+            inline=parent.winfo_width()-40 >= tabs.winfo_reqwidth()+tools.winfo_reqwidth()+30
+            if getattr(tools,'_inline',None)==inline:return
+            tools._inline=inline
+            tools.pack_forget()
+            if inline:tools.pack(in_=tabbar,side='right',padx=(18,0))
+            else:tools.pack(in_=parent,after=tabbar,fill='x',pady=(8,10))
+        self.arrange_tools=arrange_tools
+        parent.bind('<Configure>',arrange_tools,add='+')
+        th.hairline(parent,pady=(0,16))
         grid=panel(parent,th);grid.pack(fill='both',expand=True)
-        grid.columnconfigure(0,weight=1,uniform='dictionary');grid.columnconfigure(1,weight=1,uniform='dictionary')
+        grid.columnconfigure(0,weight=11,uniform='dictionary');grid.columnconfigure(1,weight=9,uniform='dictionary')
         left=panel(grid,th);left.grid(row=0,column=0,sticky='nsew',padx=(0,22))
-        self.editor_card=panel(grid,th,border=True);self.editor_card.grid(row=0,column=1,sticky='new')
-        editor_head=panel(self.editor_card,th,bg=C['soft']);editor_head.pack(fill='x')
-        self.editor_title=th.label(editor_head,'条目详情',bg=C['soft'],font=(th.font[0],11,'bold'))
+        self.editor_card=panel(grid,th);self.editor_card.grid(row=0,column=1,sticky='new')
+        left._hover_module=True
+        self.editor_card._hover_module=True
+        editor_head=panel(self.editor_card,th);editor_head.pack(fill='x')
+        self.editor_title=th.label(editor_head,'条目详情',font=(th.font[0],11,'bold'))
         self.editor_title.pack(side='left',padx=19,pady=10)
         self.editor_state=text(editor_head,th,'',small=True,muted=True);self.editor_state.pack(side='right',padx=19)
         th.hairline(self.editor_card)
@@ -428,8 +491,8 @@ class Dictionary:
         search.bind('<KeyRelease>',self.refresh)
         placeholder(search,self.keyword,th,'搜索原文或译文')
         self.filter=th.tk.StringVar(value='使用中')
-        self.selector=th.ttk.Combobox(filters,textvariable=self.filter,values=('使用中','已停用','已删除','全部'),state='readonly',width=8,font=th.font_small)
-        self.selector.pack(side='right',padx=(9,0),ipady=5);self.selector.bind('<<ComboboxSelected>>',self.refresh)
+        self.selector=th.combobox(filters,textvariable=self.filter,values=('使用中','已停用','已删除','全部'),state='readonly',width=8,font=th.font_small)
+        self.selector.pack(side='right',padx=(9,0),ipady=5,before=search_border);self.selector.bind('<<ComboboxSelected>>',self.refresh)
         self.list=EntryCards(left,th,self.select)
         foot=panel(left,th);foot.pack(fill='x',pady=(10,0))
         self.count=text(foot,th,'',small=True,muted=True);self.count.pack(side='left')
@@ -438,13 +501,6 @@ class Dictionary:
         self.clear_processed_button=th.button(self.processed_tools,'清空已处理',lambda:self.delete_processed(all_records=True))
         self.clear_processed_button.pack(anchor='w')
         self.processed_records=[]
-        # Keep import/export visible when Windows caps the window height.
-        tools=panel(tabs,th);tools.pack(side='right')
-        holder=panel(tools,th);holder.pack(side='left')
-        self.builtins=p._switch(app,holder,'builtins_enabled',p._load_config(app.root_dir))
-        text(tools,th,'内置词表',small=True).pack(side='left',padx=(8,0))
-        th.link(tools,'导出',self.export_file).pack(side='right',padx=(18,0))
-        th.link(tools,'导入',self.import_file).pack(side='right')
         def fit(event=None):
             self.list.set_height(app.canvas.winfo_height()-445)
         self.list.frame.bind('<Destroy>',lambda event:app.canvas.unbind('<Configure>',fit_id) if event.widget is self.list.frame else None)
@@ -548,7 +604,11 @@ class Dictionary:
         found=next((i for i,r in enumerate(self.rows) if self.identity(r)==selected),None)
         if found is not None:
             # Unrelated refresh must not recreate the editor or drop cursor/draft.
-            if not self.selected or self.identity(self.selected)!=selected:self.show(self.rows[found])
+            row=self.rows[found]
+            if not self.selected or self.identity(self.selected)!=selected:
+                self.show(row)
+            elif any(row.get(k)!=self.selected.get(k) for k in ('status','can_restore')):
+                self.remember();self.show(row)
         elif selected and selected[0]=='new':
             return
         else:
@@ -578,7 +638,7 @@ class Dictionary:
     def pick(self,tab):
         self.remember();self.state['tab']=tab;self.state['selected']=None;self.selected=None
         self.keyword.set('')
-        if tab=='formal':self.selector.pack(side='right',padx=(9,0),ipady=5)
+        if tab=='formal':self.selector.pack(side='right',padx=(9,0),ipady=5,before=self.selector.master.winfo_children()[0])
         else:self.selector.pack_forget()
         self.paint_tabs()
         self.refresh()
@@ -586,8 +646,9 @@ class Dictionary:
     def paint_tabs(self):
         tab=self.state['tab']
         if tab=='formal' and not self.add_button.winfo_manager():
-            self.add_button.pack(side='right',before=self.add_button.master.winfo_children()[0])
+            self.add_button.pack(side='left',padx=(0,12),before=self.import_button)
         elif tab!='formal':self.add_button.pack_forget()
+        self.arrange_tools()
         for name,btn in self.tabs.items():
             btn.configure(fg=C['accent'] if name==tab else C['muted'])
             self.tab_rails[name].configure(bg=C['accent'] if name==tab else C['bg'])
@@ -608,7 +669,7 @@ class Dictionary:
         self.editor_state.configure(text='只读' if readonly else STATUS_NAMES.get(row.get('status'),row.get('status','')))
         text(self.editor,th,'原文',small=True,muted=True).pack(anchor='w')
         original=panel(self.editor,th,bg=C['soft']);original.pack(fill='x',pady=(7,4))
-        th.label(original,row.get('original') or row['key'],bg=C['soft'],font=(th.font_mono[0],11),justify='left',wraplength=360).pack(fill='x',padx=12,pady=6)
+        th.label(original,row.get('original') or row['key'],bg=C['soft'],font=th.font,justify='left',wraplength=360).pack(fill='x',padx=12,pady=6)
         source=SOURCE_NAMES.get(row.get('source'),row.get('source','未知'))
         text(self.editor,th,source+(' · 保存将记为人工词条' if tab=='review' else ''),small=True,muted=True).pack(anchor='w',pady=(0,4))
         if row.get('api_translation') and row['api_translation']!=row.get('translation'):
@@ -623,7 +684,7 @@ class Dictionary:
             if isinstance(row.get('evidence'),dict):
                 text(body,th,json.dumps(row['evidence'],ensure_ascii=False,indent=2),small=True,muted=True,justify='left',wraplength=340).pack(fill='x',pady=(8,0))
         text(self.editor,th,'中文译文'+('' if readonly else ' · 可直接修改'),small=True,muted=True).pack(anchor='w',pady=(0,6))
-        self.draft=th.tk.Text(self.editor,height=2 if tab=='review' else 3,width=20,font=th.font,wrap='word',bg=C['panel'],fg=C['fg'],relief='flat',bd=0,highlightthickness=1,highlightbackground=C['border'],highlightcolor=C['accent'],padx=10,pady=8)
+        self.draft=th.tk.Text(self.editor,height=2 if tab=='review' else 3,width=20,font=th.font,wrap='word',bg=C['soft'],fg=C['fg'],relief='flat',bd=0,highlightthickness=1,highlightbackground=C['border'],highlightcolor=C['accent'],padx=10,pady=8)
         self.draft.pack(fill='x',pady=(0,10))
         identity=self.identity(row)
         snapshot=self.state['snapshots'].setdefault(identity,dict(row))
@@ -646,14 +707,14 @@ class Dictionary:
             self.actions.columnconfigure(0,weight=1)
             def arrange(event=None):
                 narrow=self.actions.winfo_width()<360
-                primary.grid(row=0,column=0,columnspan=3 if narrow else 1,sticky='ew')
+                primary.grid(row=0,column=0,columnspan=3 if narrow else 1,sticky='w')
                 ignore.master.grid(row=1 if narrow else 0,column=0 if narrow else 1,
                                    columnspan=2 if narrow else 1,sticky='ew',padx=(0,0) if narrow else (8,0),pady=(8,0) if narrow else 0)
                 next_button.grid(row=1 if narrow else 0,column=2,padx=(8,0),pady=(8,0) if narrow else 0)
             self.actions.bind('<Configure>',arrange)
             arrange()
         else:
-            th.button(self.actions,'保存修改',self.save_formal,kind='primary').pack(fill='x')
+            th.button(self.actions,'保存修改',self.save_formal,kind='primary').pack(anchor='w')
             if row.get('status')=='使用中':bordered_button(self.actions,th,'停用这条',self.disable,anchor='w',pady=8)
             elif row.get('status') in {'已停用','已删除'} and row.get('can_restore'):bordered_button(self.actions,th,'重新启用',self.restore,anchor='w',pady=8)
             elif row.get('source')=='builtin':th.label(self.actions,'内置词表当前关闭；开启总开关后使用。',font=th.font_small,wraplength=380).pack(anchor='w',pady=8)

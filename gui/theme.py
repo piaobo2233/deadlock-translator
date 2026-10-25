@@ -8,6 +8,7 @@ is separate from editable text, controls and data charts.
 
 import tkinter as tk
 from tkinter import ttk
+from functools import lru_cache
 
 __all__ = ["Theme", "COLORS", "TONE", "TOKENS", "TRY_FONTS", "FONT_LABEL",
            "pick_font", "pick_label_font", "hex_to_rgb", "mix",
@@ -17,20 +18,23 @@ __all__ = ["Theme", "COLORS", "TONE", "TOKENS", "TRY_FONTS", "FONT_LABEL",
 
 TOKENS = {
     # ---- 颜色（§六）----
-    "bg":            "#181A18",
-    "surface":       "#181A18",
-    "surface_hover": "#302D25",
-    "soft":          "#111410",
-    "selected":      "#332D23",
-    "border":        "#5B5545",
-    "text":          "#F2E6CA",
-    "text_dim":      "#B8AE97",
-    "text_ghost":    "#958E7C",
-    "accent":        "#E77B47",
-    "accent_dim":    "#F09561",
+    "bg":            "#494A3E",
+    "surface":       "#414438",
+    "surface_hover": "#525447",
+    "soft":          "#303229",
+    "shell":         "#292E26",
+    "selected":      "#48493D",
+    "border":        "#5E5D4F",
+    "text":          "#F3ECD9",
+    "text_dim":      "#C5C2AA",
+    "text_ghost":    "#7C8273",
+    "accent":        "#60E6A6",
+    "module_hover":  "#4B4D40",
+    "row_hover":     "#626351",
+    "accent_dim":    "#8AF3BA",
     "danger":        "#ED9080",
-    "ok":            "#93C9AD",
-    "paper":         "#F2E6CA",
+    "ok":            "#60E6A6",
+    "paper":         "#EBE6D2",
     "ink":           "#20231E",
     # ---- 形状（§八：2~5px 小圆角，硬朗工业化）----
     "radius":        3,
@@ -65,6 +69,9 @@ COLORS = {
     "card": TOKENS["surface"],
     "card_hi": TOKENS["selected"],
     "soft": TOKENS["soft"],
+    "shell": TOKENS["shell"],
+    "module_hover": TOKENS["module_hover"],
+    "row_hover": TOKENS["row_hover"],
     "border": TOKENS["border"],
     "fg": TOKENS["text"],
     "muted": TOKENS["text_dim"],
@@ -84,8 +91,8 @@ PAD = TOKENS["sp_l"]     # 页面边距 20
 GAP = TOKENS["sp_m"]     # 控件间距 12
 RADIUS = TOKENS["radius"]
 
-# 中文优先用雅黑（清晰、正常、易读，§十一）。
-TRY_FONTS = ("Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC",
+# 优先使用本机游戏已提供的中文字体；未安装游戏时回退系统字体。
+TRY_FONTS = ("Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei",
              "微软雅黑", "SimHei")
 # 英文标签用 DIN 风格的窄体，工业终端味从这儿来（Windows 10+ 自带）。
 # 找不到就退回正文族 —— 绝不为了字体让用户去装东西（§十一）。
@@ -100,10 +107,21 @@ def pick_font(root, size=10, bold=False):
         available = set(tkfont.families(root))
     except Exception:
         available = set()
+    if bold and 'Noto Sans SC SemiBold' in available:
+        return ('Noto Sans SC SemiBold',size)
     for name in TRY_FONTS:
         if name in available:
             return (name, size, "bold") if bold else (name, size)
     return ("TkDefaultFont", size, "bold") if bold else ("TkDefaultFont", size)
+
+
+@lru_cache(maxsize=1)
+def _load_local_fonts():
+    """Use existing game fonts privately; never install or redistribute them."""
+    from app.platform import game_fonts
+    if not game_fonts.GAME_DIR:
+        game_fonts.resolve_game_dir({})
+    game_fonts.register_game_font()
 
 
 def pick_label_font(root, size=9, bold=False):
@@ -148,6 +166,7 @@ class Theme:
         #     原来写死 880x560 —— 已经足够把一个 380 宽的小工具撑成一块空白面板。
         self.backend = "ttk"
         self._boot = None
+        _load_local_fonts()
         try:
             import ttkbootstrap as boot
             self._boot = boot
@@ -178,11 +197,13 @@ class Theme:
         self.t = dict(TOKENS)
 
         # 字体层级：正文 / 小字 / 区块标签 / 页面标题 / 大数字 / 工业标签
-        self.font = pick_font(self.root, 10)
-        self.font_small = pick_font(self.root, 9)
+        self.font = pick_font(self.root, 11)
+        self.font_small = pick_font(self.root, 10)
         self.font_title = self.display_font(25)
-        self.font_heading = self.display_font(13)
-        self.font_big = ("Cambria", 22, "bold")
+        self.font_heading = self.display_font(14)
+        self.font_nav = pick_font(self.root, 12, bold=True)
+        self.font_button = pick_font(self.root, 10, bold=True)
+        self.font_big = pick_label_font(self.root,22,bold=True)
         self.font_mono = ("Consolas", 10)
         self.font_tag = pick_font(self.root, 9)
 
@@ -190,6 +211,7 @@ class Theme:
             self.root.resizable(False, False)
         self._install_ttk()
         self._install_switch()
+        self._install_combobox()
         # Tk's native theme-change idle callback can outlive `destroy .` while
         # Python still holds the Tcl interpreter. Drain it before destroying
         # the root, without forcing native redraws on every page navigation.
@@ -201,10 +223,7 @@ class Theme:
         self.root.destroy = destroy
 
     def display_font(self, size):
-        from tkinter import font as tkfont
-        available = set(tkfont.families(self.root))
-        family = next((f for f in ('华文中宋', 'STZhongsong', 'SimSun', '宋体') if f in available), self.font[0])
-        return (family, size, 'bold')
+        return pick_font(self.root,size,bold=True)
 
     # ------------------------------------------------------------ ttk 底座
     def _install_ttk(self):
@@ -245,13 +264,14 @@ class Theme:
                             background=c["card_hi"], foreground=c["fg"],
                             arrowcolor=c["muted"], bordercolor=c["border"],
                             lightcolor=c["border"], darkcolor=c["border"],
-                            selectbackground=c["card"], selectforeground=c["fg"])
+                            selectbackground=c["soft"], selectforeground=c["fg"],
+                            padding=(10,6), arrowsize=16, font=self.font)
             style.map("TCombobox",
-                      fieldbackground=[("readonly", c["card"])],
+                      fieldbackground=[("readonly", c["soft"]), ('!readonly',c['soft'])],
                       foreground=[("readonly", c["fg"])])
             style.configure("TScrollbar", background=c["card_hi"],
-                            troughcolor=c["bg"], bordercolor=c["bg"],
-                            arrowcolor=c["muted"], borderwidth=0)
+                            troughcolor=c["shell"], bordercolor=c["shell"],
+                            arrowcolor=c["muted"], borderwidth=0, width=9, arrowsize=0)
             style.configure("Treeview", background=c["card"],
                             fieldbackground=c["card"], foreground=c["fg"],
                             borderwidth=0, rowheight=30, font=self.font)
@@ -278,32 +298,100 @@ class Theme:
         from PIL import Image, ImageDraw, ImageTk
         style = self.root.style if self._boot else ttk.Style(self.root)
         self._switch_images = []
-        for selected in (False, True):
-            image = Image.new('RGBA', (36, 22), COLORS['bg'])
-            draw = ImageDraw.Draw(image)
-            draw.rounded_rectangle((1,1,35,21), radius=10, fill=COLORS['ok'] if selected else COLORS['border'])
-            x = 20 if selected else 4
-            draw.ellipse((x,4,x+14,18), fill=COLORS['paper'])
+        from gui.ink import switch_surface,ring_surface
+        for selected,disabled,active in ((False,False,False),(True,False,False),(False,True,False),(True,True,False),(False,False,True),(True,False,True)):
+            image=switch_surface(selected,disabled,active)
             self._switch_images.append(ImageTk.PhotoImage(image, master=self.root))
         name = 'GoldSwitch.indicator'
         if name not in style.element_names():
-            style.element_create(name, 'image', self._switch_images[0], ('selected', self._switch_images[1]))
+            style.element_create(name, 'image', self._switch_images[0],
+                ('disabled','selected',self._switch_images[3]),('disabled',self._switch_images[2]),
+                ('active','selected',self._switch_images[5]),('active',self._switch_images[4]),
+                ('focus','selected',self._switch_images[5]),('focus',self._switch_images[4]),
+                ('selected', self._switch_images[1]))
         style.layout('GoldSwitch.TCheckbutton', [('Checkbutton.padding', {'sticky':'nswe','children':[
             (name, {'side':'left','sticky':''}), ('Checkbutton.label', {'side':'left','sticky':'nswe'})]})])
         style.configure('GoldSwitch.TCheckbutton',background=COLORS['bg'],foreground=COLORS['fg'],padding=2)
-        image=Image.new('RGBA',(16,16),(0,0,0,0))
-        draw=ImageDraw.Draw(image);draw.ellipse((1,1,15,15),fill=COLORS['accent'])
-        self._scale_image=ImageTk.PhotoImage(image,master=self.root)
+        self._scale_image=ImageTk.PhotoImage(ring_surface(),master=self.root)
+        self._scale_active=ImageTk.PhotoImage(ring_surface(True),master=self.root)
         track=Image.new('RGBA',(16,16),(0,0,0,0))
         ImageDraw.Draw(track).rectangle((0,7,15,9),fill=COLORS['border'])
         self._scale_track=ImageTk.PhotoImage(track,master=self.root)
         if 'GoldScale.trough' not in style.element_names():style.element_create('GoldScale.trough','image',self._scale_track,sticky='we')
         name='GoldScale.slider'
-        if name not in style.element_names():style.element_create(name,'image',self._scale_image)
+        if name not in style.element_names():style.element_create(name,'image',self._scale_image,('active',self._scale_active),('focus',self._scale_active))
         style.layout('Gold.Horizontal.TScale',[('GoldScale.trough',{'sticky':'we','children':[
             (name,{'side':'left','sticky':''})]})])
         style.configure('Gold.Horizontal.TScale',background=COLORS['bg'],troughcolor=COLORS['border'],
                         bordercolor=COLORS['border'],lightcolor=COLORS['border'],darkcolor=COLORS['border'],borderwidth=0)
+
+    def scale(self,parent,*,from_,to,variable,command,length=210):
+        """Native draggable scale, with the filled track and ring seen in the reference."""
+        scale=self.ttk.Scale(parent,from_=from_,to=to,orient='horizontal',variable=variable,
+                             command=command,length=length)
+        style=self.root.style if self._boot else ttk.Style(self.root)
+        name=f'Value{id(scale)}'
+        track=tk.PhotoImage(master=self.root,width=length,height=30)
+        scale._track=track
+        style.element_create(name+'.trough','image',track,sticky='we')
+        style.layout(name+'.Horizontal.TScale',[(name+'.trough',{'sticky':'we','children':[
+            ('GoldScale.slider',{'side':'left','sticky':''})]})])
+        style.configure(name+'.Horizontal.TScale',background=COLORS['bg'])
+        scale.configure(style=name+'.Horizontal.TScale')
+        def paint(*_):
+            width=max(length,scale.winfo_width())
+            track.configure(width=width,height=30)
+            track.blank()
+            track.put('#1A211A',to=(15,13,width-15,17))
+            amount=max(0,min(1,(float(variable.get())-from_)/(to-from_)))
+            end=15+round((width-30)*amount)
+            if end>15:
+                track.put('#737E61',to=(15,11,end,19))
+                track.put('#B6BE99',to=(15,12,end,18))
+                for x in range(15,end):
+                    color=mix('#EFE4C8',COLORS['accent'],max(0,(x-(end-40))/40)*.55)
+                    track.put(color,to=(x,14,x+1,17))
+        token=variable.trace_add('write',paint)
+        scale.bind('<Configure>',paint)
+        scale.bind('<Destroy>',lambda e:variable.trace_remove('write',token) if e.widget is scale else None)
+        paint()
+        return scale
+
+    def _install_combobox(self):
+        from PIL import Image, ImageDraw, ImageTk
+        from gui.ink import combo_surface
+        style=self.root.style if self._boot else ttk.Style(self.root)
+        self._combo_images=[ImageTk.PhotoImage(combo_surface(active),master=self.root) for active in (False,True)]
+        arrow=Image.new('RGBA',(48,48));draw=ImageDraw.Draw(arrow)
+        draw.line((24,8,24,34),fill=COLORS['muted'],width=6)
+        draw.line((12,23,24,35,36,23),fill=COLORS['muted'],width=6)
+        self._combo_arrow=ImageTk.PhotoImage(arrow.resize((24,24),Image.Resampling.LANCZOS),master=self.root)
+        style.element_create('InkCombo.field','image',self._combo_images[0],('focus',self._combo_images[1]),
+                             ('active',self._combo_images[1]),border=12,padding=4,sticky='nswe')
+        style.element_create('InkCombo.downarrow','image',self._combo_arrow)
+        style.layout('TCombobox',[('InkCombo.field',{'sticky':'nswe','children':[
+            ('InkCombo.downarrow',{'side':'right','sticky':''}),
+            ('Combobox.padding',{'sticky':'nswe','children':[('Combobox.textarea',{'sticky':'nswe'})]})]})])
+        style.configure('TCombobox',padding=(10,3,6,3),font=self.font_button)
+        for key,value in {'background':COLORS['bg'],'foreground':COLORS['muted'],
+                          'selectBackground':'#53634D','selectForeground':COLORS['fg'],
+                          'font':self.font_button,'borderWidth':0,'highlightThickness':0,
+                          'relief':'flat','selectBorderWidth':0}.items():
+            self.root.option_add('*TCombobox*Listbox.'+key,value)
+
+    def combobox(self,parent,**kw):
+        kw.setdefault('font',self.font_button)
+        box=self.ttk.Combobox(parent,**kw)
+        def skin():
+            popup=box.tk.call('ttk::combobox::PopdownWindow',box._w)
+            box.tk.call(str(popup)+'.f','configure','-borderwidth',2,'-relief','flat')
+            box.tk.call(str(popup)+'.f.l','configure','-background','#505044',
+                        '-foreground',COLORS['muted'],'-selectbackground','#5A604D',
+                        '-selectforeground',COLORS['fg'],'-selectborderwidth',0,
+                        '-font',pick_font(self.root,13,bold=True),'-relief','flat','-activestyle','none',
+                        '-borderwidth',8,'-highlightthickness',1,'-highlightbackground',COLORS['border'])
+        box.configure(postcommand=skin)
+        return box
 
     def is_fancy(self) -> bool:
         return self.backend == "ttkbootstrap"
@@ -345,42 +433,47 @@ class Theme:
         """
         if accent:
             kind = "primary"
+        workspace = getattr(self, 'workspace', None)
+        if workspace:
+            command = workspace.owned(parent, command)
+        if kind != 'disclosure':
+            from gui.ink import PillButton
+            return PillButton(parent,text=text,command=command,font=self.font_button,
+                              foreground=COLORS['danger'] if kind=='danger' else None)
         c = TOKENS
-        if kind == "primary":
-            bg, fg, hover = c["accent"], c['ink'], c["accent_dim"]
-        elif kind == "danger":
-            bg, fg, hover = c["surface"], c["danger"], c["surface_hover"]
-        else:
-            bg, fg, hover = c["surface"], c["text"], c["surface_hover"]
+        bg,fg,hover=c['bg'],c['text'],c['surface_hover']
         btn = tk.Button(parent, text=text, command=command, bg=bg, fg=fg,
                         activebackground=hover, activeforeground=fg,
                         disabledforeground=c['text_ghost'],
-                        font=self.font, relief="flat", bd=0,
-                        padx=11, pady=6, cursor="hand2", highlightthickness=1,
-                        highlightbackground=(c["accent"] if kind == "primary" else c["border"]),
+                        font=self.font, relief='flat', bd=0,
+                        padx=16, pady=7, cursor="hand2", highlightthickness=0,
+                        highlightbackground=c["border"],
                         highlightcolor=c["accent"])
-        # Hover：只轻微改背景，不发光不阴影（§二十二）
+        # Text actions and disclosure headings use a quiet background highlight.
         def on_enter(_e):
-            btn.configure(bg=hover)
+            if str(btn.cget("state")) != "disabled":
+                btn.configure(bg=hover,fg=fg)
 
         def on_leave(_e):
-            btn.configure(bg=bg)
+            btn.configure(bg=bg,fg=fg)
 
         btn.bind("<Enter>", on_enter)
         btn.bind("<Leave>", on_leave)
+        btn.bind("<FocusIn>", on_enter)
+        btn.bind("<FocusOut>", on_leave)
+        configure = btn.configure
+        def configure_state(cnf=None, **kwargs):
+            if kwargs.get('state') == 'disabled':
+                kwargs.update(bg=bg, fg=fg)
+            return configure(cnf, **kwargs)
+        btn.configure = btn.config = configure_state
         return btn
 
     def link(self, parent, text, command, fg=None):
-        """Visible secondary action with a persistent border and keyboard focus."""
-        btn = tk.Button(parent, text=text, command=command,
-                        bg=TOKENS["bg"], fg=fg or TOKENS["text_dim"],
-                        activebackground=TOKENS["bg"],
-                        activeforeground=TOKENS["accent"],
-                        font=(self.font_small[0], self.font_small[1], 'underline'), relief="flat", bd=0,
-                        disabledforeground=TOKENS['text_ghost'],
-                        padx=3, pady=3, cursor="hand2", highlightthickness=1,
-                        highlightbackground=TOKENS['border'], highlightcolor=TOKENS['accent'])
-        return btn
+        button=self.button(parent,text,command,kind='disclosure')
+        button.configure(font=self.font_small,padx=8,pady=4)
+        if fg:button.configure(fg=fg)
+        return button
 
     # ------------------------------------------------------------ 复合结构
     def section(self, parent, tag, gap_after=None):
@@ -437,17 +530,15 @@ class Theme:
         name = 'EntryCards.Vertical.TScrollbar'
         # Clam elements use configurable colors and sizes; image-based themes
         # otherwise keep their tiny pale thumb despite configure(width=...).
-        for part in ('trough', 'uparrow', 'downarrow', 'thumb'):
+        for part in ('trough', 'thumb'):
             element = 'EntryCards.Scrollbar.' + part
             if element not in style.element_names():
                 style.element_create(element, 'from', 'clam', part)
         style.layout(name, [('EntryCards.Scrollbar.trough', {'sticky': 'ns', 'children': [
-            ('EntryCards.Scrollbar.uparrow', {'side': 'top', 'sticky': ''}),
-            ('EntryCards.Scrollbar.downarrow', {'side': 'bottom', 'sticky': ''}),
             ('EntryCards.Scrollbar.thumb', {'expand': 1, 'sticky': 'nswe'})]})])
-        style.configure(name, background=COLORS['muted'], troughcolor=COLORS['soft'],
-                        arrowcolor=COLORS['panel'], bordercolor=COLORS['soft'],
-                        width=16, arrowsize=16, borderwidth=0)
+        style.configure(name, background=COLORS['border'], troughcolor=COLORS['soft'],
+                        bordercolor=COLORS['soft'],lightcolor=COLORS['border'],darkcolor=COLORS['border'],
+                        width=14, arrowsize=14, borderwidth=0,gripcount=0)
         style.map(name, background=[('pressed', COLORS['accent']), ('active', COLORS['accent'])])
         # Keep our named style rather than letting the optional wrapper rebuild it.
         bar.tk.call(bar._w, 'configure', '-style', name)
@@ -456,9 +547,11 @@ class Theme:
     def entry(self, parent, textvariable, width=22, show=""):
         """统一输入框（§二十一：高度、边框、圆角一致）。"""
         box = tk.Frame(parent, bg=TOKENS["border"], highlightthickness=0)
-        inner = tk.Entry(box, textvariable=textvariable, bg=TOKENS["surface"],
+        inner = tk.Entry(box, textvariable=textvariable, bg=TOKENS["soft"],
                          fg=TOKENS["text"], insertbackground=TOKENS["accent"],
                          relief="flat", bd=0, font=self.font, width=width,
                          show=show, highlightthickness=0)
-        inner.pack(fill="both", expand=True, padx=1, pady=1, ipady=5)
+        inner.pack(fill="both", expand=True, padx=1, pady=1, ipady=7)
+        inner.bind('<FocusIn>',lambda _e:box.configure(bg=TOKENS['accent']),add='+')
+        inner.bind('<FocusOut>',lambda _e:box.configure(bg=TOKENS['border']),add='+')
         return box, inner

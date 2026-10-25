@@ -1,3 +1,4 @@
+from gui.appearance import help_text
 """Game controls, region diagnostics and the current-session reader."""
 
 import app.platform.desktop as desktop
@@ -84,7 +85,7 @@ def language_control(parent,app,key,label,config):
     from app.translation.directions import LANGUAGES
     row,holder=p._row(parent,app.th,label)
     value=app.th.tk.StringVar(value=LANGUAGES[config[key]])
-    box=app.th.ttk.Combobox(holder,textvariable=value,values=tuple(LANGUAGES.values()),state='readonly',width=14)
+    box=app.th.combobox(holder,textvariable=value,values=tuple(LANGUAGES.values()),state='readonly',width=14)
     box.pack()
     def save(event=None):
         if not p._save(key,next(code for code,name in LANGUAGES.items() if name==value.get()),app):
@@ -96,18 +97,18 @@ def language_control(parent,app,key,label,config):
 def build_language_settings(parent,app):
     from gui import pages as p
     config=p._load_config(app.root_dir);th=app.th
-    text(parent,th,'开启后，在游戏聊天框提交中文输入法候选，再自行 Ctrl+A/C 复制。'
+    guide=help_text(parent,th,'开启后，在游戏聊天框提交中文输入法候选，再自行 Ctrl+A/C 复制。'
          '助手确认游戏来源后固定译英并覆盖剪贴板；提示成功后自行 Ctrl+V 粘贴、回车发送。'
          '切出游戏会取消旧输出，返回后请重新复制。私有请求台账可保留原文和译文。',
-         small=True,muted=True,wraplength=720,justify='left').pack(anchor='w',pady=(0,8))
-    row,holder=p._row(parent,th,'游戏复制中文自动译英')
+         small=True,muted=True,wraplength=720,justify='left')
+    row,holder=p._row(parent,th,'游戏复制中文自动译英',guide.cget('text'),app)
     var=p._switch(app,holder,'input_translate_enabled',config)
     app.input_translate_control=dict(value=var,holder=holder)
     app.send_language=language_control(parent,app,'send_target','面板发言目标语言',config)
 
 
 def build_recognition(parent,app):
-    label=text(parent,app.th,'持续实时识别游戏聊天。设置聊天可能出现的范围，覆盖两队位置与多条消息。',
+    label=help_text(parent,app.th,'持续实时识别游戏聊天。设置聊天可能出现的范围，覆盖两队位置与多条消息。',
                small=True,muted=True,wraplength=720,justify='left')
     label.pack(anchor='w',pady=(0,8))
     app.recognition_controls=dict(status=label)
@@ -163,12 +164,14 @@ def build_region_tools(parent,app):
     schematic.pack(fill='x',pady=8)
     source=text(parent,th,'',small=True,muted=True,wraplength=820,justify='left');source.pack(anchor='w',fill='x')
     details=text(parent,th,'',small=True,muted=True,wraplength=820,justify='left')
+    for label in (status,source,details):
+        label.bind('<Configure>',lambda event,w=label:w.configure(wraplength=max(180,event.width-8)))
     def toggle_details():
         if details.winfo_manager():details.pack_forget()
         else:details.pack(fill='x',pady=8)
     detail_button=th.link(parent,'▸ 画面与区域详情',toggle_details)
     detail_button.pack(anchor='w',pady=4)
-    text(parent,th,'换过 HUD/UI 设置？请重新导入或截取。仅支持主屏全屏/无边框；字号变化仍可能影响识别。',
+    help_text(parent,th,'换过 HUD/UI 设置？请重新导入或截取。仅支持主屏全屏/无边框；字号变化仍可能影响识别。',
          small=True,muted=True,wraplength=820,justify='left').pack(anchor='w',pady=4)
     def draw(event=None):
         cfg=p._load_config(app.root_dir);saved=cfg.get('capture_calibration',{})
@@ -180,6 +183,12 @@ def build_region_tools(parent,app):
         w=max(1,schematic.winfo_width());h=schematic.winfo_height()
         k=min(max(1,w-20)/screen[0],max(1,h-40)/screen[1]);ox=(w-screen[0]*k)/2;oy=8
         schematic.delete('all')
+        from gui.theme import mix
+        grid_color=mix(C['soft'],C['border'],.12)
+        for x in range(12,w,24):schematic.create_line(x,6,x,h-6,fill=grid_color)
+        for y in range(6,h,24):schematic.create_line(6,y,w-6,y,fill=grid_color)
+        for x,y,dx,dy in ((12,12,1,1),(w-12,12,-1,1),(12,h-12,1,-1),(w-12,h-12,-1,-1)):
+            schematic.create_line(x+dx*10,y,x,y,x,y+dy*10,fill=C['border'])
         schematic.create_rectangle(ox,oy,ox+screen[0]*k,oy+screen[1]*k,outline=C['border'])
         if rect:
             schematic.create_rectangle(ox+rect[0]*k,oy+rect[1]*k,ox+rect[2]*k,oy+rect[3]*k,
@@ -222,6 +231,13 @@ def build_region_tools(parent,app):
             state['hidden']=False;app.root.deiconify()
         state['busy']=False
         for button in buttons:button.configure(state='normal')
+    def leave():
+        # Explicit navigation can interrupt a hidden capture countdown.
+        if state['hidden']:
+            state['generation']+=1
+            finish()
+        win=preview.get('window')
+        if win and win.winfo_exists():win.destroy()
     def cleanup(event):
         if event.widget is not status:return
         state['alive']=False;state['generation']+=1
@@ -301,7 +317,7 @@ def build_region_tools(parent,app):
     edit=th.button(secondary,'编辑范围（重新选择截图）',import_image);edit.pack(side='left');buttons.append(edit)
     test=th.button(secondary,'测试当前游戏画面',lambda:begin('test'));test.pack(side='left',padx=6);buttons.append(test)
     app.game_settings=dict(region_status=status,state=state,editor=editor,import_image=import_image,begin=begin,
-                           reset=reset,refresh=refresh,schematic=schematic)
+                           reset=reset,refresh=refresh,schematic=schematic,leave=leave)
     app.region_test=dict(button=test,preview=preview)
     periodic()
 

@@ -140,7 +140,8 @@ class WorkspaceTests(unittest.TestCase):
             old = self.app.dictionary
             self.app.open_page('api')
             self.wait_resources()
-            self.assertFalse(old.resource_status.winfo_exists())
+            self.assertTrue(old.resource_status.winfo_exists())
+            self.assertIs(old,self.app.dictionary)
             for _ in range(20):
                 self.app.open_page('settings'); self.app.root.update()
                 self.app.open_page('api'); self.app.root.update()
@@ -207,7 +208,9 @@ class WorkspaceTests(unittest.TestCase):
             self.assertTrue(self.app.open_page(name));self.assertEqual(self.app.current,current)
         self.assertTrue(self.app.cost_controls['trend'].winfo_manager())
         self.assertFalse(self.app.open_page('typo'))
-        self.assertTrue(self.app.open_page('home'));self.assertEqual(self.app.title_label.cget('text'),'接收翻译')
+        self.assertIn('打不开',self.app.status.cget('text'))
+        self.assertTrue(self.app.open_page('home'));self.assertEqual(self.app.current,'home')
+        self.assertEqual(self.app.title_label.cget('text'),'')
 
     def test_api_draft_survives_navigation_and_focusout_never_saves(self):
         self.app.open_page('api');c=self.app.api_controls
@@ -228,11 +231,13 @@ class WorkspaceTests(unittest.TestCase):
     def test_local_text_scroll_does_not_also_move_page(self):
         from types import SimpleNamespace
         self.app.open_page('send');self.app._scrolling=True
+        source=self.app.composer['source']
+        source.insert('1.0','long text\n'*100);self.app.root.update();source.yview_moveto(.3)
         with patch.object(self.app.canvas,'yview_scroll') as scroll:
             self.app._wheel(SimpleNamespace(widget=self.app.composer['source'],delta=-120))
             scroll.assert_not_called()
             self.app._wheel(SimpleNamespace(widget=self.app.page,delta=-120))
-            scroll.assert_called_once_with(1,'units')
+            scroll.assert_called_once_with(3,'units')
 
     def test_current_problem_does_not_repeat_historical_failures(self):
         from gui.workspace import current_problem
@@ -533,7 +538,7 @@ class WorkspaceTests(unittest.TestCase):
         d=self.dictionary('formal')
         def walk(w):
             for c in w.winfo_children():yield c;yield from walk(c)
-        switch=next(w for w in walk(self.app.page) if 'Checkbutton' in w.winfo_class())
+        switch=next(w for w in walk(self.app.workspace.frames['dictionary']) if 'Checkbutton' in w.winfo_class())
         with patch.object(ConfigRepository,'save',return_value=False):switch.invoke()
         self.assertFalse(d.builtins.get());self.assertIn('保存失败',self.app.status.cget('text'))
         self.app.open_page('api');controls=self.app.api_controls;controls['model'].set('deepseek-v4-pro')
@@ -568,7 +573,8 @@ class WorkspaceTests(unittest.TestCase):
     def test_close_and_page_switch_cancel_callbacks_without_stopping_translator(self):
         self.seed();d=self.dictionary();self.choose(d,'first');self.draft(d,'切页草稿')
         self.app.open_page('home');self.assertTrue(self.app.page_callbacks._pending)
-        self.app.open_page('api');self.assertFalse(self.app.page_callbacks._pending)
+        pending=set(self.app.page_callbacks._pending)
+        self.app.open_page('api');self.assertEqual(self.app.page_callbacks._pending,pending)
         with patch.object(overlay_ui.Overlay,'close_assistant') as close:
             self.app.root.destroy();close.assert_not_called()
         self.assertFalse(self.app.page_callbacks._pending);self.assertFalse(self.app.window_callbacks._pending)
@@ -582,6 +588,9 @@ class WorkspaceTests(unittest.TestCase):
             bottom=self.app.canvas.winfo_rooty()+self.app.canvas.winfo_height()
             for text in ('确认并加入词库','忽略这条','下一条','导入','导出'):
                 w=self.button(text);self.assertTrue(w.winfo_ismapped());self.assertLessEqual(w.winfo_rooty()+w.winfo_height(),bottom,(text,scale,self.app.root.geometry(),w.winfo_rooty(),w.winfo_height(),bottom))
+                self.assertGreaterEqual(w.winfo_rootx(),self.app.canvas.winfo_rootx(),text)
+                self.assertLessEqual(w.winfo_rootx()+w.winfo_width(),
+                                    self.app.canvas.winfo_rootx()+self.app.canvas.winfo_width(),text)
         d.tabs['formal'].invoke();self.app.root.update()
         w=self.button('＋ 添加词条');self.assertTrue(w.winfo_ismapped());self.assertLessEqual(w.winfo_rooty()+w.winfo_height(),bottom)
 
@@ -600,11 +609,11 @@ class WorkspaceTests(unittest.TestCase):
 
     def test_preview_shell_and_api_fields_have_the_approved_geometry(self):
         self.app.open_page('api');self.app.root.geometry('1210x850+20+20');self.app.root.update()
-        self.assertEqual(self.app.nav.winfo_width(),185)
-        self.assertEqual(self.app.page.cget('bg'),'#181A18')
+        self.assertEqual(self.app.nav.winfo_width(),225)
+        self.assertEqual(self.app.page.cget('bg'),gui.pages.COLORS['shell'])
         controls=self.app.api_controls
-        self.assertLess(controls['box'].winfo_rootx(),controls['entry'].winfo_rootx())
-        self.assertLessEqual(abs(controls['box'].winfo_rooty()-controls['entry'].winfo_rooty()),5)
+        self.assertLessEqual(abs(controls['box'].winfo_rootx()-controls['entry'].winfo_rootx()),2)
+        self.assertLess(controls['box'].winfo_rooty()+controls['box'].winfo_height(),controls['entry'].winfo_rooty())
         self.assertGreater(controls['box'].winfo_width(),300)
         self.assertGreater(controls['entry'].winfo_width(),300)
         self.assertEqual(controls['box'].winfo_class(),'TCombobox')
@@ -660,15 +669,19 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(self.app.display_feedback.cget('text'),'显示空间已恢复')
         old=self.app.display_feedback
         self.app.open_page('api');self.app.root.update()
-        self.assertFalse(old.winfo_exists())
+        self.assertTrue(old.winfo_exists())
 
-    def test_page_switch_removes_card_bindings_and_display_variable_traces(self):
+    def test_page_switch_retains_card_bindings_and_display_controls_until_close(self):
         self.seed();d=self.dictionary();self.app.root.update()
         self.app.open_page('home');self.app.root.update()
         self.app.diagnostic_controls['toggle']()
         old=self.app.display_counts
         self.app.open_page('api');self.app.root.update()
-        self.assertFalse(old.winfo_exists())
+        self.assertTrue(old.winfo_exists())
+        self.assertIs(d,self.app.dictionary)
+        self.app.root.destroy()
+        self.assertNotIn(old, old.master.children.values())
+        self.assertFalse(self.app.page_callbacks._pending)
 
     def test_native_panel_shows_untranslated_reasons_and_clears_on_refresh(self):
         path=store.data_path(self.root,'runtime.json')
@@ -701,24 +714,16 @@ class WorkspaceTests(unittest.TestCase):
         self.assertTrue(any('API Key' in value for value in texts(self.app.page)))
         self.assertFalse(any('Claude' in value or '兜底' in value for value in texts(self.app.page)))
 
-    def test_heading_band_reserves_room_for_the_title_at_high_dpi(self):
+    def test_continuous_heading_has_no_duplicate_city_banner_at_high_dpi(self):
         from gui.decoration import CityArt
         root=self.app.root
-        def fits(art):
-            texts=[item for item in art.find_all() if art.type(item)=='text']
-            self.assertEqual(len(texts),2)
-            self.assertLessEqual(art.bbox(texts[0])[3],art.bbox(texts[1])[1])
-            self.assertLessEqual(art.bbox(texts[1])[3],art.winfo_height())
-        root.tk.call('tk','scaling',1.332282448377581)
-        compact=CityArt(root,self.app.th,title='API 用量',eyebrow='API USAGE',height=72)
-        compact.pack(fill='x');root.update_idletasks()
-        self.assertEqual(compact.winfo_height(),72)  # 100% DPI keeps the approved band
-        fits(compact);compact.destroy()
-        root.tk.call('tk','scaling',2.0)
-        scaled=CityArt(root,self.app.th,title='API 用量',eyebrow='API USAGE',height=72)
-        scaled.pack(fill='x');root.update_idletasks();scaled.draw()
-        self.assertGreater(scaled.winfo_height(),72)  # 150% DPI: band follows font height
-        fits(scaled);scaled.destroy()
+        def walk(widget):
+            for child in widget.winfo_children():yield child;yield from walk(child)
+        for scaling in (1.332282448377581,2.0):
+            root.tk.call('tk','scaling',scaling)
+            self.app.open_page('cost');root.update()
+            self.assertFalse(any(isinstance(w,CityArt) for w in walk(self.app.page)))
+            self.assertTrue(self.app.cost_controls['refresh_button'].winfo_ismapped())
 
     def test_model_rows_keep_amount_and_request_counts_separate_at_high_dpi(self):
         from gui.usage_charts import UsageChart

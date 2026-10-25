@@ -98,6 +98,9 @@ class ComposerTests(unittest.TestCase):
             self.assertEqual(str(c['copy'].cget('state')),'disabled')
         self.app.open_page('settings')
         self.app.root.update()
+        self.assertTrue(c['view']['alive'])
+        self.assertIs(self.app.composer,c)
+        self.app.root.destroy()
         self.assertFalse(c['view']['alive'])
         self.assertFalse(self.app.page_callbacks._pending)
 
@@ -219,7 +222,8 @@ class ComposerTests(unittest.TestCase):
                 if navigate:
                     self.app.open_page('send')
                     self.app.root.update()
-                    self.assertFalse(c['view']['alive'])
+                    self.assertTrue(c['view']['alive'])
+                    self.assertIs(self.app.composer,c)
                     self.pump_until(lambda: not c['state']['busy'])
                     self.assertEqual(self.app.composer['output'].get('1.0', 'end-1c'), 'Please wait')
                 else:

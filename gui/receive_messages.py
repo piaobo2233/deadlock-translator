@@ -41,16 +41,23 @@ class ReceiveMessages:
         self.view.bind('<MouseWheel>', lambda event: app.after_page(1, self.track_scroll), add='+')
         self.view.bind('<KeyRelease>', lambda event: self.track_scroll(), add='+')
         actions = panel(area, app.th);actions.pack(fill='x', pady=(8, 0))
-        more = panel(area, app.th);more.pack(fill='x', pady=(6, 0))
         self.buttons = {}
         for key, label, command in (
                 ('original', '复制原文', lambda: self.copy('original')),
                 ('translation', '复制译文', lambda: self.copy('translation')),
                 ('expand', '展开／收起全文', self.expand), ('review', '错译处理', self.review),
                 ('latest', '返回最新', self.latest)):
-            button = app.th.button(more if key in {'review', 'latest'} else actions, label, command)
-            button.pack(side='left', padx=(0, 6))
+            button = app.th.button(actions, label, command)
             self.buttons[key] = button
+        def arrange(event):
+            row,column,used=0,0,0
+            for button in self.buttons.values():
+                width=button.winfo_reqwidth()+8
+                if used and used+width>event.width:
+                    row+=1;column=0;used=0
+                button.grid(row=row,column=column,sticky='w',padx=(0,8),pady=(0,6))
+                used+=width;column+=1
+        actions.bind('<Configure>',arrange)
         self.refresh()
 
     def scroll(self, *args):

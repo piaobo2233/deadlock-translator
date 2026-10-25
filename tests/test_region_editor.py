@@ -104,7 +104,7 @@ class RegionEditorTests(unittest.TestCase):
         self.assertEqual(editor.draft.pixels(),[140,100,1300,650])
         self.assertEqual(Path(self.repo.path).read_bytes(),before)
 
-    def test_late_result_after_navigation_cannot_recreate_editor(self):
+    def test_pending_import_survives_scroll_navigation_without_saving(self):
         entered=threading.Event();release=threading.Event();self.addCleanup(release.set)
         def blocked(path):
             entered.set();release.wait(3)
@@ -114,8 +114,10 @@ class RegionEditorTests(unittest.TestCase):
             controls['begin']('import','fake.png');self.app.root.update()
             self.assertTrue(entered.wait(1))
             self.app.open_page('home');release.set();self.app.root.update()
-        self.assertFalse(controls['state']['alive'])
-        self.assertIsNone(controls['editor'][0])
+            self.wait(lambda:controls['state']['busy'])
+        self.assertTrue(controls['state']['alive'])
+        self.assertTrue(controls['editor'][0].alive)
+        self.assertEqual(self.app.current,'home')
         self.assertNotIn('capture_calibration',store.read_json(self.repo.path))
 
     def test_small_window_buttons_visible_letterbox_inert_and_rotation_blocks_save(self):

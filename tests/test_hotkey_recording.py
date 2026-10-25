@@ -101,10 +101,10 @@ class HotkeyRecordingTests(unittest.TestCase):
         dialog.save_button.invoke()
         self.assertEqual(self.config_value(),'Ctrl+Alt+K')
 
-    def test_navigation_cancels_recorder_and_pending_native_poll(self):
+    def test_owner_destruction_cancels_recorder_and_pending_native_poll(self):
         dialog=self.record()
         dialog.capture(75,ctrl=True)
-        self.app.open_page('settings');self.app.root.update()
+        self.control.parent.destroy();self.app.root.update()
         self.assertFalse(dialog.window.winfo_exists())
         self.assertIsNone(dialog.pending)
         self.assertIsNone(self.app.root.grab_current())
@@ -167,34 +167,39 @@ class HotkeyRecordingTests(unittest.TestCase):
         self.app.open_page('recognition');self.app.root.update()
         self.assertEqual(self.app.canvas.winfo_width(),before)
 
-    def test_hidden_settings_does_not_leave_a_long_scroll_region(self):
+    def test_continuous_scroll_region_is_stable_across_navigation(self):
         self.app.open_page('recognition');self.app.root.update()
         before_scroll=self.app._scrolling
         before_region=self.app.canvas.cget('scrollregion')
+        before_view=self.app.canvas.yview()
         self.app.open_page('settings');self.app.root.update()
         self.assertTrue(self.app._scrolling)
         self.app.open_page('recognition');self.app.root.update()
         self.assertEqual(self.app._scrolling,before_scroll)
         self.assertEqual(self.app.canvas.cget('scrollregion'),before_region)
-        self.assertEqual(self.app.canvas.yview()[0],0.)
+        self.assertEqual(self.app.canvas.yview(),before_view)
 
     def test_settings_reuses_widgets_and_refreshes_saved_preferences(self):
         from gui.app import _PAGES
-        frame=self.app._settings_page
+        frame=self.app.workspace.frames['settings']
         widgets=tuple(frame.winfo_children())
         store.atomic_write_json(self.config,dict(send_hotkey='Ctrl+Alt+T',recognize_hotkey='Ctrl+Alt+R',close_action='tray'))
         with patch.dict(_PAGES['settings'],builder=lambda *args:self.fail('Settings rebuilt on click')):
             for _ in range(4):
                 self.assertTrue(self.app.open_page('settings'));self.app.root.update()
-                self.assertIs(self.app._settings_page,frame)
+                self.assertIs(self.app.workspace.frames['settings'],frame)
                 self.assertEqual(tuple(frame.winfo_children()),widgets)
                 self.assertEqual(self.app.close_controls['variable'].get(),'收起到托盘')
                 self.app.open_page('send');self.app.root.update()
                 self.assertTrue(frame.winfo_exists())
-                self.assertFalse(frame.winfo_ismapped())
+                self.assertTrue(frame.winfo_ismapped())
 
     def test_settings_restores_resource_controls_after_onboarding(self):
         from app.game_data import service
+        until=time.monotonic()+2
+        while self.app.game_resources.busy and time.monotonic()<until:
+            self.app.root.update();time.sleep(.01)
+        self.app.game_resources._checked_stamp=None
         with patch.object(service,'inspect',return_value=(None,'隔离资料检查')):
             self.app.open_page('onboarding');self.app.root.update()
             guide_controls=self.app.game_resources.controls

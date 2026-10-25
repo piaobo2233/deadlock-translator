@@ -72,7 +72,7 @@ def build_onboarding(parent, app):
     provider = th.tk.StringVar(value=initial_provider)
     from gui.api_help import build_help
     build_help(area,app,config,provider)
-    provider_box = th.ttk.Combobox(area, textvariable=provider, values=tuple(PROVIDERS.values()),
+    provider_box = th.combobox(area, textvariable=provider, values=tuple(PROVIDERS.values()),
                                    state="readonly", font=th.font)
     provider_box.pack(fill="x", ipady=5)
 
@@ -86,7 +86,7 @@ def build_onboarding(parent, app):
     key_field.grid(row=0, column=1, sticky="nsew")
     text(model_field, th, "模型", small=True, muted=True).pack(anchor="w", pady=(0, 6))
     model = th.tk.StringVar(value=draft["model"])
-    model_box = th.ttk.Combobox(model_field, textvariable=model,
+    model_box = th.combobox(model_field, textvariable=model,
                                 values=tuple(dict.fromkeys((*MODELS, config["model"]))),
                                 state="normal", font=th.font)
     model_box.pack(fill="x", ipady=5)

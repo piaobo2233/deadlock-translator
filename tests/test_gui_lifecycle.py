@@ -117,29 +117,21 @@ probe=tk.Tk();probe.update();probe.destroy()
                 pass  # A test may already exercise the real X/destroy route.
         self.addCleanup(close_root)
 
-    def test_only_the_current_page_is_mapped_across_navigation(self):
+    def test_all_sections_share_one_mapped_canvas_across_navigation(self):
         for page in ('api','settings','recognition','settings','cost','settings'):
             self.app.open_page(page);self.app.root.update()
-            active,inactive=(self.app._settings_page,self.app._content_page) if page=='settings' else (
-                self.app._content_page,self.app._settings_page)
-            self.assertTrue(active.winfo_ismapped(),page)
-            self.assertFalse(inactive.winfo_ismapped(),page)
+            self.assertIs(self.app.page,self.app._content_page)
+            self.assertTrue(all(f.winfo_ismapped() for f in self.app.workspace.frames.values()))
+            self.assertEqual(self.app.current,page)
 
-    def test_outgoing_page_is_unmapped_before_its_controls_are_destroyed(self):
+    def test_navigation_preserves_existing_controls(self):
         self.app.open_page('api');self.app.root.update()
         old_controls=list(self.app._content_page.winfo_children())
-        observed=[]
-        clear=self.app._clear_page
-        def inspect_clear():
-            observed.append((self.app._content_page.winfo_ismapped(),
-                             any(widget.winfo_exists() for widget in old_controls)))
-            clear()
-        with patch.object(self.app,'_clear_page',side_effect=inspect_clear):
-            self.assertTrue(self.app.open_page('settings'))
-        self.assertEqual(observed,[(False,True)])
-        self.assertTrue(all(not widget.winfo_exists() for widget in old_controls))
+        self.assertTrue(self.app.open_page('settings'))
+        self.assertTrue(all(widget.winfo_exists() for widget in old_controls))
+        self.assertEqual(old_controls,self.app._content_page.winfo_children())
         self.app.root.update()
-        self.assertTrue(self.app._settings_page.winfo_ismapped())
+        self.assertTrue(self.app.workspace.frames['settings'].winfo_ismapped())
 
     def test_short_pages_cover_the_cached_settings_view(self):
         self.app.open_page('api');self.app.root.geometry('1210x1000');self.app.root.update()
@@ -148,7 +140,7 @@ probe=tk.Tk();probe.update();probe.destroy()
         self.app.open_page('settings');self.app.root.update()
         self.app.canvas.yview_moveto(1)
         self.app.open_page('home');self.app.root.update()
-        self.assertEqual(self.app.canvas.yview()[0],0)
+        self.assertLess(self.app.canvas.canvasy(0),30)
         self.assertGreaterEqual(self.app._page_background.winfo_height(),self.app.canvas.winfo_height())
 
     def test_dynamic_page_growth_and_collapse_keep_the_bottom_reachable(self):
@@ -165,16 +157,16 @@ probe=tk.Tk();probe.update();probe.destroy()
         self.app.canvas.yview_moveto(1);self.app.root.update()
         self.assertEqual(self.app.canvas.yview()[1],1.)
 
-    def test_tab_skips_inactive_cached_settings_and_restores_on_return(self):
-        frame=self.app._settings_page
+    def test_tab_reaches_persistent_settings_and_reveals_focused_control(self):
         self.app.open_page('api');self.app.root.update()
+        frame=self.app.workspace.frames['settings']
         first=self.app.nav_buttons['home']['button'];widget=first;visited=[]
         for _ in range(150):
             widget=widget.tk_focusNext()
             if str(widget)==str(first):break
             visited.append(str(widget))
         self.assertTrue(visited)
-        self.assertFalse(any(name.startswith(str(frame)+'.') for name in visited))
+        self.assertTrue(any(name.startswith(str(frame)+'.') for name in visited))
         self.app.open_page('settings');self.app.root.update()
         widget=first;visited=[]
         for _ in range(150):
@@ -185,8 +177,11 @@ probe=tk.Tk();probe.update();probe.destroy()
         chooser=self.app.close_controls['box']
         self.app.root.focus_force();chooser.focus_set();self.app.root.update()
         self.assertIs(self.app.root.focus_get(),chooser)
+        self.assertGreaterEqual(chooser.winfo_rooty(),self.app.canvas.winfo_rooty())
+        self.assertLessEqual(chooser.winfo_rooty()+chooser.winfo_height(),
+                             self.app.canvas.winfo_rooty()+self.app.canvas.winfo_height())
         self.app.open_page('api');self.app.root.update()
-        self.assertFalse(str(self.app.root.focus_get()).startswith(str(frame)+'.'))
+        self.assertEqual(self.app.current,'api')
 
     def test_navigation_back_does_not_ping_pong(self):
         for name in ("home", "settings", "cost"):
@@ -197,11 +192,12 @@ probe=tk.Tk();probe.update();probe.destroy()
         self.assertEqual(self.app.current, "home")
         self.assertFalse(self.app._history)
 
-    def test_leaving_home_cancels_heartbeat(self):
+    def test_navigation_keeps_single_callbacks_for_persistent_sections(self):
         self.app.open_page("home")
-        self.assertEqual(len(self.app.page_callbacks._pending),2)  # Status and bounded session reader.
+        pending=set(self.app.page_callbacks._pending)
+        self.assertTrue(pending)
         self.app.open_page("settings")
-        self.assertFalse(self.app.page_callbacks._pending)
+        self.assertEqual(self.app.page_callbacks._pending,pending)
 
     def test_page_switch_keeps_user_window_size(self):
         self.app.open_page("home")
@@ -238,7 +234,7 @@ probe=tk.Tk();probe.update();probe.destroy()
         self.assertIn('3 成功 / 1 失败',self.app.cost_controls['metrics'].cget('text'))
         self.assertFalse(errors)
         self.app.open_page("settings")
-        self.assertFalse(self.app.page_callbacks._pending)
+        self.assertIn('cost',self.app.page_callbacks._owners.values())
 
     def test_dictionary_filter_and_restore_preserve_original_entry(self):
         from app.storage import store
@@ -294,9 +290,10 @@ probe=tk.Tk();probe.update();probe.destroy()
         self.app.open_page('dictionary');self.app.root.update()
         links = [w for w in self.widgets() if w.winfo_class() == 'Button' and str(w.cget('text')).startswith('待审核')]
         self.assertEqual([w.cget('text') for w in links], ['待审核 1'])
-        self.assertEqual(len(self.app.page_callbacks._pending), 1)
+        pending=set(self.app.page_callbacks._pending)
+        self.assertIn('dictionary',self.app.page_callbacks._owners.values())
         self.app.open_page('settings')
-        self.assertFalse(self.app.page_callbacks._pending)
+        self.assertEqual(self.app.page_callbacks._pending,pending)
 
     def test_dictionary_owns_builtin_switch_and_destroy_cancels_all_callbacks(self):
         from gui import pages

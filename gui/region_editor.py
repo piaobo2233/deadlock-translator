@@ -86,11 +86,35 @@ class RegionEditor:
         self.inspect = None
         self.handle = 'move'
         self.th, self.tk = app.th, app.th.tk
-        self.window = win = self.tk.Toplevel(parent)
+        app.interactions.update(None)
+        app.interactions.hide_hint()
+        root = app.root
+        self.previous_focus = root.focus_get()
+        self.shade = self.tk.Toplevel(root)
+        self.shade.withdraw()
+        self.shade.overrideredirect(True)
+        self.shade.transient(root)
+        self.shade.configure(bg='#000000')
+        self.shade.attributes('-alpha', .55)
+        self.window = win = self.tk.Toplevel(root)
+        win.withdraw()
+        win.transient(root)
+        win.overrideredirect(True)
+        win._page_key = 'recognition'
         win.title('设置识别范围')
-        width = min(1000, max(380, win.winfo_screenwidth()-60))
-        height = min(760, max(300, win.winfo_screenheight()-80))
-        win.geometry(f'{width}x{height}')
+        root.update_idletasks()
+        width = min(1000, max(380, root.winfo_width()-48))
+        height = min(760, max(300, root.winfo_height()-48))
+        def position(event=None):
+            if event is not None and event.widget is not root:
+                return
+            x, y = root.winfo_rootx(), root.winfo_rooty()
+            w, h = root.winfo_width(), root.winfo_height()
+            self.shade.geometry(f'{w}x{h}+{x}+{y}')
+            ew, eh = min(width, max(380,w-32)), min(height, max(300,h-32))
+            win.geometry(f'{ew}x{eh}+{x+(w-ew)//2}+{y+(h-eh)//2}')
+        self.position_binding = root.bind('<Configure>', position, add='+')
+        position()
         win.configure(bg=C['bg'])
         win.protocol('WM_DELETE_WINDOW', self.close)
         win.bind('<Destroy>', self._destroy, add='+')
@@ -130,7 +154,7 @@ class RegionEditor:
         self.local = self.tk.Label(win, bg=C['soft'], anchor='center')
         self.local.pack(side='bottom', fill='x', padx=12, pady=3)
         self.details = self.tk.Frame(win, bg=C['bg'])
-        advanced = self.th.link(win, '▸ 坐标详情（原图像素）', self.toggle_details)
+        advanced = self.th.button(win, '▸ 坐标详情（原图像素）', self.toggle_details, kind='disclosure')
         advanced.pack(side='bottom', anchor='w', padx=12)
         self.advanced = advanced
         self.coords = [self.tk.StringVar() for _ in range(4)]
@@ -140,8 +164,9 @@ class RegionEditor:
             entry.bind('<Return>', lambda e: self.apply_coords())
         self.th.button(self.details, '应用坐标', self.apply_coords).pack(side='left', padx=4)
         title = ('导入图片' if source == 'imported_screenshot' else '当前游戏画面') + f' · {image.width} × {image.height}'
-        self.tk.Label(win, text='① 选择截图   ② 调整范围   ③ 保存并等待启用\n'+title,
-            bg=C['bg'], fg=C['fg'], font=self.th.font, anchor='w', justify='left').pack(fill='x', padx=12, pady=8)
+        heading = self.tk.Label(win, text='① 选择截图   ② 调整范围   ③ 保存并等待启用\n'+title,
+            bg=C['bg'], fg=C['fg'], font=self.th.font, anchor='w', justify='left')
+        heading.pack(fill='x', padx=12, pady=8)
         tools = self.tk.Frame(win, bg=C['bg']); tools.pack(fill='x', padx=12)
         for label, command in (('适合窗口', self.fit), ('−', lambda: self.zoom(.8)), ('+', lambda: self.zoom(1.25)),
                                ('参考范围', lambda: self.set_rect(self.reference)), ('撤销编辑', lambda: self.set_rect(self.draft.initial))):
@@ -165,14 +190,48 @@ class RegionEditor:
         canvas.bind('<KeyPress>', self.key)
         canvas.bind('<Tab>', self.tab_handle)
         canvas.bind('<FocusIn>', lambda e: self.schedule_render())
+        self.compact = None
+        def fit_layout(event=None):
+            if event is not None and event.widget is not win:
+                return
+            compact = win.winfo_height() < 650
+            if compact == self.compact:
+                return
+            self.compact = compact
+            heading.configure(text=title if compact else '① 选择截图   ② 调整范围   ③ 保存并等待启用\n'+title)
+            heading.pack_configure(pady=4 if compact else 8)
+            footer.pack_configure(pady=4 if compact else 8)
+            for group in (tools, footer):
+                for button in group.winfo_children():
+                    if button.winfo_class() == 'Button':
+                        button.configure(pady=3 if compact else 7)
+            advanced.configure(pady=2 if compact else 7)
+            if compact:
+                self.local.pack_forget()
+                self.local.place(in_=canvas, relx=1, rely=1, anchor='se', x=-6, y=-6, width=210, height=50)
+                self.local.lift()
+            else:
+                self.local.place_forget()
+                self.local.pack(side='bottom', fill='x', after=self.note, padx=12, pady=3)
+            self.schedule_render()
+        win.bind('<Configure>', fit_layout, add='+')
         self.save_state()
         self.schedule_render()
+        self.shade.deiconify()
+        win.deiconify()
+        win.lift(self.shade)
+        win.grab_set()
+        self.canvas.focus_set()
 
     def _destroy(self, event):
         if event.widget is self.window:
+            self.app.root.unbind('<Configure>', self.position_binding)
+            self.shade.destroy()
             self.alive = False; self.task += 1
             self.image = None; self.small_image = None
             self.photo = None; self.local_photo = None
+            if self.previous_focus is not None and self.previous_focus.winfo_exists():
+                self.previous_focus.focus_set()
 
     def close(self):
         if self.alive:
@@ -315,6 +374,8 @@ class RegionEditor:
         left,top = min(c-lw,max(a,cx-lw/2)),min(d-lh,max(b,cy-lh/2))
         local = self.image.crop((int(left),int(top),int(left)+lw,int(top)+lh))
         factor = min(max(1,min(w,900))/lw,85/lh)
+        if self.compact:
+            factor = min(208/lw, 48/lh)
         local = local.resize((max(1,round(lw*factor)),max(1,round(lh*factor))),Image.Resampling.BILINEAR)
         self.local_photo = self.photo_class(local, master=self.window)
         self.local.configure(image=self.local_photo)
