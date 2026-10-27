@@ -54,21 +54,13 @@ def is_autostart_enabled(root_dir: str = '') -> bool:
 
 
 def upgrade_owned_autostart(root_dir: str = ''):
-    """Resume an opted-in watcher after an update; never enable a missing entry."""
+    """Retire owned direct-start entries; resume only an opted-in watcher."""
     if not autostart_supported():return
+    from app.platform.game_autostart import _remove_legacy, _spawn
+    root_dir=root_dir or application_root()
+    _remove_legacy(root_dir)
     if is_autostart_enabled(root_dir):
-        from app.platform.game_autostart import _spawn
-        _spawn(root_dir or application_root(), '--watch-game')
-        return
-    expected=autostart_command(root_dir)
-    previous=expected.removesuffix(' --no-panel')
-    try:
-        import winreg
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,RUN_KEY,0,winreg.KEY_READ|winreg.KEY_SET_VALUE) as key:
-            current,kind=winreg.QueryValueEx(key,VALUE_NAME)
-            if kind==winreg.REG_SZ and current==previous:
-                winreg.SetValueEx(key,VALUE_NAME,0,winreg.REG_SZ,expected)
-    except FileNotFoundError:pass
+        _spawn(root_dir, '--watch-game')
 
 
 def set_autostart(enabled: bool, root_dir: str = ""):

@@ -81,9 +81,18 @@ class GameMonitorTests(unittest.TestCase):
         from app.platform import launcher
         with patch.object(launcher, 'autostart_supported', return_value=True), \
                 patch.object(launcher, 'is_autostart_enabled', return_value=True), \
+                patch.object(game, '_remove_legacy'), \
                 patch.object(game, '_spawn') as spawn:
             launcher.upgrade_owned_autostart('installation')
         spawn.assert_called_once_with('installation', '--watch-game')
+
+    def test_legacy_migration_does_not_enable_new_monitor_by_itself(self):
+        from app.platform import launcher
+        with patch.object(launcher, 'autostart_supported', return_value=True), \
+                patch.object(launcher, 'is_autostart_enabled', return_value=False), \
+                patch.object(game, '_remove_legacy') as retire, patch.object(game, '_spawn') as spawn:
+            launcher.upgrade_owned_autostart('installation')
+        retire.assert_called_once_with('installation');spawn.assert_not_called()
 
 
 @unittest.skipUnless(os.name == 'nt', 'Windows user startup integration')
