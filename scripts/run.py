@@ -14,7 +14,7 @@ def run():
     if getattr(sys, 'frozen', False):
         from app.platform.update_install import mutex_exists, UPDATE_MUTEX
         if mutex_exists(UPDATE_MUTEX):
-            if sys.argv[1:2] not in (['--ocr-worker'], ['--inspect-game-resources']):
+            if sys.argv[1:2] not in (['--ocr-worker'], ['--inspect-game-resources'], ['--watch-game']):
                 import ctypes
                 ctypes.windll.user32.MessageBoxW(None, '锁语正在更新，请稍后重新打开。', '锁语更新', 0)
             return 1
@@ -33,6 +33,11 @@ def run():
         from app.recognition.resident import worker
         worker(*sys.argv[2:])
         return 0
+    if sys.argv[1:2] == ['--watch-game']:
+        if len(sys.argv) != 2:
+            raise SystemExit('Usage: --watch-game')
+        from app.platform.game_autostart import run as watch_game
+        return watch_game()
     if sys.argv[1:2] == ['--prepare-game-resources']:
         if len(sys.argv) != 3:
             raise SystemExit('Usage: --prepare-game-resources GAME_DIRECTORY')

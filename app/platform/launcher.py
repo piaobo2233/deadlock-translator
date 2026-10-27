@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
-"""启动器支撑：开机自启、首次启动引导（§二 / §二十四）。
+"""启动器支撑：可选游戏联动启动、首次启动引导。
 
 [!] 三条纪律：
 
-  ① **开机自启默认关闭**（§二 明确要求）。写注册表是要用户明确点的动作，
-     不能"装完就给你加上"—— 那是最招人烦的一类软件行为。
+  ① 游戏联动默认关闭，仅在用户开启后注册当前用户的登录监听。
 
   ② **关掉的时候要把自己写的东西清干净**，不能留一个指向不存在路径的
-     注册表项（那会让 Windows 每次开机都报一个错）。
+     启动项；旧注册表启动项只清理属于当前安装的精确命令。
 
   ③ 首次引导**只做「让他能跑起来」这一件事**，不做花哨的向导。
      体检 + 缺什么补什么 + 一句"现在可以按 X 了"就够了。
@@ -49,23 +48,18 @@ def autostart_command(root_dir: str = "") -> str:
     return f'"{exe}" "{script}" --no-panel'
 
 
-def is_autostart_enabled() -> bool:
-    if not autostart_supported():
-        return False
-    try:
-        import winreg
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as key:
-            value, _type = winreg.QueryValueEx(key, VALUE_NAME)
-            return bool(value)
-    except FileNotFoundError:
-        return False
-    except Exception:
-        return False
+def is_autostart_enabled(root_dir: str = '') -> bool:
+    from app.platform.game_autostart import is_enabled
+    return is_enabled(root_dir)
 
 
 def upgrade_owned_autostart(root_dir: str = ''):
-    """Upgrade only our exact earlier command; never enable a missing entry."""
+    """Resume an opted-in watcher after an update; never enable a missing entry."""
     if not autostart_supported():return
+    if is_autostart_enabled(root_dir):
+        from app.platform.game_autostart import _spawn
+        _spawn(root_dir or application_root(), '--watch-game')
+        return
     expected=autostart_command(root_dir)
     previous=expected.removesuffix(' --no-panel')
     try:
@@ -78,24 +72,9 @@ def upgrade_owned_autostart(root_dir: str = ''):
 
 
 def set_autostart(enabled: bool, root_dir: str = ""):
-    """开 / 关开机自启。返回 (是否成功, 说明)。"""
-    if not autostart_supported():
-        return False, "这个系统不支持（只做了 Windows）"
-    try:
-        import winreg
-        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as key:
-            if enabled:
-                winreg.SetValueEx(key, VALUE_NAME, 0, winreg.REG_SZ,
-                                  autostart_command(root_dir))
-                return True, "已设为开机自启（下次登录 Windows 时会自动开始翻译）"
-            # [!] 关掉时把自己写的那一项删掉 —— 留着会变成开机报错。
-            try:
-                winreg.DeleteValue(key, VALUE_NAME)
-            except FileNotFoundError:
-                pass
-            return True, "已关闭开机自启"
-    except Exception as exc:
-        return False, f"改不了注册表：{exc}"
+    """Compatibility entry for the opt-in game launch setting."""
+    from app.platform.game_autostart import set_enabled
+    return set_enabled(enabled, root_dir)
 
 
 # ---------------------------------------------------------------- 首次启动

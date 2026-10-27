@@ -355,15 +355,17 @@ def build_preferences(parent, app):
     config=p._load_config(app.root_dir)
     preferences=section(parent,th,'个人偏好')
     import app.platform.launcher as launcher
-    row,holder=p._row(preferences,th,'开机启动助手')
+    row,holder=p._row(preferences,th,'游戏启动时启动助手')
     if launcher.autostart_supported():
-        var=th.tk.BooleanVar(value=launcher.is_autostart_enabled())
+        var=th.tk.BooleanVar(value=launcher.is_autostart_enabled(app.root_dir))
         def start():
             ok,why=launcher.set_autostart(var.get(),app.root_dir)
-            var.set(launcher.is_autostart_enabled());app.set_status(why,C['ok'] if ok else C['err'])
+            var.set(launcher.is_autostart_enabled(app.root_dir));app.set_status(why,C['ok'] if ok else C['err'])
         app.startup_control=th.ttk.Checkbutton(holder,variable=var,command=start,style='GoldSwitch.TCheckbutton')
         app.startup_control.pack()
     else:text(holder,th,'当前系统不支持',small=True,muted=True).pack()
+    help_text(preferences,th,'默认关闭。开启后，登录 Windows 时轻量监听游戏，检测到游戏启动再运行助手。',
+              small=True,muted=True,wraplength=820,justify='left').pack(anchor='w')
     row,holder=p._row(preferences,th,'关闭窗口时')
     labels={'exit':'退出助手','tray':'收起到托盘'}
     action=th.tk.StringVar(value=labels[config.get('close_action','exit')])
@@ -379,7 +381,7 @@ def build_preferences(parent, app):
         current=p._load_config(app.root_dir)
         action.set(labels[current.get('close_action','exit')])
         if launcher.autostart_supported():
-            var.set(launcher.is_autostart_enabled())
+            var.set(launcher.is_autostart_enabled(app.root_dir))
     app.refresh_preferences=refresh
     area=section(parent,th,'首次设置')
     help_text(area,th,'重新打开安装后的接口填写引导；不会清空已有配置，也不会自动启用联网翻译。',
