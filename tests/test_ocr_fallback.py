@@ -10,7 +10,49 @@ from unittest.mock import Mock, patch
 import numpy as np
 from app.recognition import ocr
 from app.recognition.diagnostics import OcrDiagnostics
-from app.recognition.source import SourceEvidence
+from app.recognition.source import FrameSourceReadings, SourceEvidence
+
+
+class FrameSourceReadingsTests(unittest.TestCase):
+    def test_same_model_reuses_reading_but_rechecks_entire_text(self):
+        read = Mock(return_value=SourceEvidence(False, 'source_disagrees', reading='do not go'))
+        cache = FrameSourceReadings(read, lambda text: 'eng' if text.isascii() else 'jpn')
+        self.assertFalse(cache.for_text('do go', 4).verified)
+        self.assertTrue(cache.for_text('do not go', 4).verified)
+        self.assertFalse(cache.for_text('do not go 2', 4).verified)
+        self.assertEqual(read.call_count, 1)
+        self.assertEqual(cache.hits, 2)
+        cache.for_text('行く', 4)
+        self.assertEqual(read.call_count, 2)
+        FrameSourceReadings(read, lambda _: 'eng').for_text('do not go', 4)
+        self.assertEqual(read.call_count, 3)
+
+    def test_uncertain_or_failed_read_is_retried(self):
+        for reason in ('source_uncertain', 'source_ocr_timeout', 'source_ocr_failed'):
+            read = Mock(return_value=SourceEvidence(False, reason))
+            cache = FrameSourceReadings(read, lambda _: 'eng')
+            cache.for_text('go', 4)
+            cache.for_text('go', 4)
+            self.assertEqual(read.call_count, 2)
+            self.assertEqual(cache.hits, 0)
+
+    def test_model_key_change_and_capacity_evict_old_read(self):
+        read = Mock(return_value=SourceEvidence(False, 'source_disagrees', reading='go'))
+        cache = FrameSourceReadings(read, lambda text: text)
+        for text in ('eng', 'jpn', 'kor', 'rus', 'new'):
+            cache.for_text(text, 4)
+        self.assertEqual(len(cache._readings), cache.MAX_MODELS)
+        cache.for_text('eng', 4)
+        self.assertEqual(read.call_count, 6)
+
+    def test_source_model_key_follows_language_configuration(self):
+        with patch.object(ocr, '_RECEIVE_MODEL', 'eng'):
+            english_only = ocr.source_model_key('go')
+        with patch.object(ocr, '_RECEIVE_MODEL', 'chi_sim+eng+jpn'):
+            multilingual = ocr.source_model_key('go')
+            japanese = ocr.source_model_key('行く')
+        self.assertNotEqual(english_only, multilingual)
+        self.assertNotEqual(multilingual, japanese)
 
 
 class DiagnosticTests(unittest.TestCase):

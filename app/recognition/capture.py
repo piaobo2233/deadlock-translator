@@ -78,6 +78,7 @@ def new_capture_stats() -> dict:
         "handled_skip": 0,    # 因已处理而跳过 OCR 的次数
         "confirmed": 0,       # 投票确认多少条
         "empty_frames": 0,
+        "capture_failures": 0,
         # ---- 诊断漏斗新增键（2026-10-08）。现有键的口径一律不动。----
         "boxes_distinct": 0,     # 气泡级去重后的候选框数（B 口径）
         "no_ocr": 0,             # tried == [] 的框数（从 bad_ocr 拆出）
@@ -465,6 +466,8 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                     return
                 if capture_changed():
                     return
+                if stats is not None:
+                    stats['capture_failures'] = stats.get('capture_failures', 0) + 1
                 print(f"[warn] 截屏失败：{exc}")
                 if visual_source is not None:
                     visual_error("visual_capture_wait_" + type(exc).__name__)
@@ -590,11 +593,13 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                         print(f"[DROP] reason=handled box={tuple(int(v) for v in b[:4])}")
                     continue
                 prev_text = con.emitted_text(tracking_box)
+                quick_read = None
                 if prev_text is not None:
                     quick = ""
                     for _kind, _t in ocr.ocr_variants(img, b, screen=(sw, sh), region=body,
                             **({'max_workers': 1} if cadence else {})):
                         quick = _t or ""
+                        quick_read = _t or None
                         break
                     if same_text(quick, prev_text) and (pulse.touch_current(img,body,captured_at,quick)
                             if pulse is not None else con.touch(b,text=quick)):
@@ -629,18 +634,33 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                         stats['unchanged_rejected_skip'] = stats.get('unchanged_rejected_skip', 0) + 1
                     continue
                 early_evidence = []
+                from app.recognition.source import FrameSourceReadings
                 def read_source(text,deadline):
                     evidence = ocr.source_evidence(img, body, text, scale=sh/ocr.REF_H,
                         captured_at=captured_at, origin=(x0,y0), deadline=deadline)
                     return evidence
+                frame_sources = FrameSourceReadings(read_source, ocr.source_model_key)
                 def verify_body(text):
-                    evidence=read_source(text,first_seen_at+4.0)
+                    prior_hits = frame_sources.hits
+                    evidence=frame_sources.for_text(text,first_seen_at+4.0)
+                    if stats is not None and frame_sources.hits > prior_hits:
+                        stats['source_frame_reused'] = stats.get('source_frame_reused', 0) + 1
                     early_evidence.append(evidence)
                     return evidence
-                decision = select_candidate(ocr.ocr_variants(img, b, screen=(sw, sh), region=body,
-                    deadline=first_seen_at+4.0, **({'max_workers': 1} if cadence else {})), glossary, selection_rules,
-                    verify_body=verify_body if message_snapshots else None)
+                if stats is not None:
+                    stats.update(ocr_active=True, last_ocr_at=time.time())
+                try:
+                    decision = select_candidate(ocr.ocr_variants(img, b, screen=(sw, sh), region=body,
+                        deadline=first_seen_at+4.0, preferred_read=quick_read,
+                        **({'max_workers': 1} if cadence else {})), glossary, selection_rules,
+                        verify_body=verify_body if message_snapshots else None)
+                finally:
+                    if stats is not None:
+                        stats['ocr_active'] = False
                 tried = list(decision.tried)
+                if stats is not None:
+                    if quick_read is not None:
+                        stats['preferred_frame_reused'] = stats.get('preferred_frame_reused', 0) + 1
                 if not decision.accepted:
                     if decision.reason == 'native_chinese':
                         if stats is not None:
@@ -771,8 +791,11 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                             readings = [for_text(value, candidate.text) for value in early_evidence]
                             evidence = next((value for value in readings if value.verified), readings[0])
                         else:
-                            evidence = read_source(candidate.text,
+                            prior_hits = frame_sources.hits
+                            evidence = frame_sources.for_text(candidate.text,
                                 identity.first_seen_at+4.0 if identity.first_seen_at is not None else None)
+                            if stats is not None and frame_sources.hits > prior_hits:
+                                stats['source_frame_reused'] = stats.get('source_frame_reused', 0) + 1
                         if evidence.reason == 'native_chinese':
                             if stats is not None:
                                 stats['native_chinese_filtered']=stats.get('native_chinese_filtered',0)+1

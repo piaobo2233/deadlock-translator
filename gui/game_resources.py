@@ -6,6 +6,7 @@ import time
 
 from app.game_data import service
 from gui.appearance import panel, section, text
+from gui.interactions import help_for
 from gui.theme import COLORS as C
 
 
@@ -31,8 +32,12 @@ class GameResources:
              wraplength=780, justify='left').pack(anchor='w')
         actions = panel(area, self.app.th); actions.pack(fill='x', pady=(8, 0))
         prepare = self.app.th.button(actions, '重新准备资料', self.prepare)
+        help_for(prepare, '重新读取本机 Deadlock 的官方中英文名称和中文快捷消息，更新本地资料缓存。'
+                 '游戏更新后可使用；无需联网，成功后重启助手生效。个人词库与翻译记忆保留。')
         prepare.pack(side='left')
         choose = self.app.th.button(actions, '选择游戏文件夹', self.choose)
+        help_for(choose, '自动查找不到游戏或需要更换来源时，手动选择 Steam 中的 Deadlock 文件夹。'
+                 '选定后会立即准备该目录的游戏资料，成功后重启助手生效；取消选择不作更改。')
         choose.pack(side='left', padx=(10, 0))
         status = text(area, self.app.th, self.message, small=True, muted=True,
                       wraplength=780, justify='left')

@@ -800,7 +800,8 @@ def _find_by_blobs(mn, mx, bright_loose, dark, scale, min_h, origin=(0, 0), *, i
     return out
 
 
-def ocr_variants(img, box, *, screen=None, region=None, deadline=None, max_workers=4):
+def ocr_variants(img, box, *, screen=None, region=None, deadline=None, max_workers=4,
+                 preferred_read=None):
     """Yield body-first OCR, then bounded fallbacks on validated bodies.
 
     The first call is lazy: a known-word early exit prevents starting fallback
@@ -828,7 +829,8 @@ def ocr_variants(img, box, *, screen=None, region=None, deadline=None, max_worke
     mode = 6 if body.line_count > 1 else 7
     if deadline is not None and time.monotonic() >= deadline:
         return
-    preferred = _preferred_read(_enlarge(gray, 3), mode, deadline=deadline)
+    preferred = (_preferred_read(_enlarge(gray, 3), mode, deadline=deadline)
+                 if preferred_read is None else preferred_read)
     yield (f"body{mode}", preferred)
     if deadline is not None and time.monotonic() >= deadline:
         return
@@ -922,6 +924,13 @@ def source_evidence(img, body, expected, *, scale=1.0, captured_at=None, origin=
     return replace(evidence, captured_at=captured_at, captured_box=box)
 
 
+def source_model_key(expected):
+    from app.recognition.languages import script_model
+    language = script_model(expected) if _RECEIVE_MODEL != 'eng' else ''
+    return (language + '+eng+chi_sim' if language else
+            '+'.join(dict.fromkeys(('chi_sim', *_RECEIVE_MODEL.split('+')))))
+
+
 def _read_source_evidence(img, body, expected, *, scale, deadline=None):
     """Read the same source body with a CJK-capable model before paid admission.
 
@@ -935,8 +944,7 @@ def _read_source_evidence(img, body, expected, *, scale, deadline=None):
     png = b""
     from app.recognition.languages import script_model
     language = script_model(expected) if _RECEIVE_MODEL != 'eng' else ''
-    source_model = (language + '+eng+chi_sim' if language else
-                    '+'.join(dict.fromkeys(('chi_sim', *_RECEIVE_MODEL.split('+')))))
+    source_model = source_model_key(expected)
     try:
         if not body.accepted:
             return SourceEvidence(False, 'source_no_body')

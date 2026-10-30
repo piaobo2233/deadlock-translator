@@ -27,7 +27,7 @@ class WorkspaceTests(unittest.TestCase):
         self.pending=store.data_path(self.root,'pending.json')
         store.atomic_write_json(self.config,dict(api_key='fixture-key',model='legacy-model',endpoint='https://custom.invalid/v1',builtins_enabled=False,unknown={'keep':1}))
         self.running=patch.object(desktop,'translator_is_running',return_value=False);self.running.start();self.addCleanup(self.running.stop)
-        self.app=App(str(self.root));self.errors=[]
+        self.app=App(str(self.root),size='1210x850');self.errors=[]
         self.app.root.report_callback_exception=lambda *args:self.errors.append(str(args))
         def close():
             try:self.app.root.destroy()
@@ -230,14 +230,23 @@ class WorkspaceTests(unittest.TestCase):
 
     def test_local_text_scroll_does_not_also_move_page(self):
         from types import SimpleNamespace
-        self.app.open_page('send');self.app._scrolling=True
-        source=self.app.composer['source']
-        source.insert('1.0','long text\n'*100);self.app.root.update();source.yview_moveto(.3)
+        self.app.open_page('home');self.app._scrolling=True
+        source=self.app.receive_messages.view
+        self.app.root.update()
+        self.app.page_callbacks.cancel_owner('home')
+        self.app.receive_messages.following=False
+        source.configure(state='normal');source.insert('1.0','long text\n'*100)
+        source.configure(state='disabled');self.app.root.update();source.yview_moveto(.3)
+        self.app.root.update_idletasks()
+        self.assertLess(source.yview()[1],1)
         with patch.object(self.app.canvas,'yview_scroll') as scroll:
-            self.app._wheel(SimpleNamespace(widget=self.app.composer['source'],delta=-120))
+            self.app._wheel(SimpleNamespace(widget=self.app.receive_messages.view,delta=-120))
             scroll.assert_not_called()
             self.app._wheel(SimpleNamespace(widget=self.app.page,delta=-120))
-            scroll.assert_called_once_with(3,'units')
+            scroll.assert_not_called()
+            self.app.root.after(40,self.app.root.quit)
+            self.app.root.mainloop()
+            scroll.assert_called_once_with(60,'units')
 
     def test_current_problem_does_not_repeat_historical_failures(self):
         from gui.workspace import current_problem
@@ -725,26 +734,92 @@ class WorkspaceTests(unittest.TestCase):
             self.assertFalse(any(isinstance(w,CityArt) for w in walk(self.app.page)))
             self.assertTrue(self.app.cost_controls['refresh_button'].winfo_ismapped())
 
-    def test_model_rows_keep_amount_and_request_counts_separate_at_high_dpi(self):
+    def test_trend_axes_dates_and_peak_are_inside_canvas_at_fullscreen_scaling(self):
+        from datetime import date,timedelta
+        from gui.usage_charts import UsageChart
+        from app.storage import usage
+        from app.storage.accounting import empty_costs
+        root=self.app.root; scaling=root.tk.call('tk','scaling')
+        window=self.app.th.tk.Toplevel(root)
+        chart=UsageChart(window,self.app.th,mode='trend',inspect=lambda value:None,height=145)
+        chart.pack(fill='x')
+        try:
+            for scale in (1.333,2.0,2.667):
+                root.tk.call('tk','scaling',scale)
+                for width,count in ((1600,7),(1600,30),(850,30)):
+                    with self.subTest(scale=scale,width=width,count=count):
+                        rows=[]
+                        for i in range(count):
+                            bucket=usage.empty_bucket();bucket['api_attempts']=1
+                            fee=empty_costs();fee.update(known_attempts=1,known_amount=.0084 if i==1 else .0004)
+                            bucket['request_cost']=fee
+                            rows.append(((date(2026,10,1)+timedelta(days=i)).isoformat(),bucket))
+                        window.geometry(f'{width}x600');root.update()
+                        chart.set_rows(rows);root.update();chart.draw()
+                        self.assertGreaterEqual(chart.winfo_height(),280)
+                        for item in chart.find_all():
+                            box=chart.bbox(item)
+                            self.assertGreaterEqual(box[0],0)
+                            self.assertGreaterEqual(box[1],0)
+                            self.assertLessEqual(box[2],chart.winfo_width())
+                            self.assertLessEqual(box[3],chart.winfo_height())
+                        dates=[chart.bbox(item) for item in chart.find_withtag('date-label')]
+                        for first,second in zip(dates,dates[1:]):self.assertLess(first[2],second[0])
+                        labels=[chart.itemcget(item,'text') for item in chart.find_withtag('date-label')]
+                        self.assertEqual(labels[0],'10/01');self.assertEqual(labels[-1],f'10/{count:02}')
+                        self.assertEqual(len(chart.find_withtag('peak-label')),1)
+                        # A missing amount must break the curve, never imply zero expense.
+                        rows[2][1]['request_cost'].update(known_attempts=0,unknown_attempts=1)
+                        chart.set_rows(rows);root.update()
+                        self.assertEqual(len(chart.find_withtag('trend-line')),count-3)
+                        for _stamp,bucket in rows:
+                            bucket.clear();bucket.update(usage.empty_bucket())
+                        chart.set_rows(rows);root.update()
+                        self.assertFalse(chart.find_withtag('peak-label'))
+                        self.assertTrue(any(chart.itemcget(i,'text')=='暂无请求费用记录'
+                                            for i in chart.find_all() if chart.type(i)=='text'))
+        finally:
+            window.destroy();root.tk.call('tk','scaling',scaling)
+
+    def test_model_rows_keep_text_bars_and_all_three_rows_separate_at_high_dpi(self):
         from gui.usage_charts import UsageChart
         from app.storage import usage
         from app.storage.accounting import empty_costs
         rows=[]
-        for name,attempts,tokens,amount in (('deepseek-flash',1510,6324,.0148),
-                                           ('deepseek-v4-flash',3,247,.0006)):
+        for name,attempts,tokens,amount in (('deepseek-flash',185,12600,.0306),
+                                           ('历史模型未知',4,1205,.0072),
+                                           ('deepseek-v4-flash',14,1087,.0025)):
             bucket=usage.empty_bucket();bucket.update(api_attempts=attempts,total_tokens=tokens)
             fee=empty_costs();fee.update(known_amount=amount,known_attempts=attempts)
             bucket['request_cost']=fee;rows.append((name,bucket))
         root=self.app.root
-        root.tk.call('tk','scaling',2.0)
-        chart=UsageChart(root,self.app.th,mode='models',inspect=lambda value:None,height=90)
-        chart.pack(fill='x');root.update_idletasks()
-        chart.set_rows(rows);root.update_idletasks();chart.draw()
-        boxes=[chart.bbox(item) for item in chart.find_all() if chart.type(item)=='text']
-        self.assertGreaterEqual(len(boxes),6)
-        for amount,stats in ((boxes[1],boxes[2]),(boxes[4],boxes[5])):
-            self.assertLessEqual(amount[2],stats[0])
-            self.assertLessEqual(stats[2],chart.winfo_width())
-        chart.destroy()
+        scaling=root.tk.call('tk','scaling')
+        window=self.app.th.tk.Toplevel(root)
+        chart=UsageChart(window,self.app.th,mode='models',inspect=lambda value:None,height=82)
+        chart.pack(fill='x')
+        try:
+            for scale in (1.333,2.0,2.667):
+                root.tk.call('tk','scaling',scale)
+                for width in (1600,850):
+                    with self.subTest(scale=scale,width=width):
+                        window.geometry(f'{width}x550');root.update()
+                        chart.set_rows(rows);root.update();chart.draw()
+                        boxes=[chart.bbox(item) for item in chart.find_all() if chart.type(item)=='text']
+                        bars=[chart.bbox(item) for item in chart.find_all() if chart.type(item)=='line']
+                        self.assertEqual(len(boxes),9)
+                        for i in range(0,9,3):
+                            name,amount,stats=boxes[i:i+3]
+                            self.assertLessEqual(name[2],amount[0])
+                            self.assertLessEqual(amount[2],stats[0])
+                        for box in boxes+bars:
+                            self.assertGreaterEqual(box[1],0)
+                            self.assertLessEqual(box[2],chart.winfo_width())
+                            self.assertLessEqual(box[3],chart.winfo_height())
+                        for name in boxes[::3]:
+                            for bar in bars:
+                                self.assertTrue(name[2]<=bar[0] or bar[2]<=name[0]
+                                                or name[3]<=bar[1] or bar[3]<=name[1])
+        finally:
+            window.destroy();root.tk.call('tk','scaling',scaling)
 
 if __name__=='__main__':unittest.main()

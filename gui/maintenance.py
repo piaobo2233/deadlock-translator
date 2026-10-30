@@ -3,6 +3,7 @@ import queue
 import threading
 
 from gui.appearance import section, text
+from gui.interactions import help_for
 
 
 class Maintenance:
@@ -22,6 +23,9 @@ class Maintenance:
         description.pack(anchor='w', fill='x')
         description.bind('<Configure>', lambda e: description.configure(wraplength=max(180, e.width - 8)))
         self.button = self.app.th.button(area, '立即清理', self.start)
+        help_for(self.button, '立即检查并清理超过 14 天的轮转运行日志和已确认成功使用的安装包，'
+                 '完成后显示清理数量和释放空间。配置、词库、翻译记忆、聊天记录、人工截图和回退备份均保留。'
+                 '正在使用或无法安全确认的文件会跳过。')
         self.button.pack(anchor='w', pady=8)
         self.label = text(area, self.app.th, self.message, small=True, muted=True, wraplength=740, justify='left')
         self.label.pack(anchor='w', fill='x')
@@ -63,3 +67,4 @@ class Maintenance:
         if self.label is not None and self.label.winfo_exists():
             self.label.configure(text=self.message)
             self.button.configure(state='disabled' if self.busy else 'normal')
+            self.button.configure(text='正在清理…' if self.busy else '立即清理')

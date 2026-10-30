@@ -51,6 +51,37 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def build_recovery(work):
+    """Build a self-contained helper outside the portable program manifest."""
+    work = Path(work).absolute() / 'recovery-build'
+    work.mkdir(parents=True, exist_ok=True)
+    command = [sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean',
+               '--distpath', str(work/'dist'), '--workpath', str(work/'work'),
+               str(ROOT/'scripts/installer/recovery.spec')]
+    with (work/'build.log').open('w',encoding='utf-8') as stream:
+        subprocess.run(command,cwd=ROOT,env=dict(os.environ,LOCKLINGO_BUILD_SOURCE=str(ROOT)),
+                       stdout=stream,stderr=subprocess.STDOUT,check=True)
+    path = work/'dist/LockLingoRecovery.exe'
+    if not path.is_file():
+        raise ValueError('独立恢复工具构建失败')
+    return path
+
+
+def verify_recovery_source(source):
+    """Do not pair a new recovery protocol with an older main-program ZIP."""
+    names = ('app/platform/rollback.py', 'app/platform/update_install.py', 'app/platform/updates.py',
+             'app/storage/store.py', 'app/storage/locking.py', 'gui/updates.py', 'scripts/run.py')
+    try:
+        record = json.loads((Path(source)/'BUILD-SOURCE.json').read_text(encoding='utf-8'))
+        files = {row['path']:row['sha256'] for row in record['files']}
+        expected = {name:digest(ROOT/name) for name in names}
+        if any(files.get(name) != value for name,value in expected.items()):
+            raise ValueError('source mismatch')
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise ValueError('主程序与恢复工具源码不匹配，请重新构建便携包后再制作安装器') from exc
+    return expected
+
+
 def find_iscc(explicit=""):
     candidates = [explicit, os.environ.get("INNO_SETUP_ISCC", ""),
                   str(ROOT / ".temp/tools/innosetup/ISCC.exe"),
@@ -164,6 +195,10 @@ def main():
     with tempfile.TemporaryDirectory(prefix="inno-", dir=scratch) as temporary:
         source = prepare_source(args.archive, temporary)
         release_gate.validate_bundle(ROOT, args.version, source)
+        report['recovery_sources'] = verify_recovery_source(source)
+        recovery = build_recovery(scratch)
+        verify_recovery_source(source)
+        report.update(recovery=str(recovery), recovery_sha256=digest(recovery))
         if (source / "VERSION").read_text(encoding="utf-8").strip() != args.version:
             raise ValueError("安装器版本与 ZIP 内 VERSION 不一致")
         files = [path for path in source.rglob("*") if path.is_file()]
@@ -184,6 +219,11 @@ def main():
             "KeepDataMessage": KEEP_DATA_MESSAGE,
             "LauncherFile": GUI_NAME,
             "DirectoryMessage": DIRECTORY_MESSAGE,
+            "RecoveryFile": str(recovery),
+            "RecoveryLabel": '回退到上一版本',
+            "RecoveryError": '版本备份或恢复未完成。请使用开始菜单中的回退入口；详细原因见安装目录 backups\\rollback\\recovery.log。',
+            "RecoveryFailureTitle": '更新未完成',
+            "RecoveryRestored": '新版校验未通过，已恢复更新前版本。个人数据已保留。',
         }
         command = [iscc, "/Q"]
         # ISCC parses /DName=Value; keep Chinese text inside one argument.

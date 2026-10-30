@@ -112,7 +112,10 @@ def set_enabled(enabled, root_dir=''):
             path.unlink()
         return True, '已关闭游戏联动启动；后台监听将在几秒内停止'
     except (OSError, UnicodeError) as exc:
-        return False, f'游戏联动启动设置失败：{exc}'
+        _record_error(root, exc)
+        if isinstance(exc, PermissionError):
+            return False, 'Windows 拒绝了启动设置操作，请检查系统安全软件或启动项权限'
+        return False, '游戏联动启动设置失败，请查看 data/game-start.log'
 
 
 def _acquire_watcher(root):
@@ -146,6 +149,7 @@ def _record_error(root, exc):
     try:
         from app.storage import store
         path = Path(store.data_path(root, 'game-start.log'))
+        path.parent.mkdir(parents=True, exist_ok=True)
         with path.open('a', encoding='utf-8') as stream:
             stream.write(f'{time.strftime("%Y-%m-%d %H:%M:%S")} {type(exc).__name__}: {exc}\n')
     except OSError:

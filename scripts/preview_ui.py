@@ -129,14 +129,6 @@ def main():
                         app.root.report_callback_exception = lambda *args: errors.append(str(args))
                     if not app.open_page(key):
                         raise RuntimeError(f"Page failed: {key}")
-                    if case == 'send':
-                        from gui.composer import fingerprint
-                        composer=app.composer
-                        composer['source'].insert('1.0','等我一下，我马上到。')
-                        composer['remember']()
-                        composer['state'].update(translation="Wait for me, I'll be right there.",
-                            original='等我一下，我马上到。',signature=fingerprint(app),message='演示译文，未调用 API')
-                        composer['view']['render']()
                     if case.startswith('dictionary'):
                         dictionary = app.dictionary
                         dictionary.pick({'dictionary-review':'review','dictionary-processed':'processed'}.get(case,'formal'))

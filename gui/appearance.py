@@ -13,9 +13,9 @@ def text(parent, th, value, *, small=False, muted=False, **kw):
 
 
 def heading(parent, th, title, subtitle='', *, compact=False):
-    # Page identity lives in the fixed navigation; keep this action/status holder.
     box=panel(parent,th)
-    box.pack(fill='x')
+    box.pack(fill='x',pady=(12,14))
+    th.label(box,title,fg=C['accent'],font=th.font_title).pack(anchor='w',padx=20)
     box.subtitle=help_text(box,th,subtitle,small=True,muted=True)
     return box
 
@@ -32,8 +32,7 @@ def module(parent, th, title):
 
 def section(parent,th,title):
     wrap=module(parent,th,title)
-    th.label(wrap,title,font=th.font_heading).pack(anchor='w',pady=(0,10))
-    th.hairline(wrap,pady=(0,10))
+    th.label(wrap,title,font=th.font_heading).pack(anchor='w',pady=(0,14))
     body=panel(wrap,th);body.pack(fill='x')
     return body
 
@@ -82,9 +81,12 @@ class EntryCards:
         self.th,self.on_select=th,on_select
         self.rows=[];self.buttons={};self.cards={};self.selected_key=None
         self._signature=None;self._view=None;self.tab='formal'
+        self._slots=[]
+        self._empty=None
+        self._row_metrics=None;self._row_height=self.ROW_HEIGHT
         self._height_limit=340
-        self.frame=panel(parent,th,border=True);self.frame.pack(fill='x')
-        head=panel(self.frame,th,bg=C['soft']);head.pack(fill='x')
+        self.frame=panel(parent,th);self.frame.pack(fill='x')
+        head=panel(self.frame,th);head.pack(fill='x')
         self.title=text(head,th,'当前词条',small=True,muted=True);self.title.pack(side='left',padx=13,pady=10)
         self.count=text(head,th,'0 条',small=True,muted=True);self.count.pack(side='right',padx=13)
         th.hairline(self.frame)
@@ -100,6 +102,20 @@ class EntryCards:
         self.canvas.bind('<Configure>',lambda _e:self._render())
         self.canvas.bind('<MouseWheel>',self._wheel)
 
+    @property
+    def row_height(self):
+        metrics=(self.th.font,self.th.font_small,self.th.ui_scale,self.canvas.tk.call('tk','scaling'))
+        if metrics != self._row_metrics:
+            # Native button padding and Chinese font fallback also scale.
+            # Measure unmapped controls once per font/scale, not every scroll.
+            title=self.th.tk.Button(self.inner,text='Ag',font=self.th.font,
+                relief='flat',bd=0,padx=0,pady=0,highlightthickness=0)
+            translation=text(self.inner,self.th,'示例',small=True,muted=True)
+            self._row_height=max(self.ROW_HEIGHT,title.winfo_reqheight()+translation.winfo_reqheight()+27)
+            title.destroy();translation.destroy()
+            self._row_metrics=metrics
+        return self._row_height
+
     def _scroll(self,*args):
         self.canvas.yview(*args);self._render()
 
@@ -112,11 +128,11 @@ class EntryCards:
 
     def set_height(self,height):
         self._height_limit=max(170,min(428,height))
-        self.canvas.configure(height=min(self._height_limit,len(self.rows)*self.ROW_HEIGHT if self.rows else 125))
+        self.canvas.configure(height=min(self._height_limit,len(self.rows)*self.row_height if self.rows else 125))
 
     def set_rows(self,rows,selected_key,tab):
         self.rows=rows;self.tab=tab
-        self.canvas.configure(height=min(self._height_limit,len(rows)*self.ROW_HEIGHT if rows else 125))
+        self.canvas.configure(height=min(self._height_limit,len(rows)*self.row_height if rows else 125))
         self.title.configure(text={'review':'待核对译文','processed':'处理记录','memory':'旧历史记录'}.get(tab,'当前词条'))
         self.count.configure(text=f'{len(rows)} 条')
         signature=tuple((r['key'],r.get('original'),r.get('translation'),r.get('source'),r.get('status')) for r in rows)
@@ -128,42 +144,55 @@ class EntryCards:
     def _render(self):
         width=max(self.canvas.winfo_width(),100)
         height=max(self.canvas.winfo_height(),170)
-        total=max(len(self.rows)*self.ROW_HEIGHT,self.canvas.winfo_height() if not self.rows else 0)
+        row_height=self.row_height
+        total=max(len(self.rows)*row_height,self.canvas.winfo_height() if not self.rows else 0)
         self.canvas.configure(scrollregion=(0,0,width,total))
-        first=max(0,min(len(self.rows)-1,int(self.canvas.canvasy(0)//self.ROW_HEIGHT)))
-        last=min(len(self.rows),first+height//self.ROW_HEIGHT+2)
-        view=(first,last,width,self._signature,self.tab)
+        first=max(0,min(len(self.rows)-1,int(self.canvas.canvasy(0)//row_height)))
+        last=min(len(self.rows),first+height//row_height+2)
+        view=(first,last,width,row_height,self._signature,self.tab)
         if view==self._view:return
         self._view=view
-        for child in self.inner.winfo_children():child.destroy()
         self.buttons={};self.cards={}
-        self.canvas.coords(self.window,0,first*self.ROW_HEIGHT)
+        self.canvas.coords(self.window,0,first*row_height)
         self.canvas.itemconfigure(self.window,width=width)
-        for row in self.rows[first:last]:
-            key=row['key'];card=panel(self.inner,self.th,height=self.ROW_HEIGHT)
-            card.pack(fill='x');card.pack_propagate(False)
+        visible=self.rows[first:last]
+        while len(self._slots)<len(visible):
+            card=panel(self.inner,self.th,height=row_height)
+            card.pack_propagate(False)
             rail=panel(card,self.th,bg=C['panel'],width=3);rail.pack(side='left',fill='y')
             content=panel(card,self.th);content.pack(side='left',fill='both',expand=True,padx=(11,14),pady=11)
             top=panel(content,self.th);top.pack(fill='x')
-            meta='待确认' if self.tab=='review' else {'accepted':'已加入词库','edited':'已修改','rejected':'已忽略'}.get(row.get('status'),'历史' if self.tab=='memory' else row.get('source_label',''))
-            source=text(top,self.th,meta,small=True,muted=True);source.pack(side='right',padx=(7,0))
-            original=row.get('original') or key
-            title=original if len(original)<=48 else original[:47]+'…'
-            button=self.th.tk.Button(top,text=title,command=lambda k=key:self.choose(k),bg=C['panel'],fg=C['fg'],
+            source=text(top,self.th,'',small=True,muted=True);source.pack(side='right',padx=(7,0))
+            button=self.th.tk.Button(top,text='',command=lambda c=card:self.choose(c._entry_key),bg=C['panel'],fg=C['fg'],
                 activebackground=C['card_hi'],activeforeground=C['accent'],font=self.th.font,
                 relief='flat',bd=0,padx=0,pady=0,anchor='w',justify='left',highlightthickness=0,cursor='hand2')
             button.pack(side='left',fill='x',expand=True)
-            translation=str(row.get('translation',''))
-            zh=text(content,self.th,translation if len(translation)<=55 else translation[:54]+'…',small=True,muted=True)
+            zh=text(content,self.th,'',small=True,muted=True)
             zh.pack(fill='x',anchor='w',pady=(5,0))
             for widget in (card,rail,content,top,source,zh):
-                widget.bind('<Button-1>',lambda _e,k=key:self.buttons[k].invoke())
+                widget.bind('<Button-1>',lambda _e,b=button:b.invoke())
                 widget.bind('<MouseWheel>',self._wheel)
             button.bind('<MouseWheel>',self._wheel)
             line=panel(card,self.th,bg=C['border'],height=1);line.place(relx=0,rely=1,relwidth=1,anchor='sw')
-            self.buttons[key]=button
-            self.cards[key]=dict(card=card,rail=rail,content=content,top=top,source=source,button=button,translation=zh)
-        if not self.rows:text(self.inner,self.th,'没有匹配条目' if self.tab=='formal' else '暂无条目',small=True,muted=True).pack(pady=45)
+            self._slots.append(dict(card=card,rail=rail,content=content,top=top,source=source,button=button,translation=zh))
+        for parts in self._slots[len(visible):]:parts['card'].pack_forget()
+        for row,parts in zip(visible,self._slots):
+            key=row['key'];card=parts['card'];card._entry_key=key
+            card.configure(height=row_height)
+            card.pack(fill='x')
+            meta='待确认' if self.tab=='review' else {'accepted':'已加入词库','edited':'已修改','rejected':'已忽略'}.get(row.get('status'),'历史' if self.tab=='memory' else row.get('source_label',''))
+            parts['source'].configure(text=meta)
+            original=row.get('original') or key
+            parts['button'].configure(text=original if len(original)<=48 else original[:47]+'…')
+            translation=str(row.get('translation',''))
+            parts['translation'].configure(text=translation if len(translation)<=55 else translation[:54]+'…')
+            self.buttons[key]=parts['button']
+            self.cards[key]=parts
+        if not self.rows:
+            if self._empty is None:self._empty=text(self.inner,self.th,'',small=True,muted=True)
+            self._empty.configure(text='没有匹配条目' if self.tab=='formal' else '暂无条目')
+            self._empty.pack(pady=45)
+        elif self._empty is not None:self._empty.pack_forget()
         self._paint_selection()
 
     def _paint_selection(self):
@@ -174,8 +203,9 @@ class EntryCards:
 
     def reveal(self,key):
         index=next(i for i,r in enumerate(self.rows) if r['key']==key)
+        row_height=self.row_height
         top=self.canvas.canvasy(0)
-        if key not in self.buttons or index*self.ROW_HEIGHT<top or (index+1)*self.ROW_HEIGHT>top+self.canvas.winfo_height():
+        if key not in self.buttons or index*row_height<top or (index+1)*row_height>top+self.canvas.winfo_height():
             self.canvas.yview_moveto(index/max(len(self.rows),1));self._view=None;self._render()
         return self.buttons[key]
 

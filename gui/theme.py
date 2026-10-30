@@ -8,6 +8,7 @@ is separate from editable text, controls and data charts.
 
 import tkinter as tk
 from tkinter import ttk
+from tkinter import font as tkfont
 from functools import lru_cache
 
 __all__ = ["Theme", "COLORS", "TONE", "TOKENS", "TRY_FONTS", "FONT_LABEL",
@@ -18,19 +19,20 @@ __all__ = ["Theme", "COLORS", "TONE", "TOKENS", "TRY_FONTS", "FONT_LABEL",
 
 TOKENS = {
     # ---- 颜色（§六）----
-    "bg":            "#494A3E",
-    "surface":       "#414438",
-    "surface_hover": "#525447",
-    "soft":          "#303229",
-    "shell":         "#292E26",
-    "selected":      "#48493D",
-    "border":        "#5E5D4F",
+    "bg":            "#211D1A",
+    "surface":       "#211D1A",
+    "surface_hover": "#3B3A33",
+    "soft":          "#191714",
+    "shell":         "#211D1A",
+    "nav_selected":  "#171411",
+    "selected":      "#35312A",
+    "border":        "#514B40",
     "text":          "#F3ECD9",
-    "text_dim":      "#C5C2AA",
-    "text_ghost":    "#7C8273",
+    "text_dim":      "#C8C0AF",
+    "text_ghost":    "#8F887B",
     "accent":        "#60E6A6",
-    "module_hover":  "#4B4D40",
-    "row_hover":     "#626351",
+    "module_hover":  "#3B3A33",
+    "row_hover":     "#544E43",
     "accent_dim":    "#8AF3BA",
     "danger":        "#ED9080",
     "ok":            "#60E6A6",
@@ -70,6 +72,7 @@ COLORS = {
     "card_hi": TOKENS["selected"],
     "soft": TOKENS["soft"],
     "shell": TOKENS["shell"],
+    "nav_selected": TOKENS["nav_selected"],
     "module_hover": TOKENS["module_hover"],
     "row_hover": TOKENS["row_hover"],
     "border": TOKENS["border"],
@@ -197,15 +200,17 @@ class Theme:
         self.t = dict(TOKENS)
 
         # 字体层级：正文 / 小字 / 区块标签 / 页面标题 / 大数字 / 工业标签
-        self.font = pick_font(self.root, 11)
-        self.font_small = pick_font(self.root, 10)
-        self.font_title = self.display_font(25)
+        self.ui_scale=1.
+        self._fonts={}
+        self.font = self._shared_font(pick_font(self.root, 11))
+        self.font_small = self._shared_font(pick_font(self.root, 10))
+        self.font_title = self.display_font(22)
         self.font_heading = self.display_font(14)
-        self.font_nav = pick_font(self.root, 12, bold=True)
-        self.font_button = pick_font(self.root, 10, bold=True)
-        self.font_big = pick_label_font(self.root,22,bold=True)
-        self.font_mono = ("Consolas", 10)
-        self.font_tag = pick_font(self.root, 9)
+        self.font_nav = self._shared_font(pick_font(self.root, 12, bold=True))
+        self.font_button = self._shared_font(pick_font(self.root, 10, bold=True))
+        self.font_big = self._shared_font(pick_label_font(self.root,22,bold=True))
+        self.font_mono = self._shared_font(("Consolas", 10))
+        self.font_tag = self._shared_font(pick_font(self.root, 9))
 
         if not resizable:
             self.root.resizable(False, False)
@@ -223,7 +228,28 @@ class Theme:
         self.root.destroy = destroy
 
     def display_font(self, size):
-        return pick_font(self.root,size,bold=True)
+        return self._shared_font(pick_font(self.root,size,bold=True))
+
+    def _shared_font(self,spec):
+        spec=tuple(spec)
+        if spec not in self._fonts:
+            font=tkfont.Font(root=self.root,font=spec)
+            font.configure(size=round(spec[1]*self.ui_scale))
+            self._fonts[spec]=font
+        return self._fonts[spec]
+
+    def set_ui_scale(self,scale):
+        if scale==self.ui_scale:return False
+        self.ui_scale=scale
+        for spec,font in self._fonts.items():font.configure(size=round(spec[1]*scale))
+        # Image-backed native buttons need a fresh size after their shared
+        # font changes. Other Tk controls follow named fonts automatically.
+        from gui.ink import PillButton
+        pending=list(self.root.winfo_children())
+        while pending:
+            widget=pending.pop();pending.extend(widget.winfo_children())
+            if isinstance(widget,PillButton):widget._measure()
+        return True
 
     # ------------------------------------------------------------ ttk 底座
     def _install_ttk(self):
@@ -269,7 +295,7 @@ class Theme:
             style.map("TCombobox",
                       fieldbackground=[("readonly", c["soft"]), ('!readonly',c['soft'])],
                       foreground=[("readonly", c["fg"])])
-            style.configure("TScrollbar", background=c["card_hi"],
+            style.configure("TScrollbar", background=c["border"],
                             troughcolor=c["shell"], bordercolor=c["shell"],
                             arrowcolor=c["muted"], borderwidth=0, width=9, arrowsize=0)
             style.configure("Treeview", background=c["card"],

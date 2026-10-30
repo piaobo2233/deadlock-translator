@@ -65,6 +65,7 @@ class ContinuousWorkspace:
                 self._make_subnav(key)
             self.ready = True
         except Exception:
+            app.interactions.select(None)
             app.interactions.update(None)
             for key, frame in self.frames.items():
                 app.page_callbacks.cancel_owner(key)
@@ -86,21 +87,20 @@ class ContinuousWorkspace:
         holder = app.th.tk.Frame(app.nav, bg=C['shell'])
         buttons = []
         for title, widget in self.sections.get(key, []):
-            button = app.th.tk.Button(holder, text='·  '+title, anchor='w',
-                command=lambda w=widget: self.scroll_to(w), bg=C['shell'], fg=C['muted'],
-                activebackground=C['shell'], activeforeground=C['fg'],
-                relief='flat', bd=0, font=app.th.font_small, padx=18, pady=5,
-                highlightthickness=0, cursor='hand2')
+            from gui.ink import NavigationButton
+            button = NavigationButton(holder, text='·  '+title,
+                command=lambda w=widget: self.scroll_to(w),font=app.th.font_small,foreground=C['muted'])
+            button.configure(anchor='w',padx=18,pady=5)
             button.pack(fill='x')
             button._section_selected=False
-            button.bind('<Enter>',lambda e:e.widget.configure(fg=C['fg']))
-            button.bind('<Leave>',lambda e:e.widget.configure(
-                fg=C['accent'] if e.widget._section_selected else C['muted']))
+            for sequence in ('<Enter>','<Leave>','<FocusIn>','<FocusOut>'):
+                button.bind(sequence,lambda e:e.widget.set_section_selected(e.widget._section_selected),add='+')
             buttons.append((button, widget))
         self.subnav[key] = (holder, buttons)
 
     def open(self, key, remember=True):
         app = self.app
+        app.cancel_wheel()
         if not self.ready:
             self.build()
         if key != 'recognition':
@@ -129,8 +129,6 @@ class ContinuousWorkspace:
             app.game_resources.inspect()
             app.dictionary.refresh()
             app.dictionary.resources_changed()
-        elif key == 'send':
-            app.composer['view']['render']()
         elif key == 'recognition':
             app.game_settings['refresh']()
         elif key == 'cost':
@@ -143,6 +141,7 @@ class ContinuousWorkspace:
 
     def open_auxiliary(self, key):
         app = self.app
+        app.interactions.select(None)
         app.interactions.update(None)
         if self.auxiliary is not None:
             app.page_callbacks.cancel_owner(self.auxiliary._page_key)
@@ -177,6 +176,41 @@ class ContinuousWorkspace:
     def positions(self):
         return [(key, frame.winfo_y()) for key, frame in self.frames.items()]
 
+    def select_widget(self, widget):
+        """Section surfaces share navigation positioning; controls keep their cursor."""
+        if self.building or not self.ready or self.auxiliary is not None:
+            return
+        chain=[]
+        parent=widget
+        while parent is not None and parent is not self.app._content_page:
+            chain.append(parent)
+            parent=getattr(parent,'master',None)
+        if parent is None:
+            return
+        key=next((w._page_key for w in chain if hasattr(w,'_page_key')),None)
+        if key not in self.frames:
+            return
+        self.app.cancel_wheel()
+        if self._follow_pending is not None:
+            self.app.root.after_cancel(self._follow_pending)
+            self._follow_pending=None
+        if key != self.app.current:
+            self.activate(key)
+        rows=self.subnav[key][1]
+        selected=next((i for i,(_,section) in enumerate(rows) if section in chain),None)
+        decoration=widget is getattr(getattr(widget,'master',None),'layer',None)
+        surface=(widget.winfo_class() in ('Frame','Label') or decoration) and not widget.bind('<Button-1>')
+        if selected is not None:
+            section=rows[selected][1]
+            if surface or widget is getattr(section,'layer',None):
+                rows[selected][0].invoke()
+                return
+            for i,(button,_) in enumerate(rows):
+                button.set_section_selected(i==selected)
+            self.app.interactions.select(section)
+        elif surface:
+            self.scroll_to(self.frames[key])
+
     def activate(self, key):
         app = self.app
         app.current = key
@@ -199,15 +233,23 @@ class ContinuousWorkspace:
             app.nav_footer.pack(side='bottom',fill='x',padx=24,pady=14)
         count = len(self.subnav.get(app.current, (None, []))[1])
         available = app.nav.winfo_height()-65
-        height = max(30, min(46, (available-count*26)//7-4))
+        from gui.material import navigation_geometry
+        _,cap=navigation_geometry(app.root.winfo_width(),app.root.winfo_height())
+        height = max(30, min(cap, (available-count*26)//7-4))
+        padding = 2 if height < 42 else 5
+        layout = (height, padding)
+        if getattr(self, '_nav_layout', None) == layout:
+            return
+        self._nav_layout = layout
         for parts in app.nav_buttons.values():
             parts['row'].configure(height=height)
         for _, buttons in self.subnav.values():
             for button, _ in buttons:
-                button.configure(pady=2 if height < 42 else 5)
+                button.configure(pady=padding)
 
     def scroll_to(self, widget):
         app = self.app
+        app.cancel_wheel()
         app.interactions.hide_hint()
         app.root.update_idletasks()
         y = widget.winfo_rooty() - app._content_page.winfo_rooty()
@@ -229,9 +271,11 @@ class ContinuousWorkspace:
             positions = [(i, w.winfo_rooty()-app._content_page.winfo_rooty()) for i, (_, w) in enumerate(rows)]
             selected = active_anchor(positions, top, app.canvas.winfo_height(), app._content_page.winfo_reqheight())
             for i, (button, _) in enumerate(rows):
-                button._section_selected=i==selected
-                button.configure(bg=C['shell'],
-                                 fg=C['accent'] if i == selected else C['muted'])
+                if button._section_selected == (i == selected):
+                    continue
+                button.configure(bg=C['shell'])
+                button.set_section_selected(i==selected)
+            app.interactions.select(rows[selected][1] if selected is not None else None)
 
     def on_scroll(self, first, last):
         self.app.scroll.set(first, last)
@@ -239,6 +283,15 @@ class ContinuousWorkspace:
             def follow():
                 self._follow_pending = None
                 self.follow()
+                # A canvas clips native children without unmapping them or
+                # reliably exposing them when they return to the viewport.
+                from gui.ink import PillButton
+                try:
+                    focused=self.app.root.focus_get()
+                except (KeyError,self.app.th.tk.TclError):
+                    focused=None
+                if isinstance(focused,PillButton):focused.resume_animation()
+                self.app.scroll_paint.request()
             self._follow_pending = self.app.root.after_idle(follow)
 
     def reveal(self, widget):

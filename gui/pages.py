@@ -69,6 +69,15 @@ def status_of(root_dir):
     if not data.get("game"):
         return "等待游戏", "启动《异锁》后会自动开始翻译", COLORS["muted"]
     if data.get("game_foreground"):
+        if data.get('translate_requests', 0) or data.get('queue_pending', 0):
+            return '正在翻译', '已确认聊天，正在处理翻译请求', COLORS['ok']
+        if _ocr_backend_notice(data):
+            return '兼容识别', '识别加速暂不可用，兼容模式仍在工作，速度可能变慢', COLORS['warn']
+        capture = data.get('recognition_capture')
+        if isinstance(capture, dict):
+            if capture.get('ocr_active'):
+                return '正在识别', '正在读取候选文字并核对原图；通过确认后翻译', COLORS['ok']
+            return '等待聊天', '正在扫描聊天区域，等待可确认的新消息', COLORS['ok']
         return "正在运行", "游戏内聊天正在被翻译", COLORS["ok"]
     return "已挂起", "游戏不在前台，不截屏也不花钱", COLORS["ok"]
 
@@ -120,8 +129,6 @@ def _save(key, value, app):
         app.set_status('保存失败：写后核对不一致', COLORS['err'])
         return False
     if key in {'send_target','translate_api','api_key','model','endpoint'}:
-        composer=getattr(app,'composer',None)
-        if composer:composer['view']['render']()
         api=getattr(app,'api_controls',None)
         if api and 'refresh_summary' in api:api['refresh_summary']()
     if key == 'builtins_enabled':
@@ -152,12 +159,20 @@ def _row(parent, th, label, hint="", app=None):
         所以是**移到底栏**，不是删掉。
     """
     c = COLORS
-    row = th.tk.Frame(parent, bg=c["bg"],pady=9,padx=4)
+    from gui.material import MaterialFrame
+    row = MaterialFrame(parent, bg=c["bg"],pady=9,padx=4)
     row.pack(fill="x", pady=(0, 1))
     holder = th.tk.Frame(row, bg=c["bg"])
-    holder.pack(side="right")
+    holder.grid(row=0,column=1,sticky='w')
     left = th.tk.Frame(row, bg=c["bg"])
-    left.pack(side="left", fill="x", expand=True)
+    left.grid(row=0,column=0,sticky='ew')
+
+    def columns(event):
+        large=th.ui_scale>1
+        row.columnconfigure(0,weight=0 if large else 1,minsize=round(event.width*.25) if large else 0)
+        row.columnconfigure(2,weight=1 if large else 0)
+    row.bind('<Configure>',columns,add='+')
+    row.columnconfigure(0,weight=1)
 
     name = th.label(left, label, bg=c["bg"], fg=c["fg"], font=th.font)
     name.pack(fill="x", anchor="w")
@@ -269,6 +284,7 @@ def _text(app, holder, key, config, width=22, secret=False, path=False):
 def _render_spec(app, parent, keys, config):
     """按 settings_spec 渲染一组设置项。**文案和默认值都来自规格。**"""
     th = app.th
+    controls = {}
     for key in keys:
         item = settings_spec.BY_KEY.get(key)
         if not item:
@@ -285,7 +301,7 @@ def _render_spec(app, parent, keys, config):
             _choice(app, holder, key, config, opts, width=18)
         elif kind in ("int", "float"):
             unit = ""
-            _number(app, holder, key, config, item.get("lo", 0),
+            controls[key] = _number(app, holder, key, config, item.get("lo", 0),
                     item.get("hi", 100), item.get("step", 1), unit)
         elif kind == "secret":
             _text(app, holder, key, config, width=24, secret=True)
@@ -296,6 +312,7 @@ def _render_spec(app, parent, keys, config):
                      fg=COLORS["muted"], font=th.font_small).pack(side="right")
         else:
             _text(app, holder, key, config, width=22)
+    return controls
 
 
 # ================================================================ ① 首页

@@ -14,6 +14,19 @@ spec.loader.exec_module(build)
 
 
 class InstallerInputTests(unittest.TestCase):
+    def test_recovery_helper_cannot_be_paired_with_a_stale_program_bundle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source=Path(directory)
+            with self.assertRaisesRegex(ValueError,'源码不匹配'):build.verify_recovery_source(source)
+            names=('app/platform/rollback.py','app/platform/update_install.py','app/platform/updates.py',
+                   'app/storage/store.py','app/storage/locking.py','gui/updates.py','scripts/run.py')
+            rows=[dict(path=name,sha256=build.digest(ROOT/name)) for name in names]
+            (source/'BUILD-SOURCE.json').write_text(json.dumps(dict(files=rows)),encoding='utf-8')
+            self.assertEqual(len(build.verify_recovery_source(source)),len(names))
+            rows[0]['sha256']='outdated-source'
+            (source/'BUILD-SOURCE.json').write_text(json.dumps(dict(files=rows)),encoding='utf-8')
+            with self.assertRaisesRegex(ValueError,'源码不匹配'):build.verify_recovery_source(source)
+
     def test_verified_bundle_is_accepted_and_bad_inputs_are_rejected(self):
         original = {
             'DeadlockTranslate.exe': b'executable fixture', 'LockLingo.exe': b'GUI fixture',

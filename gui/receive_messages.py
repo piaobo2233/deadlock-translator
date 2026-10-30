@@ -31,9 +31,10 @@ class ReceiveMessages:
         self.status = text(area, app.th, '暂无消息；启动后在这里查看最近原文与译文。', small=True, muted=True)
         self.status.pack(anchor='w', pady=(0, 6))
         body = panel(area, app.th);body.pack(fill='both', expand=True)
-        self.view = app.th.tk.Text(body, height=8, width=20, wrap='word', state='disabled',
-            bg=C['soft'], fg=C['fg'], font=app.th.font, padx=12, pady=10,
-            relief='flat', highlightthickness=1, highlightbackground=C['border'], highlightcolor=C['accent'])
+        self.view = app.th.tk.Text(body, height=2, width=20, wrap='word', state='disabled',
+            bg=C['bg'], fg=C['fg'], font=app.th.font, padx=12, pady=10,
+            relief='flat', highlightthickness=1, highlightbackground=C['bg'], highlightcolor=C['accent'])
+        self.view._hover_surface=True
         scroll = app.th.ttk.Scrollbar(body, command=self.scroll)
         scroll.pack(side='right', fill='y')
         self.view.configure(yscrollcommand=scroll.set)
@@ -113,6 +114,7 @@ class ReceiveMessages:
             self.view.insert(position, value, (tag,))
             self.view.tag_bind(tag, '<Button-1>', lambda event, key=key: self.select(key))
             self.rendered[key] = value
+        self.view.configure(height=8 if current else 2)
         self.rows = current
         if self.selected not in current:self.selected = None
         elif self.selected is not None:self.select(self.selected)

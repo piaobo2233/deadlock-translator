@@ -132,7 +132,6 @@ def build_cost(parent, app, load_config=None, money=None, priced=None):
     from app.brand import apply_window_icon
     th=app.th; c=COLORS
     header=heading(parent,th,'API 用量',compact=True)
-    extra_header_height=0
     selected=th.tk.IntVar(parent, value=7)
     ledger=usage.UsageStats(store.data_path(app.root_dir,'stats.json'))
     values={}; titles={}; buttons={}; detail_window=[None]
@@ -145,7 +144,8 @@ def build_cost(parent, app, load_config=None, money=None, priced=None):
         values[key].pack(anchor='w',pady=(2,0))
     th.hairline(parent,pady=(0,9))
     trend_area=module(parent,th,'费用走势')
-    toolbar=panel(trend_area,th);toolbar.pack(fill='x',pady=(0,6))
+    from gui.material import MaterialFrame
+    toolbar=MaterialFrame(trend_area,bg=c['bg'],padx=4,pady=4);toolbar.pack(fill='x',pady=(0,6))
     toolbar._hover_row=True
     th.label(toolbar,'费用走势',font=th.font_heading).pack(side='left')
     refresh_button=th.link(toolbar,'刷新',lambda:refresh());refresh_button.pack(side='left',padx=(10,0))
@@ -158,10 +158,8 @@ def build_cost(parent, app, load_config=None, money=None, priced=None):
         button.configure(padx=8,pady=3)
         button.pack(side='right',padx=(6,0));buttons[days]=button
     inspect=text(trend_area,th,'指向图表或聚焦后按左右键，查看具体数值',small=True,muted=True)
-    # Preserve room for the bottom actions when the DPI-aware title band grows.
-    # At 100% the band is still 72px and the approved chart stays 145px tall.
     trend=UsageChart(trend_area,th,mode='trend',inspect=lambda value:inspect.configure(text=value),
-                     height=max(100,145-extra_header_height))
+                     height=320)
     trend.pack(fill='x')
     inspect.pack(fill='x',pady=(4,4))
     metrics=text(trend_area,th,'',small=True,wraplength=800,justify='left')

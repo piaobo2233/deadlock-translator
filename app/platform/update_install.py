@@ -21,7 +21,8 @@ UNINSTALL_KEY = r'Software\Microsoft\Windows\CurrentVersion\Uninstall\{8D9E4B3A-
 UPDATE_MUTEX = 'Local\\LockLingo_UpdateInProgress'
 PROGRAM_DIRS = {'_internal', 'ocr', 'licenses'}
 PROGRAM_FILES = {'LockLingo.exe', 'DeadlockTranslate.exe', 'VERSION', 'BUILD-SOURCE.json',
-                 'LICENSE', 'THIRD-PARTY-NOTICES.md', '先读我.md', 'OCR-RUNTIME.txt', 'manifest.json'}
+                 'LICENSE', 'THIRD-PARTY-NOTICES.md', 'THIRD-PARTY-SOURCES.md', 'DISTRIBUTION.json',
+                 '先读我.md', 'OCR-RUNTIME.txt', 'manifest.json'}
 
 
 def installed(root):
@@ -78,14 +79,24 @@ def prepare(root, setup, checksum, version):
         raise UpdateError('更新工作目录异常')
     if file_digest(setup) != checksum:
         raise UpdateError('安装包校验失败，更新已停止')
-    previous = directory / 'previous'
-    previous.mkdir()
-    for source in program_files(root):
-        target = previous / source.relative_to(root)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, target)
-    # Includes the helper's own runtime. No data, uninstaller or private files.
-    program_files(previous)
+    from app.platform import rollback
+    recovery = root / 'recovery' / rollback.HELPER
+    helper = {}
+    if recovery.is_file():
+        if recovery.resolve() != recovery:
+            raise UpdateError('独立恢复工具路径异常')
+        program_files(root)
+        target = directory / rollback.HELPER
+        shutil.copy2(recovery, target)
+        helper = dict(helper_kind='standalone', helper_sha256=file_digest(target), before=rollback.version(root))
+    else:
+        previous = directory / 'previous'
+        previous.mkdir()
+        for source in program_files(root):
+            target = previous / source.relative_to(root)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+        program_files(previous)
     from app.runtime.panel_instance import process_info, owner, alive
     panel = process_info()
     translator = owner(root)
@@ -95,7 +106,7 @@ def prepare(root, setup, checksum, version):
     if not translator.get('stopped') and alive(translator.get('process')):
         processes.append(translator['process'])
     job = dict(root=str(root), setup=str(setup), checksum=checksum, version=version,
-               processes=processes, created=time.time(), status='prepared')
+               processes=processes, created=time.time(), status='prepared', **helper)
     path = directory / 'job.json'
     if not store.atomic_write_json(path, job):
         raise UpdateError('无法保存更新任务，旧程序未更改')
@@ -103,7 +114,10 @@ def prepare(root, setup, checksum, version):
 
 
 def launch_helper(job_path):
-    executable = Path(job_path).parent / 'previous' / 'LockLingo.exe'
+    from app.platform.rollback import HELPER
+    job = json.loads(Path(job_path).read_text(encoding='utf-8'))
+    executable = (Path(job_path).parent / HELPER if job.get('helper_kind') == 'standalone'
+                  else Path(job_path).parent / 'previous' / 'LockLingo.exe')
     return subprocess.Popen([str(executable), '--apply-update', str(job_path)],
                             cwd=executable.parent, creationflags=subprocess.CREATE_NO_WINDOW)
 
@@ -172,12 +186,16 @@ def read_job(job_path):
     job = json.loads(path.read_text(encoding='utf-8'))
     root = Path(job['root']).absolute()
     directory, previous = path.parent, path.parent / 'previous'
+    from app.platform.rollback import HELPER
+    helper = directory / HELPER if job.get('helper_kind') == 'standalone' else previous / 'LockLingo.exe'
     if (path.name != 'job.json' or directory.parent != root / 'backups' / 'updates'
             or directory.resolve() != directory or not installed(root)
             or not 0 <= time.time() - job['created'] < 1800
             or job.get('status') != 'prepared'
-            or Path(sys.executable).resolve() != previous / 'LockLingo.exe'):
+            or Path(sys.executable).resolve() != helper):
         raise UpdateError('更新任务路径或安装身份异常')
+    if job.get('helper_kind') == 'standalone' and file_digest(helper) != job.get('helper_sha256'):
+        raise UpdateError('独立更新工具校验失败')
     from app.platform.updates import version_key
     if not version_key(job['version'])[3] or not isinstance(job.get('processes'), list) or not job['processes']:
         raise UpdateError('更新版本或进程身份异常')
@@ -216,7 +234,9 @@ def apply(job_path):
             raise UpdateError('更新前数据备份失败，未执行安装')
     else:
         backup = ''
-    program_files(previous)
+    standalone = job.get('helper_kind') == 'standalone'
+    if not standalone:
+        program_files(previous)
     # No child may outlive this installer wait and race with recovery.
     try:
         record(root, 'update', 'started', code='install')
@@ -230,7 +250,21 @@ def apply(job_path):
             raise UpdateError('安装后的版本不匹配')
     except Exception as exc:
         record(root, 'update', 'failed', code='install')
-        restore_program(root, previous, directory)
+        if standalone:
+            from app.platform import rollback
+            base = rollback.directory(root)
+            if rollback.read(base/'pending.json'):
+                rollback.abort(root)
+            elif rollback.version(root) != job['before']:
+                ready = rollback.read(base/'ready.json', {})
+                if ready.get('to') != job['version']:
+                    raise UpdateError('安装未完成，请使用开始菜单的回退入口恢复') from exc
+                rollback.restore(root)
+            program_files(root)
+            if rollback.version(root) != job['before']:
+                raise UpdateError('旧程序恢复尚未完成，请使用开始菜单的回退入口') from exc
+        else:
+            restore_program(root, previous, directory)
         raise UpdateError('安装未完成，已恢复旧程序；个人数据未回退') from exc
     record(root, 'update', 'completed', code='install')
     return dict(status='success', version=job['version'], backup=backup,

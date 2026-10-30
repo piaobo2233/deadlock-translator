@@ -2,6 +2,29 @@
 from app.storage.usage import UsageStats
 import app.runtime.input_scope as input_scope
 import time
+import math
+
+
+CAPTURE_DIAGNOSTIC_FIELDS = {
+    'frames', 'boxes', 'boxes_distinct', 'empty_frames', 'capture_failures', 'dropped', 'no_ocr',
+    'garbage_filtered', 'no_consensus', 'confirmed', 'handled', 'handled_recheck',
+    'chat_area_clipped_skipped', 'chat_area_shape_skipped', 'typing_indicator_skipped',
+    'chat_body_duplicate_skipped', 'quick_chat_template_skipped', 'quick_chat_pixel_skipped',
+    'native_chinese_filtered', 'unchanged_rejected_skip', 'verified_pixels_skip',
+    'geometry_only_ocr_skipped', 'stale_source_frame_skipped', 'source_frame_reused',
+    'preferred_frame_reused', 'static_suppressed', 'worker_dedup', 'chinese_skipped',
+    'visual_drop_confirmation_expired', 'visual_drop_confirmation_not_visible',
+    'visual_drop_no_current_box', 'ocr_active', 'last_ocr_at',
+}
+
+
+def capture_diagnostics(stats):
+    """One numeric allowlist for runtime and feedback; missing is not zero."""
+    if not isinstance(stats, dict):
+        return {}
+    return {key: value for key, value in stats.copy().items()
+            if key in CAPTURE_DIAGNOSTIC_FIELDS and type(value) in (int, float, bool)
+            and math.isfinite(value) and value >= 0}
 
 def format_funnel(stats: dict, translator=None, tag: str = "FUNNEL") -> str:
     """一行结构化漏斗统计，k=v 空格分隔，可离线解析。

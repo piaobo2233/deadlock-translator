@@ -114,6 +114,11 @@ class TranslationPipeline:
     def pending_depth(self):
         return self.pending.qsize() + self.network.qsize()
 
+    @property
+    def translation_requests(self):
+        """Include requests already taken by the API worker, beyond queue depth."""
+        return sum(not group.closed for group in self._group_snapshot())
+
     def _report_error(self, stage, exc):
         self.health.record(stage, type(exc).__name__, error=True)
         with self._error_lock:

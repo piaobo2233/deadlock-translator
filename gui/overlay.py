@@ -6,6 +6,7 @@ from app.runtime.messages import DisplayMessage
 import app.platform.game_fonts as game_fonts
 import app.recognition.live as live_state
 import app.runtime.input_scope as input_scope
+from collections import OrderedDict
 import ctypes
 import math
 import os
@@ -135,6 +136,7 @@ class Overlay:
         """字号可调，所以字体对象要能重建。Tk 字号传负数 = 像素单位。"""
         import tkinter.font as tkfont
 
+        self._wrap_cache=OrderedDict()
         self.font_text = tkfont.Font(family=self.family_text, size=-self.font_size, weight='bold')
         self.line_height = max(1, int(self.font_text.metrics('linespace')))
 
@@ -234,27 +236,47 @@ class Overlay:
                 fill=top_color, outline=BUBBLE_BORDER, tags=tag)
 
     def _wrap(self, text: str, font, max_px: int, max_lines: int = 3):
-        lines, cur = [], ""
-        for idx, ch in enumerate(text):
-            if font.measure(cur + ch) <= max_px:
-                cur += ch
-                continue
+        # A moving source changes placement, not the translation's line breaks.
+        # Keep only bounded, font-specific layouts; _build_fonts clears them.
+        if not hasattr(self, '_wrap_cache'):self._wrap_cache=OrderedDict()
+        key=(id(font),text,max_px,max_lines)
+        if key in self._wrap_cache:
+            self._wrap_cache.move_to_end(key)
+            return list(self._wrap_cache[key])
+        lines,cur,offset=[],"",0
+        while offset<len(text):
+            rest=text[offset:]
+            if font.measure(cur+rest)<=max_px:
+                cur+=rest
+                break
+            # Find the next break with logarithmic native font calls instead
+            # of repeatedly measuring every growing prefix of a long line.
+            lo,hi=offset,len(text)
+            while lo<hi:
+                mid=(lo+hi+1)//2
+                if font.measure(cur+text[offset:mid])<=max_px:lo=mid
+                else:hi=mid-1
+            cur+=text[offset:lo]
+            offset=lo
+            ch=text[offset];offset+=1
             if " " in cur.strip():
-                cut = cur.rindex(" ")
+                cut=cur.rindex(" ")
                 lines.append(cur[:cut].rstrip())
-                cur = cur[cut + 1:] + ch
+                cur=cur[cut+1:]+ch
             else:
                 lines.append(cur)
-                cur = ch
-            if len(lines) >= max_lines:
-                last = lines[-1]
-                while last and font.measure(last + "…") > max_px:
-                    last = last[:-1]
-                lines[-1] = last + "…"
-                return lines[:max_lines]
-        if cur:
-            lines.append(cur)
-        return lines[:max_lines] or [""]
+                cur=ch
+            if len(lines)>=max_lines:
+                last=lines[-1]
+                while last and font.measure(last+"…")>max_px:last=last[:-1]
+                lines[-1]=last+"…"
+                cur=""
+                break
+        if cur:lines.append(cur)
+        result=lines[:max_lines] or [""]
+        self._wrap_cache[key]=tuple(result)
+        if len(self._wrap_cache)>128:self._wrap_cache.popitem(last=False)
+        return result
 
     def _within_display_deadline(self, message):
         if not isinstance(message, DisplayMessage) or message.display_deadline is None:

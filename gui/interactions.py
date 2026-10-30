@@ -19,6 +19,8 @@ class InteractionController:
     def __init__(self, app):
         self.app = app
         self.targets = []
+        self.selected = None
+        self.pointer_widget = None
         self.saved = {}
         self.hint = None
         self.hint_target = None
@@ -27,6 +29,7 @@ class InteractionController:
         self.transitions = {}
         self.app.root.bind_all('<Motion>', self.motion, add='+')
         self.app.root.bind_all('<FocusIn>', self.focus, add='+')
+        self.app.root.bind('<Button-1>', self.click, add='+')
         self.app.root.bind_all('<MouseWheel>', lambda e: self.hide_hint(), add='+')
         self.app.root.bind('<Leave>', self.leave, add='+')
 
@@ -51,28 +54,45 @@ class InteractionController:
             return
         if event.widget.winfo_toplevel() is not self.app.root:
             return
+        # Tk also sends FocusIn to ancestors of the newly focused control.
+        # Revealing those large containers jumps the page before the entry.
+        if event.widget is not self.app.root.focus_get():
+            return
         deck = getattr(self.app, 'workspace', None)
         if deck:
             deck.reveal(event.widget)
         self.update(event.widget)
 
+    def click(self, event):
+        if not hasattr(event.widget,'winfo_toplevel'):
+            return
+        if event.widget.winfo_exists() and event.widget.winfo_toplevel() is self.app.root:
+            self.app.workspace.select_widget(event.widget)
+
     def leave(self, event):
         if event.widget is self.app.root:
             self.update(None)
 
+    def select(self, widget):
+        if widget is self.selected:
+            return
+        self.selected = widget
+        pointer = self.pointer_widget
+        self.update(pointer if pointer is not None and pointer.winfo_exists() else None)
+
     def update(self, widget):
+        self.pointer_widget = widget
         chain = self.chain(widget)
         module = next((w for w in chain if getattr(w, '_hover_module', False)), None)
         row = next((w for w in chain if getattr(w, '_hover_row', False)), None)
-        targets = [w for w in (module, row) if w is not None]
+        targets = list(dict.fromkeys(w for w in (self.selected, module, row) if w is not None))
         if targets != self.targets:
             previous={w:self.background(w) for w in set(self.saved)|set(self.transitions) if w.winfo_exists()}
             self.cancel_animation()
             self.restore()
             self.targets = targets
-            for target, color in ((module, C['module_hover']), (row, C['row_hover'])):
-                if target is not None:
-                    self.paint(target, color)
+            for target in targets:
+                self.paint(target, C['row_hover'] if target is row else C['module_hover'])
             transitions={}
             for widget in set(previous)|set(self.saved):
                 if not widget.winfo_exists():continue
@@ -142,7 +162,7 @@ class InteractionController:
     def paint(self, widget, color):
         for child in (widget, *widget.winfo_children()):
             try:
-                if child.winfo_class() in ('Frame', 'Label'):
+                if child.winfo_class() in ('Frame', 'Label') or getattr(child,'_hover_surface',False):
                     old = child.cget('bg')
                     if old in (C['bg'], C['panel'], C['soft'], C['module_hover'], C['row_hover']):
                         self.saved.setdefault(child, old)

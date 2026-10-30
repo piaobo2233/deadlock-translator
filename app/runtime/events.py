@@ -75,6 +75,9 @@ class RuntimeHealth:
                 "display_reason_drawn": self._counts[(PipelineStage.DISPLAY.value, "reason_drawn")],
                 "display_failed": self._counts[(PipelineStage.DISPLAY.value, "render_failed")],
                 "display_hidden": self._counts[(PipelineStage.DISPLAY.value, "hidden")],
+                "display_expired": self._counts[(PipelineStage.DISPLAY.value, "expired")],
+                "display_not_current": self._counts[(PipelineStage.DISPLAY.value, "not_current")],
+                "translate_expired": self._counts[(PipelineStage.TRANSLATE.value, "expired")],
             }
 
 

@@ -84,26 +84,28 @@ def _liquid_field():
     return field.filter(ImageFilter.GaussianBlur(1.4))
 
 
+def _apply_liquid(base,amount,phase):
+    w,h=base.size
+    field=_liquid_field()
+    drift=phase*6%96
+    shift=int(drift)
+    moving=Image.blend(ImageChops.offset(field,shift,0),
+                       ImageChops.offset(field,shift+1,0),drift-shift)
+    pools=Image.blend(field,moving,.58).resize((w,h),Image.Resampling.BILINEAR)
+    wash=Image.composite(Image.new('RGBA',(w,h),'#5CAC73'),
+                         Image.new('RGBA',(w,h),'#32704D'),pools)
+    # Connected islands fill and drain locally on both buttons and navigation.
+    wet=pools.point([max(0,min(255,round((amount*290-v)*7))) for v in range(256)])
+    wash.putalpha(wet)
+    return Image.blend(Image.alpha_composite(base,wash),base,.09)
+
+
 def pill_surface(width, height, amount=0., phase=0., disabled=False, pressed=False):
     base,mask,rim,outline=_paper_surface(width,height,disabled)
     image=base.copy();w,h=image.size
     amount=max(0.,min(1.,amount))
     if amount and not disabled:
-        field=_liquid_field()
-        drift=phase*6%96
-        shift=int(drift)
-        moving=Image.blend(ImageChops.offset(field,shift,0),
-                           ImageChops.offset(field,shift+1,0),drift-shift)
-        pools=Image.blend(field,moving,.58).resize((w,h),Image.Resampling.BILINEAR)
-        wash=Image.composite(Image.new('RGBA',(w,h),'#5CAC73'),
-                             Image.new('RGBA',(w,h),'#32704D'),pools)
-        # A moving threshold reveals connected islands; leaving drains them
-        # locally, rather than making the entire button uniformly transparent.
-        wet=pools.point([max(0,min(255,round((amount*290-v)*7))) for v in range(256)])
-        wash.putalpha(wet)
-        image=Image.alpha_composite(image,wash)
-        # Keep the printed grain visible through the dye.
-        image=Image.blend(image,base,.09)
+        image=_apply_liquid(base,amount,phase)
     draw=ImageDraw.Draw(image)
     image.paste(mix('#E3DBC2','#8FDAA1',amount),mask=rim)
     image.paste(mix('#7C7665','#295E40',amount),mask=outline)
@@ -121,6 +123,21 @@ def rest_surface(width,height,disabled):
     return pill_surface(width,height,disabled=disabled)
 
 
+@lru_cache(maxsize=96)
+def _navigation_paper(width,height,color,seed):
+    from gui.material import paper_profile
+    w,h=max(16,width)*2,max(16,height)*2
+    edge,chips,grain=paper_profile(width,height,seed)
+    mask=Image.new('L',(w,h));draw=ImageDraw.Draw(mask)
+    draw.polygon([(x*2,y*2) for x,y in edge],fill=255)
+    for box in chips:draw.rectangle(tuple(v*2 for v in box),fill=0)
+    base=Image.new('RGBA',(w,h),color);draw=ImageDraw.Draw(base)
+    shades=(mix(color,C['ink'],.16),mix(color,C['fg'],.08),mix(color,C['ink'],.07))
+    for x,y,right,bottom,tone in grain:
+        draw.line((x*2,y*2,right*2,bottom*2),fill=shades[tone],width=2)
+    return base,mask
+
+
 class PillButton(tk.Button):
     def __init__(self,parent,*,text,command,font,foreground=None):
         self._ready=False
@@ -135,6 +152,7 @@ class PillButton(tk.Button):
                          compound='center',cursor='hand2',takefocus=True)
         self._ready=True;self._measure()
         self.bind('<Configure>',lambda e:self._draw(),add='+')
+        self.bind('<Expose>',self.resume_animation,add='+')
         self.bind('<Enter>',lambda e:self._feedback(pointer=True),add='+')
         self.bind('<Leave>',lambda e:self._feedback(pointer=False,pressed=False),add='+')
         self.bind('<FocusIn>',lambda e:self._feedback(focused=True),add='+')
@@ -156,6 +174,9 @@ class PillButton(tk.Button):
         if not self._ready or (not kw and not isinstance(cnf,dict)):
             return super().configure(cnf,**kw)
         if isinstance(cnf,dict):kw={**cnf,**kw};cnf=None
+        if 'state' in kw and str(kw['state'])==str(super().cget('state')):
+            kw.pop('state')
+            if not kw:return None
         measure=bool(set(kw)&{'text','font','width','padx','pady'})
         for key,attr in (('width','_chars'),('padx','_padx'),('pady','_pady')):
             if key in kw:setattr(self,attr,int(kw.pop(key)))
@@ -181,28 +202,133 @@ class PillButton(tk.Button):
     def _animate(self):
         self._job=None
         if not self.winfo_exists() or str(self.cget('state'))=='disabled':return
-        now=time.monotonic();elapsed=min(.05,now-self._clock);self._clock=now
         target=1. if self._pointer or self._focused or self._selected else 0.
+        if not self._in_view():
+            # Finish an offscreen state change once, so a departing focus does
+            # not leave an old green face cached when the button returns.
+            if self._amount!=target:
+                self._amount=target;self._draw()
+            return
+        now=time.monotonic();elapsed=min(.05,now-self._clock);self._clock=now
         self._amount=max(0.,min(1.,self._amount+(elapsed/.16 if target else -elapsed/.20)))
         self._draw()
         if self.winfo_ismapped() and (self._pointer or self._focused or abs(self._amount-target)>.001):
             self._job=self.after(33,self._animate)
+
+    def _in_view(self):
+        if not self.winfo_ismapped():return False
+        x,y=self.winfo_rootx(),self.winfo_rooty()
+        right,bottom=x+self.winfo_width(),y+self.winfo_height()
+        parent=self.master
+        while parent is not None:
+            if isinstance(parent,tk.Canvas):
+                left,top=parent.winfo_rootx(),parent.winfo_rooty()
+                if (right<=left or bottom<=top or x>=left+parent.winfo_width()
+                        or y>=top+parent.winfo_height()):return False
+            parent=getattr(parent,'master',None)
+        return True
+
+    def resume_animation(self,event=None):
+        if self._job is None and (self._pointer or self._focused):
+            self._feedback()
 
     def _draw(self,preferred=False):
         if not self._ready:return
         w,h=self._size
         if not preferred and self.winfo_width()>1:w,h=self.winfo_width(),self.winfo_height()
         disabled=str(self.cget('state'))=='disabled'
+        static_key=self._static_surface_key(w,h) if not disabled and not self._amount and not self._pressed else None
+        if static_key is not None and static_key==getattr(self,'_drawn_static_key',None):
+            return
+        self._drawn_static_key=None
         if disabled:
             super().configure(image='',width=self._chars,height=0,padx=self._padx+5,pady=self._pady+5,
                               disabledforeground=C['muted'])
             return
-        face=pill_surface(w,h,self._amount,time.monotonic(),False,self._pressed) if self._amount or self._pressed else rest_surface(w,h,False)
+        face=self._surface(w,h)
         self._face=ImageTk.PhotoImage(face,master=self)
         super().configure(image=self._face,activebackground=self.cget('bg'),width=self._size[0],height=self._size[1],padx=0,pady=0)
+        self._drawn_static_key=static_key
+
+    def _static_surface_key(self,w,h):
+        return w,h,self._size,self.cget('bg')
+
+    def _surface(self,w,h):
+        return pill_surface(w,h,self._amount,time.monotonic(),False,self._pressed) if self._amount or self._pressed else rest_surface(w,h,False)
 
     def _stop(self):
         if self._job is not None:self.after_cancel(self._job);self._job=None
 
     def _destroy(self,event):
         if event.widget is self:self._stop()
+
+
+class NavigationButton(PillButton):
+    """Keep flat navigation geometry; share the capsule's local liquid motion."""
+    def __init__(self,*args,**kwargs):
+        self._section_selected=False
+        super().__init__(*args,**kwargs)
+        self.configure(compound='none')
+        # A native Button centers text over a compound image. Keep its command,
+        # focus and keyboard bindings, with a left-aligned Tk text layer above.
+        # A sibling overlay survives Windows' native Button repaint during
+        # animation; a child canvas can be painted over by the button face.
+        self._caption=tk.Canvas(self.master,highlightthickness=0,takefocus=0,bg=self.cget('bg'))
+        self._caption.place(in_=self,x=0,y=0,relwidth=1,relheight=1)
+        self._caption_image=self._caption.create_image(0,0,anchor='nw')
+        self._caption_text=self._caption.create_text(0,0,anchor='w')
+        self._caption.bind('<Expose>',self.resume_animation,add='+')
+        for sequence in ('<Enter>','<Leave>','<ButtonPress-1>','<ButtonRelease-1>'):
+            self._caption.bind(sequence,lambda e,s=sequence:self.event_generate(s,x=e.x,y=e.y))
+        self._draw()
+
+    def set_section_selected(self,selected):
+        self._section_selected=selected
+        color=C['fg'] if self._pointer or self._focused else C['accent'] if selected else C['muted']
+        self.configure(fg=color,bg=C['nav_selected'] if selected else C['shell'])
+
+    def _surface(self,w,h):
+        color=self.cget('bg')
+        if color==C['shell'] and not self._amount:
+            return Image.new('RGBA',(max(1,w),max(1,h)),C['shell'])
+        full_width,offset,seed=getattr(self,'_paper_geometry',(w,0,71))
+        full_width=max(full_width,w+offset)
+        base,mask=_navigation_paper(full_width,h,color,seed)
+        base=base.copy()
+        if self._amount and self._selected:
+            base=_apply_liquid(base,self._amount,time.monotonic())
+        base.putalpha(mask)
+        face=Image.alpha_composite(Image.new('RGBA',base.size,C['shell']),base)
+        face=face.resize((max(1,full_width),max(1,h)),Image.Resampling.LANCZOS)
+        self._paper_full_face=face
+        return face.crop((offset,0,offset+max(1,w),max(1,h)))
+
+    def _static_surface_key(self,w,h):
+        return super()._static_surface_key(w,h),getattr(self,'_paper_geometry',None)
+
+    def _draw(self,preferred=False):
+        super()._draw(preferred)
+        if not hasattr(self,'_caption'):return
+        disabled=str(self.cget('state'))=='disabled'
+        self._caption.configure(bg=C['shell'])
+        self._caption.itemconfigure(self._caption_image,image='' if disabled else self._face)
+        self._caption.coords(self._caption_text,self._padx,self.winfo_height()/2)
+        self._caption.itemconfigure(self._caption_text,text=self.cget('text'),font=self.cget('font'),
+            fill=C['muted'] if disabled else self.cget('fg'))
+        self._caption.tk.call('raise',self._caption._w)
+        canvas=getattr(self,'_paper_canvas',None)
+        if canvas is not None and canvas.winfo_exists():
+            if self._amount and not disabled:
+                self._paper_animation=ImageTk.PhotoImage(self._paper_full_face,master=self)
+                if canvas.find_withtag('liquid'):
+                    canvas.itemconfigure('liquid',image=self._paper_animation)
+                else:
+                    canvas.create_image(0,0,anchor='nw',image=self._paper_animation,tags='liquid')
+                canvas.tag_raise('nav_marker')
+            else:canvas.delete('liquid')
+
+    def _destroy(self,event):
+        super()._destroy(event)
+        caption=getattr(self,'_caption',None)
+        if event.widget is self and caption is not None and caption.winfo_exists():
+            caption.destroy()

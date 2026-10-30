@@ -1,6 +1,7 @@
 """Independent source-image reading; English-looking output alone proves nothing."""
 
 from dataclasses import dataclass, field, replace
+from collections import OrderedDict
 import csv
 import io
 import re
@@ -58,3 +59,28 @@ def for_text(evidence, expected):
         return evidence
     matches = bool(comparable(evidence.reading)) and comparable(evidence.reading) == comparable(expected)
     return replace(evidence, verified=matches, reason='' if matches else 'source_disagrees')
+
+
+class FrameSourceReadings:
+    """Reuse a successful source read only within one body of one captured frame."""
+
+    MAX_MODELS = 4
+
+    def __init__(self, read, model_key):
+        self.read, self.model_key = read, model_key
+        self._readings = OrderedDict()
+        self.hits = 0
+
+    def for_text(self, text, deadline):
+        key = self.model_key(text)
+        previous = self._readings.get(key)
+        if previous is not None:
+            self._readings.move_to_end(key)
+            self.hits += 1
+            return for_text(previous, text)
+        evidence = self.read(text, deadline)
+        if evidence.reason in ('', 'source_disagrees', 'native_chinese'):
+            self._readings[key] = evidence
+            if len(self._readings) > self.MAX_MODELS:
+                self._readings.popitem(last=False)
+        return evidence

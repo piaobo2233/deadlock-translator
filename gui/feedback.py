@@ -53,6 +53,15 @@ def ocr_diagnostics(value):
         for name in ('preferred','fallback','source') if isinstance(stages,dict) and name in stages}
     return result
 
+
+def evidence_diagnostics(value):
+    if not isinstance(value, dict):return {}
+    result=numeric_fields(value, {'captures_saved','images_saved','events_saved','failures','last_saved_at'})
+    failure=value.get('last_failure')
+    if isinstance(failure,str) and failure:
+        result['last_failure']=failure if failure in {'OSError','PermissionError','ValueError','JSONDecodeError'} else 'OtherError'
+    return result
+
 def report(root,*,include_text=False):
     values=secrets(root);cfg=ConfigRepository(store.data_path(root,'config.json'),log=lambda _:None).load()
     runtime=store.read_json(store.data_path(root,'runtime.json'),{})
@@ -72,6 +81,10 @@ def report(root,*,include_text=False):
                    'hard_offline','pipeline_errors','queue_pending','queue_display','queue_replaced'} or
              k.startswith(('capture_','recognize_','translate_','display_'))) and type(v) in (int,float,bool)}
         summary['诊断']['recognition_ocr']=ocr_diagnostics(runtime.get('recognition_ocr'))
+        from app.runtime.reporting import capture_diagnostics
+        summary['诊断']['recognition_capture']=capture_diagnostics(runtime.get('recognition_capture'))
+        summary['诊断']['recognition_evidence']=evidence_diagnostics(runtime.get('recognition_evidence'))
+        summary['识别计数口径']='按帧、候选框或处理次数累计，各项不可相减推算漏句数；缺少原图时无法确认未检测到的句子。'
         from app.presentation.reasons import LABELS
         summary['诊断']['translation_unavailable']=numeric_fields(runtime.get('translation_unavailable'),LABELS)
     lines=['反馈诊断',json.dumps(summary,ensure_ascii=False,indent=2),'','最近运行的错误与警告分类：']
@@ -139,6 +152,7 @@ def build(parent,app):
     from gui.appearance import panel,text,section
     from gui.theme import COLORS as C
     from tkinter import filedialog
+    from gui.interactions import help_for
     th=app.th;body=section(parent,th,'反馈与排查')
     selected=th.tk.BooleanVar(value=False);images=[];editor=th.tk.Text(body,height=7,font=th.font_small,wrap='word')
     def preview():
@@ -148,6 +162,7 @@ def build(parent,app):
     controls=panel(body,th);controls.pack(fill='x',pady=8)
     label=text(body,th,'默认只导出诊断信息；反馈包由你自行发送。',small=True,muted=True);label.pack(anchor='w')
     remove=th.link(controls,'移除截图',lambda:None)
+    help_for(remove,'从本次反馈中移除已选择的图片，原始图片文件保留。')
     def detach():
         images.clear();remove.pack_forget();label.configure(text='默认只导出诊断信息；反馈包由你自行发送。')
     remove.configure(command=detach)
@@ -164,6 +179,12 @@ def build(parent,app):
             export(app.root_dir,target,content,images=images)
             app.set_status('反馈日志已导出，可自行发送',C['ok'])
         except (OSError,ValueError,TypeError) as exc:app.set_status('导出失败：'+clean(str(exc),secrets(app.root_dir)),C['err'])
-    th.button(controls,'导出反馈日志',save,kind='primary').pack(side='left')
-    th.link(controls,'预览与删减',preview).pack(side='left',padx=14)
-    th.link(controls,'选择截图',attach).pack(side='left')
+    export_button=th.button(controls,'导出反馈日志',save,kind='primary')
+    help_for(export_button,'保存 ZIP 反馈包到你选择的位置，包含诊断信息及主动选择的文字、截图。导出后由你自行发送。')
+    export_button.pack(side='left')
+    preview_button=th.link(controls,'预览与删减',preview)
+    help_for(preview_button,'生成并查看本次诊断文字，可删减后导出。再次预览会重新生成并覆盖当前预览中的编辑。')
+    preview_button.pack(side='left',padx=14)
+    attach_button=th.link(controls,'选择截图',attach)
+    help_for(attach_button,'手动选择出现问题时的截图；最多 5 张、合计 50 MiB，单张不超过 20 MiB。请先检查图片中的个人信息。')
+    attach_button.pack(side='left')

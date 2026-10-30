@@ -139,7 +139,7 @@ class RegionEditor:
         self.confirm_box.pack(side='bottom', anchor='w', padx=12)
         self.tk.Checkbutton(win, text='已人工核对当前截图的两队位置、长句及堆叠空间', variable=self.coverage,
             bg=C['bg'], fg=C['fg'], selectcolor=C['soft'], activebackground=C['bg'], font=self.th.font).pack(side='bottom', anchor='w', padx=12)
-        self.note = self.tk.Label(win, text=self.reason or '覆盖两队可能出现聊天的整片范围；无聊天也可保存，聊天覆盖待验证。',
+        self.note = self.tk.Label(win, text=self.reason or '覆盖两队可能出现聊天的范围；保存后在本机保留截图缩略图用于预览。',
             bg=C['bg'], fg=C['muted'], anchor='w', justify='left', font=self.th.font_small)
         self.note.pack(side='bottom', fill='x', padx=12, pady=4)
         self.note.bind('<Configure>', lambda e: self.note.configure(wraplength=max(160, e.width)))
@@ -378,7 +378,11 @@ class RegionEditor:
         except ValueError as exc:
             self.note.configure(text=str(exc)); return
         if pages._save('capture_calibration', record, self.app):
+            from gui.region_preview import save_preview
+            saved=save_preview(self.app.root_dir,self.image,record)
             self.on_saved(); self.close()
+            if not saved:
+                self.app.set_status('区域已保存；截图预览保存失败，请重新导入截图。',C['warn'])
 
     def test(self):
         from gui.game_settings import diagnostic_read

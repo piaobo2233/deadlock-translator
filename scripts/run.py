@@ -20,6 +20,13 @@ def run():
             return 1
         from app.platform.single_instance import retain_install_guard
         retain_install_guard()
+        recovery = Path(sys.executable).parent / 'backups' / 'rollback'
+        if mutex_exists(UPDATE_MUTEX) or any((recovery/name).exists() for name in ('pending.json','restore.json')):
+            if sys.argv[1:2] not in (['--ocr-worker'], ['--inspect-game-resources'], ['--watch-game']):
+                import ctypes
+                ctypes.windll.user32.MessageBoxW(None,
+                    '更新或恢复尚未完成。请使用开始菜单中的回退入口完成恢复后再打开锁语。', '锁语恢复', 0)
+            return 1
     if sys.argv[1:2] == ['--inspect-game-resources']:
         if len(sys.argv) != 3:
             raise SystemExit('Invalid game resource inspection arguments')

@@ -200,7 +200,7 @@ class SimplifiedTkTests(unittest.TestCase):
         labels=self.labels()
         for removed in ('本次会话回看','开始新对局','译文最大宽度','新消息延长旧译文'):self.assertNotIn(removed,labels)
         self.assertNotIn('复制上次输入原文',labels)
-        self.app.open_page('send');self.assertIn('复制上次输入原文',self.labels())
+        self.app.open_page('send');self.assertNotIn('复制上次输入原文',self.labels())
         self.assertTrue(self.app.open_page('ingame'));self.app.root.update()
         self.assertEqual(self.app.current,'recognition')
         labels=self.labels();self.assertIn('测试当前游戏画面',labels);self.assertIn('导入局内截图',labels)
@@ -237,17 +237,14 @@ class SimplifiedTkTests(unittest.TestCase):
         self.assertFalse(hasattr(self.app,'hotkey_controls'))
         self.assertNotIn('自动发送',self.labels())
 
-    def test_original_recovery_includes_pending_failed_and_successful_input(self):
-        from app.runtime.panel_instance import begin_translator
-        from app.runtime.session_view import SessionView
-        owner=begin_translator(self.root);view=SessionView(self.root,owner['token'])
-        self.app.open_page('send')
-        for status in ('正在翻译','翻译失败','已回填，请手动发送'):
-            self.assertTrue(view.input(dict(original='保留原文',translation='',status=status)))
-            self.app._feedback_refreshes[0]()
-            self.assertEqual(str(self.app.input_recovery['copy'].cget('state')),'normal')
-            with patch.object(self.app.root,'clipboard_clear'),patch.object(self.app.root,'clipboard_append') as append:
-                self.app.input_recovery['copy'].invoke();append.assert_called_once_with('保留原文')
+    def test_sending_has_no_original_copy_button_or_persistent_instructions(self):
+        self.app.open_page('send');self.app.root.update()
+        self.assertFalse(hasattr(self.app,'input_recovery'))
+        self.assertFalse(hasattr(self.app,'_feedback_refreshes'))
+        labels=self.labels()
+        self.assertNotIn('复制上次输入原文',labels)
+        self.assertFalse(any('Ctrl+A / Ctrl+C' in label or '译文固定为英语' in label for label in labels))
+        self.assertIsNotNone(self.app.input_translate_control['value'])
 
     def test_pause_action_is_queued_and_no_optimistic_success(self):
         self.app.open_page('home')

@@ -1,4 +1,4 @@
-"""Session drafts and nonblocking preview; clipboard changes require a click."""
+"""Legacy design-study component; not mounted by the settings application."""
 import queue
 import threading
 
@@ -10,15 +10,19 @@ from app.translation.manual import ManualTranslator
 def _text_field(parent, th, title, *, preview=False):
     """Reference label above a dark native field; selection and editing stay native."""
     text(parent,th,title).pack(anchor='w',pady=(0,6))
-    frame=panel(parent,th,bg=C['soft'],border=True)
+    background=C['bg'] if preview else C['soft']
+    border=C['bg'] if preview else C['border']
+    frame=panel(parent,th,bg=background,border=True)
+    frame.configure(highlightbackground=border)
     frame.pack(fill='x')
     editor=th.tk.Text(frame,height=2 if preview else 3,width=1,wrap='word',font=th.font,
-        relief='flat',bd=0,highlightthickness=0,bg=C['soft'],fg=C['fg'],
+        relief='flat',bd=0,highlightthickness=0,bg=background,fg=C['fg'],
         insertbackground=C['fg'],selectbackground=C['accent'],selectforeground=C['ink'],
         padx=12,pady=10,state='disabled' if preview else 'normal',undo=not preview)
     editor.pack(fill='both',expand=True,padx=1,pady=1)
+    editor._hover_surface=preview
     editor.bind('<FocusIn>',lambda _e:frame.configure(highlightbackground=C['accent']),add='+')
-    editor.bind('<FocusOut>',lambda _e:frame.configure(highlightbackground=C['border']),add='+')
+    editor.bind('<FocusOut>',lambda _e:frame.configure(highlightbackground=border),add='+')
     return editor
 
 

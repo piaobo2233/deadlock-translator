@@ -2,7 +2,6 @@
 from functools import lru_cache
 from pathlib import Path
 import tkinter as tk
-from tkinter import font as tkfont
 
 from PIL import Image, ImageOps, ImageTk
 
@@ -23,13 +22,48 @@ def city_image():
         return image.convert('RGB')
 
 
+class Atmosphere(tk.Frame):
+    """Stationary matte backdrop in the settings window's margins."""
+    def __init__(self, parent):
+        super().__init__(parent,bg=C['shell'])
+        self.layer=tk.Canvas(self,bg=C['shell'],highlightthickness=0,takefocus=0)
+        self.layer.place(x=0,y=0,relwidth=1,relheight=1)
+        self.layer.tk.call('lower',self.layer._w)
+        self.photo=None
+        self._size=None
+        self.bind('<Configure>',self.draw,add='+')
+
+    def draw(self,event=None):
+        size=(self.winfo_width(),self.winfo_height())
+        if size==self._size or min(size)<2:return
+        self._size=size
+        # Fixed matte texture, independently painted beneath opaque controls.
+        # No generated scene, transparency on text, or per-scroll image work.
+        import random
+        from PIL import ImageDraw, ImageFilter
+        rng=random.Random(29)
+        material=Image.new('RGB',(480,270),C['shell'])
+        paint=ImageDraw.Draw(material)
+        for _ in range(3800):
+            x,y=rng.randrange(480),rng.randrange(270)
+            tone=rng.choice(('#25221E','#1C1A18','#292620'))
+            paint.point((x,y),fill=tone)
+        for x in range(-270,480,36):
+            paint.line((x,270,x+270,0),fill='#292621',width=1)
+        material=material.filter(ImageFilter.GaussianBlur(.65))
+        scene=material.resize(size,Image.Resampling.BILINEAR)
+        self.photo=ImageTk.PhotoImage(scene,master=self.layer)
+        self.layer.delete('all')
+        self.layer.create_image(0,0,image=self.photo,anchor='nw')
+
+
 class CityArt(tk.Canvas):
     def __init__(self, parent, th, *, title='', eyebrow='', height=86):
         self.th, self.title, self.eyebrow = th, title, eyebrow
         # Explicit font objects keep measurement and Canvas drawing on the same
         # DPI generation when Tk scaling changes between pages.
-        self.tag_font = tkfont.Font(root=parent, font=th.font_tag)
-        self.title_font = tkfont.Font(root=parent, font=th.font_title)
+        self.tag_font = th.font_tag
+        self.title_font = th.font_title
         self.title_top, self.title_line = TAG_TOP, 0
         if title:
             tag_line, self.title_line = (self.tag_font.metrics('linespace'), self.title_font.metrics('linespace'))

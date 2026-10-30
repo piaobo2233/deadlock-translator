@@ -357,7 +357,14 @@ def atomic_write_bytes(path, data) -> bool:
             handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(tmp, path)
+        for attempt in range(5):
+            try:
+                os.replace(tmp, path)
+                break
+            except PermissionError:
+                if os.name != 'nt' or attempt == 4:
+                    raise
+                time.sleep(0.01 * 2 ** attempt)
         return True
     except Exception as exc:
         print(f'[warn] 保存识别图片失败：{type(exc).__name__}')

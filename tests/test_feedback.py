@@ -80,4 +80,21 @@ class FeedbackTests(unittest.TestCase):
             last_failure='private-message',counts=['private-counts'],stages='private-stages')),
             dict(last_failure='OtherError',counts={},stages={}))
 
+    def test_capture_rejections_and_evidence_health_are_exported_without_text_or_images(self):
+        store.atomic_write_json(store.data_path(self.root,'runtime.json'),dict(at=time.time(),
+            recognition_capture=dict(frames=10,chat_area_clipped_skipped=2,no_ocr=3,
+                garbage_filtered=4,visual_drop_confirmation_expired=1,ocr_active=False,
+                raw_text='private raw',crop='private image',arbitrary_count=99),
+            recognition_evidence=dict(images_saved=2,failures=1,last_failure='OSError',
+                path='private location',original='private original'),translate_requests=1))
+        content=feedback.report(self.root)
+        summary=json.loads(content.split('\n',1)[1].split('\n\n最近运行',1)[0])
+        diagnostic=summary['诊断']
+        self.assertEqual(diagnostic['recognition_capture']['chat_area_clipped_skipped'],2)
+        self.assertEqual(diagnostic['recognition_capture']['visual_drop_confirmation_expired'],1)
+        self.assertEqual(diagnostic['recognition_evidence'],dict(images_saved=2,failures=1,last_failure='OSError'))
+        self.assertEqual(diagnostic['translate_requests'],1)
+        for private in ('private raw','private image','private location','private original','arbitrary_count'):
+            self.assertNotIn(private,content)
+
 if __name__=='__main__':unittest.main()

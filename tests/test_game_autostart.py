@@ -138,8 +138,16 @@ class GameStartupTests(unittest.TestCase):
         self.assertTrue(game.is_enabled(self.root))
 
     def test_startup_write_permission_failure_does_not_launch(self):
-        with patch.object(game, '_write_startup', side_effect=PermissionError('denied')):
-            self.assertFalse(game.set_enabled(True, self.root)[0])
+        error = PermissionError(13, 'Permission denied', str(self.path)+'.temporary')
+        with patch.object(game, '_write_startup', side_effect=error):
+            ok, message = game.set_enabled(True, self.root)
+        self.assertFalse(ok)
+        self.assertIn('Windows', message)
+        self.assertNotIn(str(self.path), message)
+        self.assertNotIn('Errno', message)
+        log = (Path(self.root)/'data/game-start.log').read_text(encoding='utf-8')
+        self.assertIn('PermissionError', log)
+        self.assertIn(str(self.path).replace('\\', '\\\\'), log)
         self._spawn.assert_not_called();self.assertFalse(self.path.exists())
 
     def test_source_and_frozen_commands_quote_paths_without_shell_execution(self):
@@ -183,7 +191,7 @@ class GameStartupTests(unittest.TestCase):
             script = game.startup_script(self.root)
         self.path.parent.mkdir();self.path.write_text(script, encoding='utf-16')
         result = subprocess.run([cscript, '//nologo', str(self.path)], capture_output=True, timeout=10)
-        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         deadline = time.monotonic() + 5
         while not marker.exists() and time.monotonic() < deadline:time.sleep(.05)
         self.assertEqual(marker.read_text(encoding='utf-8'), 'ok')

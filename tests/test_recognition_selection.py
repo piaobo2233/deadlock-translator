@@ -44,6 +44,34 @@ class RecognitionSelectionTests(unittest.TestCase):
         self.assertFalse(result.accepted)
         self.assertEqual(result.reason,'bad_ocr')
 
+    def test_verified_sentence_case_without_known_vocabulary_preserves_original(self):
+        text='Evaluate intricate statements.'
+        glossary=translation_builtins_module.DEFAULT_GLOSSARY
+        policy=recognition_capture.recognition_rules()
+        self.assertFalse(policy.is_chat(text,glossary))
+        self.assertTrue(policy.is_chat(text.lower(),glossary))
+        verify=Mock(return_value=SourceEvidence(True,'',reading=text))
+        result=select_candidate([('body7',text)],glossary,policy,verify_body=verify)
+        self.assertTrue(result.accepted)
+        self.assertEqual(result.text,policy.clean(text,glossary))
+        self.assertTrue(result.text.startswith('Evaluate'))
+
+    def test_sentence_case_retry_requires_verified_body_and_keeps_noise_gates(self):
+        policy=recognition_capture.recognition_rules()
+        glossary=translation_builtins_module.DEFAULT_GLOSSARY
+        for kind,text,source in (
+                ('body7','Evaluate intricate statements.',None),
+                ('body7','Evaluate intricate statements.',SourceEvidence(False,'source_disagrees')),
+                ('gray','Evaluate intricate statements.',SourceEvidence(True,'')),
+                ('body7','Continuous',SourceEvidence(True,'')),
+                ('body7','ESAS TUE',SourceEvidence(True,'')),
+                ('body7','HimMmavuy issoY',SourceEvidence(True,'')),
+                ('body7','Eeeeeeeee oooooooo',SourceEvidence(True,''))):
+            with self.subTest(kind=kind,text=text,source=source):
+                verify=Mock(return_value=source) if source is not None else None
+                result=select_candidate([(kind,text)],glossary,policy,verify_body=verify)
+                self.assertFalse(result.accepted)
+
     def test_human_laughter_extension_passes_shared_gates_without_changing_query(self):
         variants = [('body7', '»b;lolll'), ('otsu3x13', '“brlolt'),
                     ('tight2x8', 'b;lolll'), ('gray2x', 'sbzlolll')]

@@ -238,13 +238,31 @@ class UpdateUiTests(unittest.TestCase):
         self.updater.state_valid = False
         self.assertFalse(self.updater.save(skipped='1.0.1'))
 
+    def test_rollback_button_opens_independent_helper_and_skipped_release_can_reinstall(self):
+        updater=self.updater
+        self.assertEqual(str(updater.controls['rollback'].cget('state')),'disabled')
+        updater.rollback_info=dict(available=True,message='回退到 0.9.0')
+        updater.repaint()
+        with patch('tkinter.messagebox.askyesno',return_value=True), \
+             patch('subprocess.Popen') as launch, \
+             patch('app.runtime.panel_instance.owner',return_value={}), \
+             patch.object(self.app.root,'destroy') as close:
+            updater.controls['rollback'].invoke()
+        args=launch.call_args.args[0]
+        self.assertIn('LockLingoRecovery.exe',args[0]);self.assertIn('--confirmed',args)
+        close.assert_called_once()
+        updater.events.put(('checked',u.parse_release(release_raw())))
+        updater.poll();updater.defer(skip=True)
+        self.assertFalse(updater.badge.winfo_manager())
+        self.assertEqual(str(updater.controls['install'].cget('state')),'normal')
+
     def test_controls_remain_accessible_at_minimum_window_width(self):
         self.updater.events.put(('checked', u.parse_release(release_raw())))
         self.updater.poll()
         self.app.root.geometry('880x560')
         self.app.root.update()
         controls = self.updater.controls
-        for name in ('check', 'install', 'later', 'skip', 'website'):
+        for name in ('check', 'install', 'later', 'skip', 'website', 'rollback'):
             button = controls[name]
             self.assertTrue(button.winfo_ismapped(), name)
             self.assertLessEqual(button.winfo_rootx() + button.winfo_width(),

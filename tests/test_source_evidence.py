@@ -147,6 +147,56 @@ class EvidenceLogTests(unittest.TestCase):
         self.assertEqual(index.read_text(encoding='utf-8'),'{broken')
         self.assertEqual(len(list(self.log.directory.glob('*.png'))),1)
 
+    def test_save_failure_is_visible_and_success_clears_current_failure_without_private_data(self):
+        with patch.object(store,'atomic_write_bytes',return_value=False):
+            self.log.capture(candidate(evidence=self.source))
+        state=self.log.snapshot()
+        self.assertEqual(state['failures'],1)
+        self.assertEqual(state['captures_saved'],0)
+        self.assertEqual(state['last_failure'],'OSError')
+        self.log.capture(candidate(2,self.source))
+        state=self.log.snapshot()
+        self.assertEqual((state['captures_saved'],state['images_saved']),(1,1))
+        self.assertEqual(state['last_failure'],'')
+        self.assertEqual(state['failures'],1)
+        for private in ('knock knock','png-test',str(self.root)):
+            self.assertNotIn(private,json.dumps(state))
+
+    def test_status_snapshot_does_not_wait_for_disk_writer(self):
+        import threading
+        held=threading.Event();release=threading.Event()
+        def writer():
+            with self.log._lock:
+                held.set();release.wait(2)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            waiting=pool.submit(writer)
+            self.assertTrue(held.wait(1))
+            try:
+                snapshot=pool.submit(self.log.snapshot).result(timeout=.5)
+                self.assertEqual(snapshot['failures'],0)
+            finally:
+                release.set();waiting.result(timeout=1)
+
+    def test_transient_windows_image_lock_retries_and_permanent_failure_preserves_existing(self):
+        import os
+        if os.name != 'nt':self.skipTest('Windows sharing retry')
+        path=self.root/'image.png'
+        path.write_bytes(b'original')
+        replace=store.os.replace
+        calls=[]
+        def locked_then_replace(source,target):
+            calls.append(1)
+            if len(calls)<3:raise PermissionError('fixture sharing violation')
+            replace(source,target)
+        with patch.object(store.os,'replace',side_effect=locked_then_replace), patch.object(store.time,'sleep'):
+            self.assertTrue(store.atomic_write_bytes(str(path),b'new image'))
+        self.assertEqual(path.read_bytes(),b'new image')
+        self.assertEqual(len(calls),3)
+        with patch.object(store.os,'replace',side_effect=PermissionError('fixture permission')), patch.object(store.time,'sleep'):
+            self.assertFalse(store.atomic_write_bytes(str(path),b'must not replace'))
+        self.assertEqual(path.read_bytes(),b'new image')
+        self.assertEqual(list(self.root.glob('.image.png.*.tmp')),[])
+
     def test_parallel_events_remain_bounded_without_reviving_evictions(self):
         with ThreadPoolExecutor(max_workers=4) as workers:
             list(workers.map(lambda i:self.log.capture(candidate(i,self.source)),range(1,21)))

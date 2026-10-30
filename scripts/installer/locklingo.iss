@@ -11,6 +11,9 @@
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
+#ifndef AppIdValue
+  #define AppIdValue "{{8D9E4B3A-2F6C-4E1B-9A7D-2C5F7B1E4A90}"
+#endif
 #ifndef NumericVersion
   #define NumericVersion "1.0.0.0"
 #endif
@@ -47,12 +50,27 @@
 #ifndef LauncherFile
   #error LauncherFile define is required
 #endif
+#ifndef RecoveryFile
+  #error RecoveryFile define is required
+#endif
+#ifndef RecoveryLabel
+  #define RecoveryLabel "Restore previous version"
+#endif
+#ifndef RecoveryError
+  #define RecoveryError "Program backup or recovery failed. Use the Start menu recovery entry. See backups\rollback\recovery.log."
+#endif
+#ifndef RecoveryFailureTitle
+  #define RecoveryFailureTitle "Update was not completed"
+#endif
+#ifndef RecoveryRestored
+  #define RecoveryRestored "The new program failed verification. The previous program has been restored; personal data was preserved."
+#endif
 #ifndef DirectoryMessage
   #define DirectoryMessage "Use an English installation path. Changing folders does not move personal data. Back up the old data folder and move the complete folder manually after installation."
 #endif
 
 [Setup]
-AppId={{8D9E4B3A-2F6C-4E1B-9A7D-2C5F7B1E4A90}
+AppId={#AppIdValue}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
@@ -80,7 +98,7 @@ WizardStyle=modern
 UsePreviousAppDir=yes
 CloseApplications=no
 RestartApplications=no
-AppMutex=DeadlockTranslate_SingleInstance,DeadlockTranslate_InstallGuard
+AppMutex=DeadlockTranslate_SingleInstance,DeadlockTranslate_InstallGuard,Local\LockLingo_RecoveryWindow
 SetupLogging=yes
 AllowNoIcons=yes
 DisableWelcomePage=no
@@ -96,19 +114,52 @@ UninstallAppRunningError={#UninstallRunningMessage}
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
+Source: "{#RecoveryFile}"; DestDir: "{app}\recovery"; Flags: ignoreversion
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
+Name: "{group}\{#RecoveryLabel}"; Filename: "{app}\recovery\LockLingoRecovery.exe"; Parameters: "--root ""{app}"""; WorkingDir: "{app}"
 Name: "{group}\{#AppName}"; Filename: "{app}\{#LauncherFile}"; WorkingDir: "{app}"; IconFilename: "{app}\{#LauncherFile}"
 Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#LauncherFile}"; WorkingDir: "{app}"; IconFilename: "{app}\{#LauncherFile}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#LauncherFile}"; Description: "{cm:LaunchProgram,{#AppName}}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#LauncherFile}"; Description: "{cm:LaunchProgram,{#AppName}}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent; Check: RecoverySucceeded
 
 [Code]
 var
   DirectoryNote: TNewStaticText;
+  RecoveryPrepared, RecoveryCommitted, RecoveryFailed, RecoveryHadProgram: Boolean;
+  RecoveryFailureMessage: String;
+  UpdateGuard, InstallerGuard: THandle;
+
+function RecoveryCreateMutex(Attributes: LongWord; InitialOwner: Boolean; Name: String): THandle;
+  external 'CreateMutexW@kernel32.dll stdcall';
+function RecoveryCloseHandle(Handle: THandle): Boolean;
+  external 'CloseHandle@kernel32.dll stdcall';
+function RecoveryLastError(): LongWord;
+  external 'GetLastError@kernel32.dll stdcall';
+
+procedure ReleaseUpdateGuard();
+begin
+  if UpdateGuard <> 0 then begin
+    RecoveryCloseHandle(UpdateGuard);
+    UpdateGuard := 0;
+  end;
+end;
+
+function RecoverySucceeded(): Boolean;
+begin
+  Result := RecoveryCommitted;
+end;
+
+function RunRecovery(Parameters: String): Boolean;
+var Code: Integer;
+begin
+  Result := Exec(ExpandConstant('{tmp}\LockLingoRecovery.exe'),
+    '--root ' + AddQuotes(ExpandConstant('{app}')) + ' ' + Parameters,
+    ExpandConstant('{tmp}'), SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
+end;
 
 procedure InitializeWizard();
 begin
@@ -126,10 +177,75 @@ begin
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
+var Parameters: String; UpdateActive: Boolean;
 begin
   Result := '';
-  if CheckForMutexes('DeadlockTranslate_SingleInstance,DeadlockTranslate_InstallGuard') then
-    Result := '{#RunningMessage}';
+  if RecoveryPrepared then Exit;
+  if CheckForMutexes('DeadlockTranslate_SingleInstance,DeadlockTranslate_InstallGuard,Local\LockLingo_RecoveryWindow') then begin
+    Result := '{#RunningMessage}'; Exit;
+  end;
+  InstallerGuard := RecoveryCreateMutex(0, False, 'Local\LockLingo_Installer');
+  if (InstallerGuard = 0) or (RecoveryLastError() = 183) then begin
+    if InstallerGuard <> 0 then RecoveryCloseHandle(InstallerGuard);
+    InstallerGuard := 0; Result := '{#RecoveryError}'; Exit;
+  end;
+  UpdateGuard := RecoveryCreateMutex(0, False, 'Local\LockLingo_UpdateInProgress');
+  UpdateActive := RecoveryLastError() = 183;
+  if UpdateGuard = 0 then Result := '{#RecoveryError}'
+  else begin
+    if CheckForMutexes('DeadlockTranslate_SingleInstance,DeadlockTranslate_InstallGuard,Local\LockLingo_RecoveryWindow') then
+      Result := '{#RunningMessage}'
+    else begin
+      ExtractTemporaryFile('LockLingoRecovery.exe');
+      Parameters := '--prepare {#AppVersion} --setup ' + AddQuotes(ExpandConstant('{srcexe}'));
+      if UpdateActive then Parameters := Parameters + ' --update-active';
+      RecoveryHadProgram := FileExists(ExpandConstant('{app}\VERSION'));
+      RecoveryPrepared := RunRecovery(Parameters);
+      if not RecoveryPrepared then Result := '{#RecoveryError}';
+    end;
+  end;
+  if Result <> '' then begin
+    ReleaseUpdateGuard(); RecoveryCloseHandle(InstallerGuard); InstallerGuard := 0;
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then begin
+    RecoveryCommitted := RunRecovery('--commit');
+    if not RecoveryCommitted then begin
+      RecoveryFailed := True;
+      RecoveryFailureMessage := '{#RecoveryError}';
+      if RunRecovery('--abort') then begin
+        RecoveryPrepared := False;
+        if RecoveryHadProgram then RecoveryFailureMessage := '{#RecoveryRestored}';
+      end;
+      Log(RecoveryFailureMessage);
+    end;
+    if RecoveryCommitted or not RecoveryPrepared then ReleaseUpdateGuard();
+  end;
+end;
+
+function GetCustomSetupExitCode(): Integer;
+begin
+  Result := 0;
+  if RecoveryFailed then Result := 12;
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if (CurPageID = wpFinished) and RecoveryFailed then begin
+    WizardForm.FinishedHeadingLabel.Caption := '{#RecoveryFailureTitle}';
+    WizardForm.FinishedLabel.Caption := RecoveryFailureMessage;
+  end;
+end;
+
+procedure DeinitializeSetup();
+begin
+  if RecoveryPrepared and not RecoveryCommitted then
+    if not RunRecovery('--abort') then Log('{#RecoveryError}');
+  ReleaseUpdateGuard();
+  if InstallerGuard <> 0 then RecoveryCloseHandle(InstallerGuard);
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);

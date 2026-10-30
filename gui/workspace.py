@@ -74,6 +74,9 @@ def display_feedback(data, *, running, now):
             feedback.append('审核记录保存失败，已暂停新 API；可以重试保存')
         if isinstance(status, str) and status and status != '译文未显示：显示空间不足':
             feedback.append(status)
+        evidence = data.get('recognition_evidence')
+        if isinstance(evidence, dict) and evidence.get('last_failure'):
+            feedback.append('识别诊断截图保存失败；本次反馈可能缺少画面，请手动选择截图补充')
         return counts, '\n'.join(feedback)
     except (TypeError, ValueError, OverflowError):
         return '诊断记录异常，无法核对显示结果', ''
@@ -114,6 +117,8 @@ def build_translation(parent, app):
             app.set_status('已提交重新保存请求，等待实际结果',C['muted'])
         else:app.set_status('未能提交重试，请重新打开面板或导出诊断',C['err'])
     retry_button=th.button(inner,'重试保存审核记录',retry_review)
+    from gui.interactions import help_for
+    help_for(retry_button,'重新尝试保存待处理的审核记录。保存成功后才能继续新 API 请求；操作结果会在运行状态中反馈。')
     runbar=panel(inner,th);runbar.pack(anchor='w',pady=(8,0))
     starting=[None,0.]
     def run_action():
@@ -134,13 +139,20 @@ def build_translation(parent, app):
             app.set_status('已请求启动，等待后台心跳确认',C['muted'])
         except OSError as exc:app.set_status('启动失败：'+str(exc),C['err'])
     run_button=th.button(runbar,'启动',run_action,kind='primary');run_button.configure(width=9);run_button.pack(side='left')
+    help_for(run_button,lambda: {'启动':'启动后台助手，等待心跳确认后开始工作。',
+        '暂停':'暂停接收识别；可点击恢复继续。', '恢复':'恢复接收识别，游戏在前台时继续扫描聊天。'}.get(run_button.cget('text'),''))
     for label, page in (('测试识别','recognition'),('配置接口','api'),('诊断与反馈','settings')):
-        th.button(runbar,label,lambda page=page:app.open_page(page)).pack(side='left',padx=(8,0))
+        button=th.button(runbar,label,lambda page=page:app.open_page(page))
+        help_for(button,{'recognition':'打开识别与显示，检查识别范围并使用测试功能。',
+            'api':'打开翻译接口，配置并检查联网翻译。',
+            'settings':'打开设置中的诊断与反馈，可预览日志、选择截图并导出反馈包。'}[page])
+        button.pack(side='left',padx=(8,0))
     app.run_controls=dict(button=run_button,action=run_action)
     from gui.receive_messages import ReceiveMessages
     app.receive_messages = ReceiveMessages(parent, app)
     receive_options=section(parent,th,'接收选项')
-    online=panel(receive_options,th);online.pack(fill='x')
+    from gui.material import MaterialFrame
+    online=MaterialFrame(receive_options,bg=C['bg'],padx=4,pady=4);online.pack(fill='x')
     from gui.interactions import setting_row
     setting_row(online)
     controls=panel(online,th);controls.pack(side='right')
@@ -154,11 +166,12 @@ def build_translation(parent, app):
     app.diagnostic_controls=dict(button=button,body=body,toggle=toggle)
     def tick():
         word,why,color=p.status_of(app.root_dir)
-        status.configure(text='运行中' if word=='正在运行' else word,
-            fg=color if word in {'未运行','没有响应','已暂停'} else C['ok'])
+        status.configure(text='运行中' if word=='正在运行' else word,fg=color)
         note.configure(text=current_problem(data=store.read_json(store.data_path(app.root_dir,'runtime.json'),None),
             config=p._load_config(app.root_dir),word=word,why=why,now=time.time()))
-        run_button.configure(text='启动' if word=='未运行' else '恢复' if word=='已暂停' else '暂停')
+        action_text='启动' if word=='未运行' else '恢复' if word=='已暂停' else '暂停'
+        if run_button.cget('text') != action_text:
+            run_button.configure(text=action_text)
         if starting[0] is not None:
             if word!='未运行':
                 starting[0]=None;run_button.configure(state='normal');app.set_status('后台已启动',C['ok'])
@@ -168,7 +181,7 @@ def build_translation(parent, app):
         if (word not in {'未运行','没有响应'} and isinstance(data,dict)
                 and type(data.get('at')) in (int,float) and 0<=time.time()-data['at']<10):
             notice=p._ocr_backend_notice(data)
-            if notice:
+            if notice and word != '兼容识别':
                 note.configure(text=note.cget('text')+'；'+notice)
         if (word not in {'未运行','没有响应'} and isinstance(data,dict) and data.get('review_record_error')
             and type(data.get('at')) in (int,float) and 0<=time.time()-data['at']<10):
@@ -193,18 +206,10 @@ def current_problem(*, data, config, word, why, now):
 
 
 def build_sending(parent,app):
-    from gui.composer import build_composer
-    from gui.game_settings import build_language_settings, build_input_recovery
+    from gui.game_settings import build_language_settings
     heading(parent,app.th,'发言翻译')
-    build_composer(parent,app)
     area=section(parent,app.th,'游戏内发言')
     build_language_settings(area,app)
-    app._feedback_refreshes=[]
-    build_input_recovery(area,app)
-    def tick():
-        for refresh in app._feedback_refreshes:refresh()
-        app.after_page(1500,tick)
-    tick()
 
 
 def build_api_settings(parent, app):
@@ -229,9 +234,10 @@ def build_api_settings(parent, app):
         row,holder=p._row(parent,th,label,hint,app)
         holder.configure(width=400,height=44);holder.pack_propagate(False)
         def fit(e):
-            holder.configure(width=max(220,min(420,int(e.width*.48))))
-            holder.pack_configure(padx=(0,max(0,int(e.width*.12)-20)))
-        row.bind('<Configure>',fit)
+            holder.configure(width=max(round(220*th.ui_scale),min(round(420*th.ui_scale),int(e.width*.48))),
+                             height=round(44*th.ui_scale))
+            holder.grid_configure(padx=(0,max(0,int(e.width*.12)-20)))
+        row.bind('<Configure>',fit,add='+')
         th.hairline(parent,pady=(0,2))
         return holder
     provider_field=field_row('服务商','预设会填入对应的模型与接口地址；保存后才会应用。')
@@ -303,8 +309,6 @@ def build_api_settings(parent, app):
         draft.update(model=model.get(),endpoint=endpoint.get(),key=key.get(),
             provider=next(k for k,v in PROVIDERS.items() if v==provider.get()),dirty=True)
         app._api_revision=getattr(app,'_api_revision',0)+1
-        composer=getattr(app,'composer',None)
-        if composer:composer['view']['render']()
         app._application_generation+=1
         dirty.configure(text='未保存',fg=C['warn'])
         app.set_status('未保存',C['warn'],page='api')
@@ -401,7 +405,10 @@ def build_recognition_settings(parent, app):
     build_recognition(region,app)
     build_region_tools(region,app)
     display=section(parent,th,'译文显示')
-    p._render_spec(app,display,('font_size',),config)
+    controls=p._render_spec(app,display,('font_size',),config)
+    from gui.display_preview import DisplayPreview
+    app.display_preview=DisplayPreview(display,th,controls['font_size'])
+    app.display_preview.pack(fill='x',pady=(16,0))
     try:
         import app.recognition.ocr as ocr
         if not ocr.find_tesseract(config.get('tesseract','')):
@@ -482,7 +489,7 @@ class Dictionary:
         left._hover_module=True
         self.editor_card._hover_module=True
         editor_head=panel(self.editor_card,th);editor_head.pack(fill='x')
-        self.editor_title=th.label(editor_head,'条目详情',font=(th.font[0],11,'bold'))
+        self.editor_title=th.label(editor_head,'条目详情',font=th.display_font(11))
         self.editor_title.pack(side='left',padx=19,pady=10)
         self.editor_state=text(editor_head,th,'',small=True,muted=True);self.editor_state.pack(side='right',padx=19)
         th.hairline(self.editor_card)
@@ -671,8 +678,8 @@ class Dictionary:
         self.editor_title.configure(text='核对这条译文' if tab=='review' else '查看记录' if readonly else '编辑词条')
         self.editor_state.configure(text='只读' if readonly else STATUS_NAMES.get(row.get('status'),row.get('status','')))
         text(self.editor,th,'原文',small=True,muted=True).pack(anchor='w')
-        original=panel(self.editor,th,bg=C['soft']);original.pack(fill='x',pady=(7,4))
-        th.label(original,row.get('original') or row['key'],bg=C['soft'],font=th.font,justify='left',wraplength=360).pack(fill='x',padx=12,pady=6)
+        original=panel(self.editor,th);original.pack(fill='x',pady=(7,4))
+        th.label(original,row.get('original') or row['key'],font=th.font,justify='left',wraplength=360).pack(fill='x',padx=12,pady=6)
         source=SOURCE_NAMES.get(row.get('source'),row.get('source','未知'))
         text(self.editor,th,source+(' · 保存将记为人工词条' if tab=='review' else ''),small=True,muted=True).pack(anchor='w',pady=(0,4))
         if row.get('api_translation') and row['api_translation']!=row.get('translation'):

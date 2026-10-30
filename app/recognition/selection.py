@@ -61,7 +61,15 @@ def select_candidate(variants, glossary, rules: RecognitionRules, *, early_known
             evidence = verify_body(text)
             if evidence.reason == 'native_chinese':
                 return CandidateSelection(reason='native_chinese', tried=tuple(tried), variants=tuple(consumed))
-        if not rules.is_chat(text, glossary) or rules.is_garbage(text, glossary):
+        is_chat = rules.is_chat(text, glossary)
+        if (not is_chat and evidence is not None and evidence.verified
+                and text[:1].isupper() and text[1:] == text[1:].lower()
+                and rules.word_count(text) >= 2):
+            # Sentence-initial capitals are normal in chat. Only a matching
+            # source reading may retry the same text in lowercase; retain the
+            # original spelling and all remaining text/temporal gates.
+            is_chat = rules.is_chat(text.lower(), glossary)
+        if not is_chat or rules.is_garbage(text, glossary):
             continue
         normalized = rules.normalize(text)
         admitted.append((kind, normalized))

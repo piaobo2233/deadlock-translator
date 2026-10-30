@@ -108,7 +108,7 @@ probe=tk.Tk();probe.update();probe.destroy()
         patch.dict("os.environ", {"DEEPSEEK_API_KEY": "", "DEADLOCK_TEST_NO_NETWORK": "1"}).start()
         patch('app.game_data.service.application_root', return_value=self.temp.name).start()
         patch.object(desktop, "translator_is_running", return_value=False).start()
-        self.app = App(self.temp.name)
+        self.app = App(self.temp.name,size='1210x850')
         def close_root():
             try:
                 if self.app.root.winfo_exists():
@@ -135,13 +135,13 @@ probe=tk.Tk();probe.update();probe.destroy()
 
     def test_short_pages_cover_the_cached_settings_view(self):
         self.app.open_page('api');self.app.root.geometry('1210x1000');self.app.root.update()
-        self.assertGreaterEqual(self.app._page_background.winfo_height(),self.app.canvas.winfo_height())
-        self.assertEqual(self.app.canvas.winfo_children()[-2:],[self.app._page_background,self.app._content_page])
+        self.assertEqual(self.app.canvas.winfo_children(),[self.app._content_page])
+        self.assertEqual(self.app.canvas.cget('bg'),self.app.page.cget('bg'))
         self.app.open_page('settings');self.app.root.update()
         self.app.canvas.yview_moveto(1)
         self.app.open_page('home');self.app.root.update()
         self.assertLess(self.app.canvas.canvasy(0),30)
-        self.assertGreaterEqual(self.app._page_background.winfo_height(),self.app.canvas.winfo_height())
+        self.assertEqual(self.app.canvas.winfo_children(),[self.app._content_page])
 
     def test_dynamic_page_growth_and_collapse_keep_the_bottom_reachable(self):
         self.app.open_page('settings');self.app.root.update()

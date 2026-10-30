@@ -28,6 +28,13 @@ class Updater:
         self.message = ''
         self.controls = None
         self.can_install = update_install.installed(self.root)
+        self.rollback_info = dict(available=False, message='回退到上一版本')
+        from app.platform import rollback
+        if self.can_install and (self.root/'recovery'/rollback.HELPER).is_file():
+            try:
+                self.rollback_info = rollback.status(self.root)
+            except (OSError, ValueError, KeyError, updates.UpdateError):
+                self.rollback_info = dict(available=True, message='打开版本恢复')
         self.job = None
         self.badge = app.th.link(app.bar, '', lambda: app.open_page('settings'))
         receipt = store.read_json(self.root / '.temp/updates/last-result.json', {})
@@ -161,6 +168,35 @@ class Updater:
             self.job = None
         return False
 
+    def rollback(self):
+        if self.busy or not self.rollback_info['available']:
+            return
+        from tkinter import messagebox
+        from app.platform.rollback import HELPER
+        from app.runtime.panel_instance import owner, alive, request_exit
+        import subprocess
+        if not messagebox.askyesno('回退版本', '请先保存尚未保存的编辑。\n\n'
+                '将安全退出助手，恢复本机更新前的程序；个人数据保留当前内容。\n'
+                '回退后默认跳过刚退掉的版本。现在继续？',parent=self.app.root):
+            return
+        try:
+            executable = self.root/'recovery'/HELPER
+            if executable.resolve() != executable.absolute():
+                raise updates.UpdateError('恢复工具路径异常')
+            subprocess.Popen([str(executable),'--root',str(self.root),'--confirmed','--wait'],
+                             cwd=self.root,creationflags=subprocess.CREATE_NO_WINDOW)
+            current = owner(self.root)
+            if not current.get('stopped') and alive(current.get('process')):
+                if not request_exit(self.root):
+                    raise updates.UpdateError('请先退出助手，再在恢复窗口中重试')
+                self.message = '正在安全退出，恢复窗口将继续处理'
+                self.busy = True
+            else:
+                self.app.root.destroy()
+        except (OSError, updates.UpdateError) as exc:
+            self.message = str(exc) if isinstance(exc,updates.UpdateError) else '无法打开独立恢复工具'
+            self.repaint()
+
     def poll(self):
         latest_progress = None
         for _ in range(256):
@@ -217,8 +253,15 @@ class Updater:
         if not self.controls or not self.controls['frame'].winfo_exists():
             return
         c = self.controls
+        state=(self.message,self.busy,self.release,self.can_install,
+               self.rollback_info['available'],self.rollback_info['message'])
+        if c.get('_painted') == state:
+            return
+        c['_painted']=state
         c['status'].configure(text=self.message or '启动后检查当前通道；持续运行时每天检查。更新由你选择。')
         c['check'].configure(state='disabled' if self.busy else 'normal')
+        c['rollback'].configure(state='normal' if self.rollback_info['available'] and not self.busy else 'disabled',
+                                text=self.rollback_info['message'] if self.rollback_info['available'] else '回退到上一版本')
         release = self.release
         if release:
             if not c['wrap'].winfo_manager():
@@ -243,7 +286,7 @@ class Updater:
         width = max(1, c['actions'].winfo_width())
         layout = []
         row, used = 0, 0
-        for name in ('check', 'install', 'later', 'skip', 'website'):
+        for name in ('check', 'install', 'later', 'skip', 'website', 'rollback'):
             button = c[name]
             if name in ('install', 'later', 'skip') and not self.release:
                 continue
@@ -258,7 +301,7 @@ class Updater:
         if c.get('action_layout') == layout:
             return
         c['action_layout'] = layout
-        for name in ('check', 'install', 'later', 'skip', 'website'):
+        for name in ('check', 'install', 'later', 'skip', 'website', 'rollback'):
             c[name].pack_forget()
         for frame in c['action_rows']:
             frame.pack_forget()
@@ -288,14 +331,24 @@ class Updater:
         actions = panel(area, th)
         actions.pack(fill='x', pady=(10, 0))
         controls = dict(frame=area, status=status, notes=notes, wrap=wrap, actions=actions,
-                        action_rows=[th.frame(actions) for _ in range(5)])
+                        action_rows=[th.frame(actions) for _ in range(6)])
         for name, label, command in (
                 ('check', '检查更新', lambda: self.check(manual=True)),
                 ('install', '下载并重启更新', self.install),
                 ('later', '稍后提醒', self.defer),
                 ('skip', '跳过此版本', lambda: self.defer(skip=True)),
-                ('website', '官方下载页', self.website)):
+                ('website', '官方下载页', self.website),
+                ('rollback', '回退到上一版本', self.rollback)):
             button = th.button(actions, label, command)
+            from gui.interactions import help_for
+            help_for(button,{
+                'check':'联网检查当前通道的公开版本，结果显示在此处；检查本身不会安装。',
+                'install':'安装版下载并校验更新，确认后保存数据并退出安装，完成后重新打开设置。源码版和便携版打开官方下载页。',
+                'later':'暂时收起更新提醒，明天再提醒；仍可手动检查。',
+                'skip':'跳过当前提示的版本；以后有更新版本仍会提醒，也可手动检查。',
+                'website':'在浏览器中打开官方下载页，查看发行说明或手动下载安装包。',
+                'rollback':'安装版更新后保留本机更新前一版。只恢复程序，保留当前个人数据；主程序打不开时可使用开始菜单中的回退入口。',
+            }[name])
             controls[name] = button
         help_text(area, th, '安装版支持一键更新；源码版和便携版请手动更新。更新备份仅保存在本机，含个人配置，请勿分享。',
              small=True, muted=True, wraplength=780, justify='left').pack(anchor='w', pady=(10, 0))

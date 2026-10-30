@@ -99,8 +99,7 @@ class App:
         self._page_status = {}
         from app import brand
         self.th = Theme(brand.WINDOW_TITLE,
-                        # At Windows' current DPI, 650px clips existing actions/charts.
-                        # This is only the initial size; navigation preserves resizing.
+                        # Explicit sizes are for isolated UI checks; product opens maximized.
                         size=size or "1210x850",
                         resizable=True, minsize=(880, 560))
         self.root = self.th.root
@@ -122,16 +121,27 @@ class App:
         self.workspace = ContinuousWorkspace(self, _PAGES)
         self.th.workspace = self.workspace
         self.nav.bind('<Configure>', self.workspace.fit_nav, add='+')
+        self.root.bind('<Configure>', self._fit_navigation, add='+')
         self.interactions = InteractionController(self)
         self.canvas.configure(yscrollcommand=self.workspace.on_scroll)
         self._building_key = None
         self._callback_page = None
         from gui.game_resources import GameResources
         self.game_resources = GameResources(self)
+        if size is None:
+            from gui.rendering import MaximizedWindow
+            self.fullscreen_workspace = MaximizedWindow(self.root)
 
-    def _fit_page_background(self):
-        height = max(self.canvas.winfo_height(), self.page.winfo_reqheight())
-        self.canvas.itemconfigure(self._background_win, height=height)
+    def _fit_navigation(self, event):
+        if event.widget is not self.root:return
+        from gui.material import navigation_geometry,workspace_geometry
+        width,_=navigation_geometry(event.width,event.height)
+        if int(self.nav.cget('width'))!=width:self.nav.configure(width=width)
+        scale,margins,gap=workspace_geometry(event.width,event.height)
+        self.body.pack_configure(padx=margins)
+        self.canvas.master.pack_configure(padx=(gap,0))
+        self.th.set_ui_scale(scale)
+        self.workspace.fit_nav()
 
     def _on_destroy(self, event):
         if event.widget is self.root:
@@ -143,9 +153,6 @@ class App:
             if workspace and workspace._follow_pending is not None:
                 self.root.after_cancel(workspace._follow_pending)
                 workspace._follow_pending = None
-            draft = getattr(self, '_composer_draft', None)
-            if draft is not None:
-                draft['generation'] += 1
             self.page_callbacks.cancel_all()
             self.window_callbacks.cancel_all()
             if self._coordinator:
@@ -213,6 +220,10 @@ class App:
     def _build_chrome(self):
         """A shared dark backdrop and worn navigation strip from the video reference."""
         th,c=self.th,COLORS
+        from gui.decoration import Atmosphere
+        self.atmosphere=Atmosphere(self.root)
+        self.atmosphere.place(x=0,y=0,relwidth=1,relheight=1)
+        self.atmosphere.lower()
         self.bar=th.tk.Frame(self.root,bg=c['shell'])
         self.bar.pack(fill='x')
         logo=th.tk.Frame(self.bar,bg=c['shell'],width=48,height=48)
@@ -240,6 +251,8 @@ class App:
         self._install_close_handler()
         self.global_status=th.label(self.bar,'',bg=c['shell'],font=th.font_small,fg=c['ok'])
         self.global_status.pack(side='right',padx=18)
+        from gui.interactions import help_for
+        help_for(self.global_status,lambda:getattr(self,'_runtime_explanation','等待运行状态'))
         self.back_btn=th.link(self.bar,'← 返回',self.go_back)
         self.title_label=th.label(self.bar,'')  # Internal compatibility diagnostics.
         self.body=th.tk.Frame(self.root,bg=c['shell'])
@@ -256,26 +269,26 @@ class App:
         th.label(bottom,'本地优先',bg=c['shell'],fg=c['muted'],font=th.font_small).pack(anchor='w')
 
         content=th.tk.Frame(self.body,bg=c['shell']);content.pack(side='left',fill='both',expand=True)
-        self.canvas=th.tk.Canvas(content,bg=c['shell'],highlightthickness=0,yscrollincrement=20)
-        self.scroll=th.ttk.Scrollbar(content,orient='vertical',command=self.canvas.yview)
+        self.canvas=th.tk.Canvas(content,bg=c['shell'],highlightthickness=0,yscrollincrement=1)
+        self.scroll=th.vertical_scrollbar(content,self._scrollbar)
         # Keep the native scrollbar mapped. Showing it on entering a long page
         # both shrinks the viewport and triggers costly native/theme redraws.
         self.scroll.pack(side='right',fill='y')
         self.scroll.state(['disabled'])
         self.canvas.configure(yscrollcommand=self.scroll.set)
-        self._page_background=th.tk.Frame(self.canvas,bg=c['shell'])
-        self._background_win=self.canvas.create_window((0,0),window=self._page_background,anchor='nw')
         self.page=th.tk.Frame(self.canvas,bg=c['shell'],padx=14,pady=12)
         self._content_page=self.page
+        from gui.rendering import ScrollPaint
+        self.scroll_paint=ScrollPaint(self.root)
         self._win=self.canvas.create_window((0,0),window=self.page,anchor='nw')
         self.canvas.pack(side='left',fill='both',expand=True)
         self._scrolling=False
+        self._wheel_pixels=0.
+        self._wheel_job=None
         def inner(_e=None):
-            self._fit_page_background()
             self.canvas.configure(scrollregion=self.canvas.bbox(self._win));self._update_scroll()
         def viewport(event):
-            for item in (self._background_win,self._win):
-                self.canvas.itemconfigure(item,width=event.width)
+            self.canvas.itemconfigure(self._win,width=event.width)
             inner()
         self._page_configure=inner
         self.page.bind('<Configure>',inner);self.canvas.bind('<Configure>',viewport)
@@ -289,6 +302,7 @@ class App:
         def heartbeat():
             from gui.pages import status_of
             word,why,color=status_of(self.root_dir)
+            self._runtime_explanation=why
             self.global_status.configure(text='● '+word,fg=color)
             from gui.pages import _load_config
             action=_load_config(self.root_dir).get('close_action','exit')
@@ -304,20 +318,21 @@ class App:
         paint=th.tk.Canvas(row,bg=c['shell'],highlightthickness=0,takefocus=0)
         paint.place(x=0,y=0,relwidth=1,relheight=1)
         rail=th.tk.Frame(row,bg=c['shell'],width=3)
-        button=th.tk.Button(row,text=label,command=lambda:self.open_page(key),bg=c['shell'],fg=c['fg'],
-            activebackground=c['card_hi'],activeforeground=c['accent'],font=th.font_nav,relief='flat',bd=0,
-            anchor='w',padx=2,cursor='hand2',highlightthickness=0)
-        button.place(x=20,y=4,relwidth=1,width=-38,relheight=1,height=-8)
+        from gui.ink import NavigationButton
+        button=NavigationButton(row,text=label,command=lambda:self.open_page(key),font=th.font_nav,foreground=c['fg'])
+        button.configure(anchor='w',padx=2,pady=0)
+        button.place(x=20,y=0,relwidth=1,width=-38,relheight=1)
         parts=dict(row=row,rail=rail,button=button,paint=paint)
         from gui.material import paint_navigation
-        def hover(value):
-            parts['hover']=value
+        def hover(value=None):
+            if value is not None:button._feedback(pointer=value)
+            parts['hover']=button._pointer or button._focused
             paint_navigation(parts,key==self.current)
         for target in (row,button,paint):
             target.bind('<Enter>',lambda e:hover(True),add='+')
             target.bind('<Leave>',lambda e:hover(False),add='+')
-        button.bind('<FocusIn>',lambda e:hover(True),add='+')
-        button.bind('<FocusOut>',lambda e:hover(False),add='+')
+        button.bind('<FocusIn>',lambda e:hover(),add='+')
+        button.bind('<FocusOut>',lambda e:hover(),add='+')
         row.bind('<Configure>',lambda _e:paint_navigation(parts,key==self.current))
         paint.bind('<Button-1>',lambda _e:self.open_page(key))
         return parts
@@ -419,10 +434,35 @@ class App:
                 widget = getattr(widget, 'master', None)
             if widget is None and event.widget is not self.canvas:
                 return
-            steps = max(1, abs(event.delta)//120)
-            self.canvas.yview_scroll((-3 if event.delta > 0 else 3)*steps, "units")
+            if not event.delta:
+                return
+            # Keep the full wheel distance and hover transitions, coalescing
+            # native deltas into one frame instead of clipping fast gestures.
+            self._wheel_pixels-=event.delta/120*60
+            if self._wheel_job is None:
+                self._wheel_job=self.window_callbacks.schedule(16,self._flush_wheel)
         except Exception:
             pass
+
+    def _flush_wheel(self):
+        self._wheel_job=None
+        pixels=round(self._wheel_pixels)
+        self._wheel_pixels-=pixels
+        if self._scrolling and pixels:
+            self.canvas.yview_scroll(pixels,'units')
+
+    def _scrollbar(self, *args):
+        # Pixel scrolling must not reduce the native arrow buttons to 1 px.
+        if args[0] == 'scroll' and args[2] == 'units':
+            self.canvas.yview_scroll(int(args[1])*20,'units')
+        else:
+            self.canvas.yview(*args)
+
+    def cancel_wheel(self):
+        if self._wheel_job is not None:
+            self.window_callbacks.cancel(self._wheel_job)
+            self._wheel_job=None
+        self._wheel_pixels=0.
 
     def _update_scroll(self):
         """Derive overflow from the actual viewport, including manual resizing."""

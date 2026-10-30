@@ -123,6 +123,31 @@ class DictionaryControlTests(unittest.TestCase):
 
 
 class ScrollbarDragTests(unittest.TestCase):
+    def test_both_lines_fit_at_multiple_scales_and_last_row_remains_selectable(self):
+        import gc
+        for scale in (1.33,1.67,2.,2.5):
+            with self.subTest(scale=scale):
+                th=Theme('Two-line layout check',size='760x480')
+                root=th.root
+                try:
+                    root.tk.call('tk','scaling',scale)
+                    selected=[]
+                    cards=EntryCards(root,th,selected.append)
+                    rows=[dict(key=str(i),original='sample phrase '+str(i),translation='中文译文完整显示',source_label='我的词条') for i in range(100)]
+                    cards.set_rows(rows,None,'formal');root.update()
+                    for parts in cards.cards.values():
+                        zh=parts['translation'];card=parts['card']
+                        self.assertGreaterEqual(zh.winfo_height(),zh.winfo_reqheight())
+                        self.assertLessEqual(zh.winfo_rooty()+zh.winfo_reqheight(),card.winfo_rooty()+card.winfo_height()-10)
+                    cards.reveal('99').invoke();root.update()
+                    self.assertEqual(selected,['99'])
+                    self.assertLess(len(cards.buttons),12)
+                    parts=cards.cards['99']
+                    self.assertGreaterEqual(parts['translation'].winfo_height(),parts['translation'].winfo_reqheight())
+                    self.assertLessEqual(parts['card'].winfo_rooty()+parts['card'].winfo_height(),cards.canvas.winfo_rooty()+cards.canvas.winfo_height())
+                finally:
+                    root.destroy();gc.collect()
+
     def test_visible_rail_in_narrow_layout_and_real_drag_reaches_last_rows(self):
         th = Theme('Scrollbar check', size='340x420')
         root = th.root

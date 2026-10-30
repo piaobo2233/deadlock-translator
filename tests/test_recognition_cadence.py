@@ -84,9 +84,28 @@ class CadenceTests(unittest.TestCase):
             cadence = RecognitionCadence(interval, clock=lambda: self.now)
             cadence.observe(self.now, True, False)
             self.assertTrue(cadence.ocr_due())
-            self.now += min(max(.25, interval), .2)
+            self.now += .1
             cadence.observe(self.now, True, False)
             self.assertFalse(cadence.ocr_due())
+
+    def test_new_body_burst_is_short_and_respects_resource_setting(self):
+        self.now = 10
+        fast = RecognitionCadence(clock=lambda: self.now)
+        fast.observe(self.now, True, False)
+        self.assertTrue(fast.ocr_due())
+        self.now = 10.16
+        self.assertTrue(fast.ocr_due())
+        self.now = 10.8
+        self.assertTrue(fast.ocr_due())
+        self.now = 11.0
+        self.assertFalse(fast.ocr_due())
+        slow = RecognitionCadence(1.0, clock=lambda: self.now)
+        slow.observe(self.now, True, False)
+        self.assertTrue(slow.ocr_due())
+        self.now += .2
+        self.assertFalse(slow.ocr_due())
+        fast.unavailable()
+        self.assertEqual(fast.capture_interval(), .4)
 
     def test_manual_force_is_temporary_and_failure_clears_activity(self):
         self.assertEqual(self.cadence.capture_interval(force=True), .12)
@@ -217,6 +236,16 @@ class CaptureAndWorkerTests(unittest.TestCase):
             variants.close()
             self.assertEqual(read.call_count, 1)
             pool.assert_not_called()
+
+    def test_same_frame_recheck_can_reuse_preferred_read(self):
+        image = synthetic_chat(('go',))
+        box = (0, 0, image.shape[1], image.shape[0])
+        with patch.object(ocr, '_preferred_read', return_value='no') as preferred:
+            first = next(ocr.ocr_variants(image, box, max_workers=1))
+            self.assertEqual(first[1], 'no')
+            reused = next(ocr.ocr_variants(image, box, max_workers=1, preferred_read=first[1]))
+            self.assertEqual(reused, first)
+            preferred.assert_called_once()
 
     def test_serial_fallback_honors_deadline_between_jobs(self):
         image = synthetic_chat(('go',))

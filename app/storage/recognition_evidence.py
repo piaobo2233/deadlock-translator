@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import threading
+import time
 
 from app.storage import store
 
@@ -20,6 +21,14 @@ class RecognitionEvidenceLog:
         self._lock = threading.RLock()
         self._warned = False
         self._display_seen = OrderedDict()
+        self._status = dict(captures_saved=0, images_saved=0, events_saved=0,
+                            failures=0, last_failure='', last_saved_at=0.)
+
+    def snapshot(self):
+        """Export save health only; never expose crops, text, IDs or paths."""
+        # These fixed numeric/status fields are telemetry, not commit receipts.
+        # The Tk heartbeat must not wait for the worker's disk/fsync lock.
+        return dict(self._status)
 
     @staticmethod
     def key(candidate):
@@ -47,8 +56,11 @@ class RecognitionEvidenceLog:
     def _save(self, records):
         if not store.atomic_write_json(str(self.directory / 'index.json'), {'version':1,'records':records}):
             raise OSError('Evidence index write failed')
+        self._status.update(last_saved_at=time.time(), last_failure='')
 
     def _failure(self, exc):
+        self._status['failures'] += 1
+        self._status['last_failure'] = type(exc).__name__
         if not self._warned:
             self.log(f'[warn] 识别证据保存失败：{type(exc).__name__}；不能据此确认字幕已显示')
             self._warned = True
@@ -87,6 +99,8 @@ class RecognitionEvidenceLog:
                     del records[old]
                 self._save(records)
                 committed = True
+                self._status['captures_saved'] += 1
+                self._status['images_saved'] += int(created_image is not None)
                 for old in evicted:
                     path = self.directory / (old + '.png')
                     if path.is_symlink():
@@ -120,6 +134,7 @@ class RecognitionEvidenceLog:
                 events.append(dict(at=store.now_iso(), **event))
                 records[key]['events'] = events[-64:]
                 self._save(records)
+                self._status['events_saved'] += 1
             except Exception as exc:
                 self._failure(exc)
 

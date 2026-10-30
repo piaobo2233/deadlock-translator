@@ -104,7 +104,6 @@ def build_language_settings(parent,app):
     row,holder=p._row(parent,th,'游戏复制中文自动译英',guide.cget('text'),app)
     var=p._switch(app,holder,'input_translate_enabled',config)
     app.input_translate_control=dict(value=var,holder=holder)
-    app.send_language=language_control(parent,app,'send_target','面板发言目标语言',config)
 
 
 def build_recognition(parent,app):
@@ -160,7 +159,7 @@ def build_region_tools(parent,app):
     actions=th.tk.Frame(parent,bg=C['bg']);actions.pack(fill='x')
     state=dict(alive=True,busy=False,hidden=False,generation=0)
     results=queue.Queue();preview={};editor=[None];buttons=[]
-    schematic=th.tk.Canvas(parent,height=145,bg=C['soft'],highlightthickness=1,highlightbackground=C['border'])
+    schematic=th.tk.Canvas(parent,height=215,bg=C['soft'],highlightthickness=1,highlightbackground=C['border'])
     schematic.pack(fill='x',pady=8)
     source=text(parent,th,'',small=True,muted=True,wraplength=820,justify='left');source.pack(anchor='w',fill='x')
     details=text(parent,th,'',small=True,muted=True,wraplength=820,justify='left')
@@ -173,27 +172,43 @@ def build_region_tools(parent,app):
     detail_button.pack(anchor='w',pady=4)
     help_text(parent,th,'换过 HUD/UI 设置？请重新导入或截取。仅支持主屏全屏/无边框；字号变化仍可能影响识别。',
          small=True,muted=True,wraplength=820,justify='left').pack(anchor='w',pady=4)
+    scene_state={'record':None,'image':None}
     def draw(event=None):
         cfg=p._load_config(app.root_dir);saved=cfg.get('capture_calibration',{})
         screen=tuple(saved.get('screen') or r.screen_size())
         try:
-            rect=saved['rect'] if saved else region_details(cfg,screen)['region']
+            rect=region_details(cfg,screen)['region']
         except ValueError:
             rect=None
         w=max(1,schematic.winfo_width());h=schematic.winfo_height()
-        k=min(max(1,w-20)/screen[0],max(1,h-40)/screen[1]);ox=(w-screen[0]*k)/2;oy=8
+        height=max(260,round(300*th.ui_scale))
+        if int(schematic.cget('height'))!=height:schematic.configure(height=height)
+        if scene_state['record']!=saved:
+            from gui.region_preview import load_preview
+            scene_state.update(record=dict(saved),image=load_preview(app.root_dir,saved))
+        key=(w,h,screen,tuple(rect) if rect else None,str(saved))
+        if getattr(schematic,'_scene_key',None)==key:return
+        schematic._scene_key=key
+        k=min(max(1,w-40)/screen[0],max(1,h-th.font_small.metrics('linespace')-38)/screen[1])
+        sw,sh=max(1,round(screen[0]*k)),max(1,round(screen[1]*k))
+        ox=(w-sw)/2;oy=12
         schematic.delete('all')
-        from gui.theme import mix
-        grid_color=mix(C['soft'],C['border'],.12)
-        for x in range(12,w,24):schematic.create_line(x,6,x,h-6,fill=grid_color)
-        for y in range(6,h,24):schematic.create_line(6,y,w-6,y,fill=grid_color)
+        from PIL import Image, ImageTk
+        scene=scene_state['image']
+        if scene is not None:
+            schematic._photo=ImageTk.PhotoImage(scene.resize((sw,sh),Image.Resampling.LANCZOS),master=schematic)
+            schematic.create_image(ox,oy,image=schematic._photo,anchor='nw')
+        else:
+            schematic._photo=None
+            schematic.create_text(w/2,h/2-16,text='尚未选择局内截图',fill=C['fg'],font=th.font_heading)
+            schematic.create_text(w/2,h/2+20,text='导入完整对局截图，或切回游戏截取画面后保存区域',fill=C['muted'],font=th.font_small)
         for x,y,dx,dy in ((12,12,1,1),(w-12,12,-1,1),(12,h-12,1,-1),(w-12,h-12,-1,-1)):
             schematic.create_line(x+dx*10,y,x,y,x,y+dy*10,fill=C['border'])
-        schematic.create_rectangle(ox,oy,ox+screen[0]*k,oy+screen[1]*k,outline=C['border'])
-        if rect:
+        if scene is not None:schematic.create_rectangle(ox,oy,ox+sw,oy+sh,outline=C['border'])
+        if rect and scene is not None:
             schematic.create_rectangle(ox+rect[0]*k,oy+rect[1]*k,ox+rect[2]*k,oy+rect[3]*k,
-                                       outline=C['accent'],width=2,dash=(4,2))
-        schematic.create_text(w/2,h-14,text='布局示意，非当前截图 · '+('个人区域' if saved else '参考范围'),fill=C['muted'],font=th.font_small)
+                                       outline=C['accent'],width=2,dash=(4,2),tags='capture-region')
+        schematic.create_text(w/2,h-8-th.font_small.metrics('linespace')/2,text='绿色框：聊天搜索范围 · 已保存截图（非实时）' if scene is not None else '导入 / 截取截图并保存区域后在此预览',fill=C['muted'],font=th.font_small)
     schematic.bind('<Configure>',draw)
     def refresh():
         if not state['alive']:return
@@ -220,6 +235,10 @@ def build_region_tools(parent,app):
             details.configure(text=f"物理尺寸 {screen}；当前采集搜索范围 {tuple(info['region'])}；{info['source']}{note}")
         except ValueError as exc:status.configure(text=str(exc),fg=C['warn'])
         draw()
+    def preview_saved():
+        scene_state.update(record=None,image=None)
+        schematic._scene_key=None
+        refresh()
     def periodic():
         if state['alive']:
             refresh();app.after_page(1000,periodic)
@@ -271,7 +290,7 @@ def build_region_tools(parent,app):
                     image,rotated,small=result
                     close_editor()
                     editor[0]=RegionEditor(parent,app,image,'imported_screenshot' if mode=='import' else 'game_capture',
-                                          rotated=rotated,preview=small,on_saved=refresh)
+                                          rotated=rotated,preview=small,on_saved=preview_saved)
                 return
         except queue.Empty:pass
         if time.monotonic()>state['deadline']:
@@ -322,28 +341,3 @@ def build_region_tools(parent,app):
     periodic()
 
 
-def build_input_recovery(parent,app):
-    from app.runtime.session_view import view_path
-    from app.runtime.panel_instance import alive
-    from pathlib import Path
-    last_input={}
-    def copy_original():
-        poll()
-        if last_input.get('original'):
-            app.root.clipboard_clear();app.root.clipboard_append(last_input['original'])
-            app.set_status('已复制上次游戏输入原文',C['ok'])
-    button=app.th.button(parent,'复制上次输入原文',copy_original);button.pack(anchor='w',pady=(6,0))
-    status=text(parent,app.th,'',small=True,muted=True,wraplength=700,justify='left')
-    status.pack(anchor='w',pady=(6,0))
-    def poll():
-        current=store.read_json(str(Path(app.root_dir)/'.temp/panel-instance/translator.json'),{})
-        snapshot=store.read_json(view_path(app.root_dir),{})
-        valid=(isinstance(current,dict) and isinstance(snapshot,dict) and current.get('token') and not current.get('stopped')
-               and alive(current.get('process')) and snapshot.get('session_id')==current['token'])
-        value=snapshot.get('last_input',{}) if valid else {}
-        last_input.clear()
-        if isinstance(value,dict):last_input.update(value)
-        button.configure(state='normal' if last_input.get('original') else 'disabled')
-        status.configure(text=('上次输入：'+str(last_input.get('status',''))) if last_input else '')
-    poll();app._feedback_refreshes.append(poll)
-    app.input_recovery=dict(copy=button,last_input=last_input,status=status)

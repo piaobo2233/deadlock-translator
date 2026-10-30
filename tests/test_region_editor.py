@@ -58,7 +58,7 @@ class RegionEditorTests(unittest.TestCase):
         editor = controls['editor'][0]
         self.app.root.update()
         self.assertTrue(editor.window.winfo_viewable())
-        self.assertEqual(self.app.root.state(), 'normal')
+        self.assertEqual(self.app.root.state(), 'zoomed')
         self.assertEqual(self.app.root.grab_current(), editor.window)
         # External desktop windows may cover a test runner; assert the stack
         # within our application, where the old shade covered this dialog.
@@ -86,6 +86,9 @@ class RegionEditorTests(unittest.TestCase):
             self.repo.save(dict(font_size=22))
             editor.save()
             saved=store.read_json(self.repo.path)
+            from gui.region_preview import load_preview
+            self.assertEqual(load_preview(self.root,saved['capture_calibration']).size,(1600,900))
+            self.assertIsNotNone(self.app.game_settings['schematic']._photo)
             self.assertEqual(saved['capture_calibration']['screen'],[2560,1440])
             self.assertEqual(saved['capture_calibration']['rect'],[100,200,2200,800])
             self.assertEqual(saved['capture_calibration']['coverage'],'unverified')
