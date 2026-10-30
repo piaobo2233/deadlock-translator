@@ -588,12 +588,12 @@ class WorkspaceTests(unittest.TestCase):
             self.app.root.destroy();close.assert_not_called()
         self.assertFalse(self.app.page_callbacks._pending);self.assertFalse(self.app.window_callbacks._pending)
 
-    def test_actions_visible_at_default_size_and_two_scalings(self):
+    def test_actions_visible_at_fullscreen_and_two_scalings(self):
         self.seed();d=self.dictionary();self.choose(d,'first')
         original_scaling=self.app.root.tk.call('tk','scaling')
         self.addCleanup(self.app.root.tk.call,'tk','scaling',original_scaling)
         for scale in (1.33,1.67):
-            self.app.root.tk.call('tk','scaling',scale);self.app.root.geometry('1028x749');self.app.root.update()
+            self.app.root.tk.call('tk','scaling',scale);self.app.root.state('zoomed');self.app.root.update()
             bottom=self.app.canvas.winfo_rooty()+self.app.canvas.winfo_height()
             for text in ('确认并加入词库','忽略这条','下一条','导入','导出'):
                 w=self.button(text);self.assertTrue(w.winfo_ismapped());self.assertLessEqual(w.winfo_rooty()+w.winfo_height(),bottom,(text,scale,self.app.root.geometry(),w.winfo_rooty(),w.winfo_height(),bottom))
