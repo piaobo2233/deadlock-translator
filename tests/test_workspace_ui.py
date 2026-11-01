@@ -90,7 +90,10 @@ class WorkspaceTests(unittest.TestCase):
         def delayed(bundle):
             self.assertNotEqual(threading.get_ident(), owner)
             entered.set()
-            if not release.wait(5): raise TimeoutError('fixture release missing')
+            # The first continuous-page build can exceed five seconds on a
+            # loaded desktop. Keep validation held until the test releases it;
+            # this guard only bounds a broken fixture, not UI startup latency.
+            if not release.wait(30): raise TimeoutError('fixture release missing')
             return original(bundle)
         with patch.object(service, '_inspect_process', side_effect=self.inline_resource_inspection), \
                 patch.object(service, 'validate', side_effect=delayed) as validate:

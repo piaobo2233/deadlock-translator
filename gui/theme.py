@@ -19,11 +19,11 @@ __all__ = ["Theme", "COLORS", "TONE", "TOKENS", "TRY_FONTS", "FONT_LABEL",
 
 TOKENS = {
     # ---- 颜色（§六）----
-    "bg":            "#211D1A",
-    "surface":       "#211D1A",
+    "bg":            "#211C18",
+    "surface":       "#211C18",
     "surface_hover": "#3B3A33",
-    "soft":          "#191714",
-    "shell":         "#211D1A",
+    "soft":          "#302E27",
+    "shell":         "#211C18",
     "nav_selected":  "#171411",
     "selected":      "#35312A",
     "border":        "#514B40",
@@ -31,12 +31,12 @@ TOKENS = {
     "text_dim":      "#C8C0AF",
     "text_ghost":    "#8F887B",
     "accent":        "#60E6A6",
-    "module_hover":  "#3B3A33",
-    "row_hover":     "#544E43",
+    "module_hover":  "#302D27",
+    "row_hover":     "#474338",
     "accent_dim":    "#8AF3BA",
     "danger":        "#ED9080",
     "ok":            "#60E6A6",
-    "paper":         "#EBE6D2",
+    "paper":         "#C8C1AB",
     "ink":           "#20231E",
     # ---- 形状（§八：2~5px 小圆角，硬朗工业化）----
     "radius":        3,
@@ -164,7 +164,7 @@ class Theme:
     """
 
     def __init__(self, title, size="1120x740", resizable=True,
-                 minsize=(880, 560)):
+                 minsize=(880, 560), defer_show=False):
         # [!] minsize 做成参数，是为了那个**小控制窗口**。
         #     原来写死 880x560 —— 已经足够把一个 380 宽的小工具撑成一块空白面板。
         self.backend = "ttk"
@@ -178,6 +178,8 @@ class Theme:
         except Exception:
             self._boot = None
             self.root = tk.Tk()
+        if defer_show:
+            self.root.attributes('-alpha',0.)
         self.root.title(title)
         self.root.geometry(size)
         if minsize:
@@ -201,6 +203,7 @@ class Theme:
 
         # 字体层级：正文 / 小字 / 区块标签 / 页面标题 / 大数字 / 工业标签
         self.ui_scale=1.
+        self._font_density=float(self.root.tk.call('tk','scaling'))
         self._fonts={}
         self.font = self._shared_font(pick_font(self.root, 11))
         self.font_small = self._shared_font(pick_font(self.root, 10))
@@ -214,9 +217,12 @@ class Theme:
 
         if not resizable:
             self.root.resizable(False, False)
+        self._control_images=[]
+        self._control_scale=None
         self._install_ttk()
         self._install_switch()
         self._install_combobox()
+        self.refresh_control_scale()
         # Tk's native theme-change idle callback can outlive `destroy .` while
         # Python still holds the Tcl interpreter. Drain it before destroying
         # the root, without forcing native redraws on every page navigation.
@@ -239,7 +245,9 @@ class Theme:
         return self._fonts[spec]
 
     def set_ui_scale(self,scale):
-        if scale==self.ui_scale:return False
+        density=float(self.root.tk.call('tk','scaling'))
+        if scale==self.ui_scale and density==self._font_density:return False
+        self._font_density=density
         self.ui_scale=scale
         for spec,font in self._fonts.items():font.configure(size=round(spec[1]*scale))
         # Image-backed native buttons need a fresh size after their shared
@@ -249,7 +257,26 @@ class Theme:
         while pending:
             widget=pending.pop();pending.extend(widget.winfo_children())
             if isinstance(widget,PillButton):widget._measure()
+        self.refresh_control_scale()
         return True
+
+    def _control_image(self,image):
+        photo=tk.PhotoImage(master=self.root)
+        self._control_images.append((photo,image))
+        return photo
+
+    def refresh_control_scale(self):
+        """Resize the existing ttk images, preserving their native state map."""
+        from PIL import Image, ImageTk
+        factor=round(float(self.root.tk.call('tk','scaling'))*.6*self.ui_scale,2)
+        if factor==self._control_scale:return
+        self._control_scale=factor
+        for photo,original in self._control_images:
+            size=tuple(max(1,round(value*factor)) for value in original.size)
+            source=ImageTk.PhotoImage(original.resize(size,Image.Resampling.LANCZOS),master=self.root)
+            photo.configure(width=size[0],height=size[1])
+            photo.blank()
+            photo.tk.call(str(photo),'copy',str(source))
 
     # ------------------------------------------------------------ ttk 底座
     def _install_ttk(self):
@@ -327,7 +354,7 @@ class Theme:
         from gui.ink import switch_surface,ring_surface
         for selected,disabled,active in ((False,False,False),(True,False,False),(False,True,False),(True,True,False),(False,False,True),(True,False,True)):
             image=switch_surface(selected,disabled,active)
-            self._switch_images.append(ImageTk.PhotoImage(image, master=self.root))
+            self._switch_images.append(self._control_image(image))
         name = 'GoldSwitch.indicator'
         if name not in style.element_names():
             style.element_create(name, 'image', self._switch_images[0],
@@ -338,8 +365,8 @@ class Theme:
         style.layout('GoldSwitch.TCheckbutton', [('Checkbutton.padding', {'sticky':'nswe','children':[
             (name, {'side':'left','sticky':''}), ('Checkbutton.label', {'side':'left','sticky':'nswe'})]})])
         style.configure('GoldSwitch.TCheckbutton',background=COLORS['bg'],foreground=COLORS['fg'],padding=2)
-        self._scale_image=ImageTk.PhotoImage(ring_surface(),master=self.root)
-        self._scale_active=ImageTk.PhotoImage(ring_surface(True),master=self.root)
+        self._scale_image=self._control_image(ring_surface())
+        self._scale_active=self._control_image(ring_surface(True))
         track=Image.new('RGBA',(16,16),(0,0,0,0))
         ImageDraw.Draw(track).rectangle((0,7,15,9),fill=COLORS['border'])
         self._scale_track=ImageTk.PhotoImage(track,master=self.root)
@@ -366,17 +393,20 @@ class Theme:
         scale.configure(style=name+'.Horizontal.TScale')
         def paint(*_):
             width=max(length,scale.winfo_width())
-            track.configure(width=width,height=30)
+            height=max(24,self._scale_image.height())
+            radius=height//2
+            middle=height//2
+            track.configure(width=width,height=height)
             track.blank()
-            track.put('#1A211A',to=(15,13,width-15,17))
+            track.put('#1A211A',to=(radius,middle-2,width-radius,middle+2))
             amount=max(0,min(1,(float(variable.get())-from_)/(to-from_)))
-            end=15+round((width-30)*amount)
-            if end>15:
-                track.put('#737E61',to=(15,11,end,19))
-                track.put('#B6BE99',to=(15,12,end,18))
-                for x in range(15,end):
+            end=radius+round((width-2*radius)*amount)
+            if end>radius:
+                track.put('#737E61',to=(radius,middle-4,end,middle+4))
+                track.put('#B6BE99',to=(radius,middle-3,end,middle+3))
+                for x in range(radius,end):
                     color=mix('#EFE4C8',COLORS['accent'],max(0,(x-(end-40))/40)*.55)
-                    track.put(color,to=(x,14,x+1,17))
+                    track.put(color,to=(x,middle-1,x+1,middle+2))
         token=variable.trace_add('write',paint)
         scale.bind('<Configure>',paint)
         scale.bind('<Destroy>',lambda e:variable.trace_remove('write',token) if e.widget is scale else None)
@@ -384,14 +414,14 @@ class Theme:
         return scale
 
     def _install_combobox(self):
-        from PIL import Image, ImageDraw, ImageTk
+        from PIL import Image, ImageDraw
         from gui.ink import combo_surface
         style=self.root.style if self._boot else ttk.Style(self.root)
-        self._combo_images=[ImageTk.PhotoImage(combo_surface(active),master=self.root) for active in (False,True)]
+        self._combo_images=[self._control_image(combo_surface(active)) for active in (False,True)]
         arrow=Image.new('RGBA',(48,48));draw=ImageDraw.Draw(arrow)
         draw.line((24,8,24,34),fill=COLORS['muted'],width=6)
         draw.line((12,23,24,35,36,23),fill=COLORS['muted'],width=6)
-        self._combo_arrow=ImageTk.PhotoImage(arrow.resize((24,24),Image.Resampling.LANCZOS),master=self.root)
+        self._combo_arrow=self._control_image(arrow.resize((24,24),Image.Resampling.LANCZOS))
         style.element_create('InkCombo.field','image',self._combo_images[0],('focus',self._combo_images[1]),
                              ('active',self._combo_images[1]),border=12,padding=4,sticky='nswe')
         style.element_create('InkCombo.downarrow','image',self._combo_arrow)
@@ -414,7 +444,7 @@ class Theme:
             box.tk.call(str(popup)+'.f.l','configure','-background','#505044',
                         '-foreground',COLORS['muted'],'-selectbackground','#5A604D',
                         '-selectforeground',COLORS['fg'],'-selectborderwidth',0,
-                        '-font',pick_font(self.root,13,bold=True),'-relief','flat','-activestyle','none',
+                        '-font',self.font_button,'-relief','flat','-activestyle','none',
                         '-borderwidth',8,'-highlightthickness',1,'-highlightbackground',COLORS['border'])
         box.configure(postcommand=skin)
         return box
@@ -467,7 +497,7 @@ class Theme:
             return PillButton(parent,text=text,command=command,font=self.font_button,
                               foreground=COLORS['danger'] if kind=='danger' else None)
         c = TOKENS
-        bg,fg,hover=c['bg'],c['text'],c['surface_hover']
+        bg,fg,hover=parent.cget('bg'),c['text'],c['surface_hover']
         btn = tk.Button(parent, text=text, command=command, bg=bg, fg=fg,
                         activebackground=hover, activeforeground=fg,
                         disabledforeground=c['text_ghost'],
@@ -475,13 +505,14 @@ class Theme:
                         padx=16, pady=7, cursor="hand2", highlightthickness=0,
                         highlightbackground=c["border"],
                         highlightcolor=c["accent"])
-        # Text actions and disclosure headings use a quiet background highlight.
+        btn._hover_surface=True
+        # Follow the containing paper surface, including after module selection.
         def on_enter(_e):
             if str(btn.cget("state")) != "disabled":
-                btn.configure(bg=hover,fg=fg)
+                btn.configure(bg=hover)
 
         def on_leave(_e):
-            btn.configure(bg=bg,fg=fg)
+            btn.configure(bg=parent.cget('bg'))
 
         btn.bind("<Enter>", on_enter)
         btn.bind("<Leave>", on_leave)
@@ -490,7 +521,7 @@ class Theme:
         configure = btn.configure
         def configure_state(cnf=None, **kwargs):
             if kwargs.get('state') == 'disabled':
-                kwargs.update(bg=bg, fg=fg)
+                kwargs.update(bg=parent.cget('bg'))
             return configure(cnf, **kwargs)
         btn.configure = btn.config = configure_state
         return btn

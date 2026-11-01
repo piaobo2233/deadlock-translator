@@ -151,14 +151,9 @@ def build_translation(parent, app):
     from gui.receive_messages import ReceiveMessages
     app.receive_messages = ReceiveMessages(parent, app)
     receive_options=section(parent,th,'接收选项')
-    from gui.material import MaterialFrame
-    online=MaterialFrame(receive_options,bg=C['bg'],padx=4,pady=4);online.pack(fill='x')
-    from gui.interactions import setting_row
-    setting_row(online)
-    controls=panel(online,th);controls.pack(side='right')
+    _,controls=p._row(receive_options,th,'联网翻译',app=app)
     config=p._load_config(app.root_dir)
-    online_var=p._switch(app,controls,'translate_api',config)
-    th.label(online,'联网翻译',font=th.font_heading).pack(anchor='w')
+    p._switch(app,controls,'translate_api',config)
     from gui.game_settings import language_control
     language_control(receive_options,app,'receive_target','收到的消息译成',config)
     text(receive_options,th,'修改后重启助手生效',small=True,muted=True).pack(anchor='w')
@@ -235,7 +230,7 @@ def build_api_settings(parent, app):
         holder.configure(width=400,height=44);holder.pack_propagate(False)
         def fit(e):
             holder.configure(width=max(round(220*th.ui_scale),min(round(420*th.ui_scale),int(e.width*.48))),
-                             height=round(44*th.ui_scale))
+                             height=max(round(44*th.ui_scale),th.font.metrics('linespace')+16))
             holder.grid_configure(padx=(0,max(0,int(e.width*.12)-20)))
         row.bind('<Configure>',fit,add='+')
         th.hairline(parent,pady=(0,2))
@@ -448,7 +443,6 @@ class Dictionary:
         if self.state['tab'] not in {'formal', 'review', 'processed'}:
             self.state.update(tab='formal', selected=None)
         head=heading(parent,th,'词库','修改常用译文，或停用当前选中的词条。')
-        th.label(head,'词库',font=th.font_heading).pack(anchor='w',pady=(0,8))
         self.subtitle=head.subtitle
         self.resource_status = text(head,th,'',small=True,muted=True,wraplength=700)
         self.resource_status.pack(fill='x',pady=(0,10))
@@ -661,7 +655,7 @@ class Dictionary:
         self.arrange_tools()
         for name,btn in self.tabs.items():
             btn.configure(fg=C['accent'] if name==tab else C['muted'])
-            self.tab_rails[name].configure(bg=C['accent'] if name==tab else C['bg'])
+            self.tab_rails[name].configure(bg=C['accent'] if name==tab else btn.master.cget('bg'))
         if tab=='processed':self.processed_tools.pack(fill='x',pady=(10,0))
         else:self.processed_tools.pack_forget()
         self.subtitle.configure(text={'review':'只列尚未处理的内容，在同一页核对、修改和保存。','processed':'可删除处理记录；已经加入词库的译文会保留。'}.get(tab,self.resources.message))

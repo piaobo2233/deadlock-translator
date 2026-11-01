@@ -7,6 +7,9 @@ class ScrollPaint:
         self.pending = None
         self.painting = False
         widget.bind('<Configure>', self.configure, add='+')
+        # The first native Map can arrive after build/update_idletasks, even
+        # when the window manager has already assigned its final geometry.
+        widget.bind('<Map>', self.configure, add='+')
         widget.bind('<Destroy>', self.destroy, add='+')
 
     def configure(self, event):
@@ -39,7 +42,10 @@ class ScrollPaint:
         if visible[0]>=visible[2] or visible[1]>=visible[3]:return
         widget.event_generate('<Expose>',x=visible[0]-x,y=visible[1]-y,
             width=visible[2]-visible[0],height=visible[3]-visible[1])
-        for child in widget.winfo_children():
+        children=widget.winfo_children()
+        layer=getattr(widget,'layer',None)
+        if layer is not None and layer not in children:children.insert(0,layer)
+        for child in children:
             self.expose(child,visible)
 
     def destroy(self, event):

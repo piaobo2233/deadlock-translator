@@ -3,7 +3,8 @@ from gui.theme import COLORS as C
 
 
 def panel(parent, th, *, bg=None, border=False, **kw):
-    return th.tk.Frame(parent, bg=bg or C['bg'], highlightthickness=1 if border else 0,
+    from gui.material import MaterialFrame
+    return MaterialFrame(parent, bg=bg or parent.cget('bg'), highlightthickness=1 if border else 0,
                        highlightbackground=C['border'], **kw)
 
 
@@ -59,7 +60,8 @@ def bordered_button(parent,th,title,command,**pack):
 
 
 def placeholder(entry,variable,th,value):
-    hint=th.label(entry.master,value,bg=C['soft'],fg=C['muted'],font=th.font_small)
+    hint=th.label(entry.master,value,bg=entry.cget('bg'),fg=C['muted'],font=th.font_small)
+    hint._fixed_surface=True
     def update(*_):
         if not entry.winfo_exists():return
         # Combobox popdowns are Tcl windows without a Python Widget object.
@@ -92,6 +94,7 @@ class EntryCards:
         th.hairline(self.frame)
         body=panel(self.frame,th);body.pack(fill='x')
         self.canvas=th.tk.Canvas(body,bg=C['panel'],width=1,height=340,highlightthickness=0,yscrollincrement=1)
+        self.canvas._hover_surface=True
         self.scroll=th.vertical_scrollbar(body,self._scroll)
         # Reserve the rail before the expanding canvas, including narrow windows.
         self.scroll.pack(side='right',fill='y')
@@ -167,6 +170,7 @@ class EntryCards:
                 activebackground=C['card_hi'],activeforeground=C['accent'],font=self.th.font,
                 relief='flat',bd=0,padx=0,pady=0,anchor='w',justify='left',highlightthickness=0,cursor='hand2')
             button.pack(side='left',fill='x',expand=True)
+            button._hover_surface=True
             zh=text(content,self.th,'',small=True,muted=True)
             zh.pack(fill='x',anchor='w',pady=(5,0))
             for widget in (card,rail,content,top,source,zh):
@@ -197,7 +201,7 @@ class EntryCards:
 
     def _paint_selection(self):
         for key,parts in self.cards.items():
-            active=key==self.selected_key;bg=C['card_hi'] if active else C['panel']
+            active=key==self.selected_key;bg=C['card_hi'] if active else self.frame.cget('bg')
             for name in ('card','content','top','source','button','translation'):parts[name].configure(bg=bg)
             parts['rail'].configure(bg=C['accent'] if active else bg)
 

@@ -6,15 +6,22 @@ from functools import lru_cache
 from gui.theme import COLORS as C, mix
 
 
-def navigation_geometry(width, height):
+def navigation_geometry(width, height, density=1.25):
     """Keep the reference ribbon proportions without squeezing small windows."""
-    return max(225, round(width*415/2560)), max(46, round(height*57/1440))
+    return max(round(180*density), round(width*415/2560)), max(round(36.8*density), round(height*57/1440))
 
 
-def workspace_geometry(width,height):
+def workspace_geometry(width,height,density=1.25):
     """Fit the video's readable content columns on a large desktop window."""
-    growth=max(0.,min(1.,(width-1440)/1120,(height-900)/470))
-    return round((1+.4*growth)*20)/20, (round(108*growth),round(300*growth)), round(76*growth)
+    # Work in logical space so high Windows DPI does not also trigger the
+    # same large-screen enlargement as an equally wide low-DPI desktop.
+    growth=max(0.,min(1.,(width/density-1152)/896,(height/density-720)/376))
+    unit=density/1.25
+    left,right=round(108*growth*unit),round(300*growth*unit)
+    gap=round(76*growth*unit)
+    nav,_=navigation_geometry(width,height,density)
+    extra=max(0,width-nav-gap-left-right-round(1750*unit))
+    return round((1+.4*growth)*20)/20, (left+extra//2,right+extra-extra//2), gap
 
 
 @lru_cache(maxsize=96)
@@ -82,6 +89,11 @@ class MaterialFrame(tk.Frame):
         self._painted=None
         self.bind('<Configure>',self.draw,add='+')
 
+    def winfo_children(self):
+        # Page builders enumerate/destroy their content; keep the background
+        # implementation out of that public container interface.
+        return [child for child in super().winfo_children() if child is not self.layer]
+
     def configure(self,cnf=None,**kwargs):
         result=super().configure(cnf,**kwargs)
         if hasattr(self,'layer') and ('bg' in kwargs or 'background' in kwargs):self.draw()
@@ -94,16 +106,24 @@ class MaterialFrame(tk.Frame):
         if (w,h,color)==self._painted or min(w,h)<2:return
         self._painted=(w,h,color)
         canvas=self.layer
-        canvas.configure(bg=C['bg']);canvas.delete('all')
-        # Idle modules blend into the page; their texture appears on hover.
-        if color==C['bg']:return
-        if getattr(self,'_hover_row',False):
+        canvas.configure(bg=color)
+        if getattr(self,'_hover_row',False) and color!=C['bg']:
             paint_paper(canvas,w,h,color,C['module_hover'])
         else:
-            # The video's broad module backdrop is plain; the active row has
-            # the broken paper ends. Keep these two surfaces distinct.
-            canvas.configure(bg=color)
-            canvas.create_rectangle(0,0,w,h,fill=color,outline='')
+            canvas.delete('all')
+            # Fades use the native fill. Fixed RGB tiles avoid both per-pixel
+            # alpha regions on Windows and full-size images for nested panels.
+            if min(w,h)<24 or h>2400 or color not in (C['bg'],C['module_hover']):return
+            root=self.winfo_toplevel()
+            tiles=getattr(root,'_paper_tiles',None)
+            if tiles is None:tiles=root._paper_tiles={}
+            if color not in tiles:
+                from PIL import ImageTk
+                from gui.backdrop import paper_tile
+                tiles[color]=ImageTk.PhotoImage(paper_tile(color),master=canvas)
+            for y in range(0,h,128):
+                for x in range(0,w,128):
+                    canvas.create_image(x,y,image=tiles[color],anchor='nw',tags='grain')
 
 
 def paint_navigation(parts,active):

@@ -37,8 +37,11 @@ def ring_surface(active=False):
 
 def combo_surface(active=False):
     image=Image.new('RGBA',(180,84));draw=ImageDraw.Draw(image)
-    draw.rounded_rectangle((3,3,176,80),radius=16,fill=C['soft'],outline='#A5B69A' if active else '#747665',width=3)
-    draw.rounded_rectangle((8,8,171,75),radius=12,outline='#454B3D',width=2)
+    draw.rounded_rectangle((3,3,176,80),radius=12,fill=C['soft'],outline=C['accent'] if active else '#797263',width=2)
+    rng=random.Random(26)
+    for _ in range(220):
+        x,y=rng.randrange(10,170),rng.randrange(9,75)
+        draw.point((x,y),fill=mix(C['soft'],C['paper'],rng.uniform(.015,.045)))
     return image.resize((90,42),Image.Resampling.LANCZOS)
 
 
@@ -59,7 +62,7 @@ def _paper_surface(width,height,disabled):
         if abs(math.sin(angle))>.85:x=rng.randrange(10,max(11,w-10))
         r=rng.uniform(.5,2.2)
         draw.ellipse((x-r,y-r,x+r,y+r),fill=rng.randrange(40,160))
-    paper='#777B68' if disabled else '#C8C1AB'
+    paper=mix(C['paper'],C['bg'],.72) if disabled else C['paper']
     image=Image.new('RGBA',(w,h),paper);draw=ImageDraw.Draw(image)
     for _ in range(max(160,width*height//8)):
         x,y=rng.randrange(w),rng.randrange(h)
@@ -145,6 +148,7 @@ class PillButton(tk.Button):
         self._amount=0.
         self._pointer=self._focused=self._pressed=self._selected=False
         self._job=None;self._clock=time.monotonic()
+        self._disabled_layer=None
         fg=foreground or C['ink']
         super().__init__(parent,text=text,command=command,font=font,bg=parent.cget('bg'),
                          fg=fg,activeforeground=fg,disabledforeground='#A3A38E',
@@ -237,18 +241,36 @@ class PillButton(tk.Button):
         w,h=self._size
         if not preferred and self.winfo_width()>1:w,h=self.winfo_width(),self.winfo_height()
         disabled=str(self.cget('state'))=='disabled'
-        static_key=self._static_surface_key(w,h) if not disabled and not self._amount and not self._pressed else None
+        static_key=(*self._static_surface_key(w,h),disabled) if not self._amount and not self._pressed else None
         if static_key is not None and static_key==getattr(self,'_drawn_static_key',None):
+            if disabled:self._show_disabled()
             return
         self._drawn_static_key=None
-        if disabled:
-            super().configure(image='',width=self._chars,height=0,padx=self._padx+5,pady=self._pady+5,
-                              disabledforeground=C['muted'])
-            return
-        face=self._surface(w,h)
+        # Keep the same capsule and geometry when disabled. Removing its image
+        # turned actions into unframed text and shifted adjacent buttons.
+        face=rest_surface(w,h,True) if disabled else self._surface(w,h)
         self._face=ImageTk.PhotoImage(face,master=self)
-        super().configure(image=self._face,activebackground=self.cget('bg'),width=self._size[0],height=self._size[1],padx=0,pady=0)
+        super().configure(image=self._face,activebackground=self.cget('bg'),disabledforeground=C['muted'],width=self._size[0],height=self._size[1],padx=0,pady=0)
+        if disabled:self._show_disabled()
+        elif self._disabled_layer is not None:self._disabled_layer.place_forget()
         self._drawn_static_key=static_key
+
+    def _show_disabled(self):
+        # Tk/Windows stipples image buttons even with disabledforeground set.
+        # An inert sibling caption preserves the native disabled command and
+        # tab behavior while keeping the muted paper/text readable.
+        if self._disabled_layer is None:
+            layer=self._disabled_layer=tk.Canvas(self.master,highlightthickness=0,takefocus=0)
+            layer.create_image(0,0,anchor='nw',tags='paper')
+            layer.create_text(0,0,tags='text')
+            layer.bind('<Configure>',lambda e:layer.coords('text',e.width/2,e.height/2))
+        layer=self._disabled_layer
+        layer.configure(bg=self.cget('bg'))
+        layer.itemconfigure('paper',image=self._face)
+        layer.itemconfigure('text',text=self.cget('text'),font=self.cget('font'),fill=C['muted'])
+        layer._help_text=getattr(self,'_help_text','')
+        layer.place(in_=self,x=0,y=0,relwidth=1,relheight=1)
+        layer.tk.call('raise',layer._w)
 
     def _static_surface_key(self,w,h):
         return w,h,self._size,self.cget('bg')
@@ -260,7 +282,10 @@ class PillButton(tk.Button):
         if self._job is not None:self.after_cancel(self._job);self._job=None
 
     def _destroy(self,event):
-        if event.widget is self:self._stop()
+        if event.widget is self:
+            self._stop()
+            if self._disabled_layer is not None and self._disabled_layer.winfo_exists():
+                self._disabled_layer.destroy()
 
 
 class NavigationButton(PillButton):
@@ -295,7 +320,7 @@ class NavigationButton(PillButton):
         full_width=max(full_width,w+offset)
         base,mask=_navigation_paper(full_width,h,color,seed)
         base=base.copy()
-        if self._amount and self._selected:
+        if self._amount:
             base=_apply_liquid(base,self._amount,time.monotonic())
         base.putalpha(mask)
         face=Image.alpha_composite(Image.new('RGBA',base.size,C['shell']),base)

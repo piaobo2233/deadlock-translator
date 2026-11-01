@@ -35,23 +35,20 @@ class Atmosphere(tk.Frame):
 
     def draw(self,event=None):
         size=(self.winfo_width(),self.winfo_height())
-        if size==self._size or min(size)<2:return
-        self._size=size
-        # Fixed matte texture, independently painted beneath opaque controls.
-        # No generated scene, transparency on text, or per-scroll image work.
-        import random
-        from PIL import ImageDraw, ImageFilter
-        rng=random.Random(29)
-        material=Image.new('RGB',(480,270),C['shell'])
-        paint=ImageDraw.Draw(material)
-        for _ in range(3800):
-            x,y=rng.randrange(480),rng.randrange(270)
-            tone=rng.choice(('#25221E','#1C1A18','#292620'))
-            paint.point((x,y),fill=tone)
-        for x in range(-270,480,36):
-            paint.line((x,270,x+270,0),fill='#292621',width=1)
-        material=material.filter(ImageFilter.GaussianBlur(.65))
-        scene=material.resize(size,Image.Resampling.BILINEAR)
+        root=self.winfo_toplevel()
+        screen=(root.winfo_width(),root.winfo_height())
+        origin=(self.winfo_rootx()-root.winfo_rootx(),self.winfo_rooty()-root.winfo_rooty())
+        key=(size,screen,origin)
+        if key==self._size or min(*size,*screen)<2:return
+        self._size=key
+        from gui.backdrop import atmosphere_source
+        # All stationary shell surfaces sample the same image, without seams
+        # or a separate full-window bitmap for each container.
+        cached=getattr(root,'_atmosphere_image',None)
+        if cached is None or cached.size!=screen:
+            cached=root._atmosphere_image=atmosphere_source().resize(screen,Image.Resampling.BILINEAR)
+        x,y=origin
+        scene=cached.crop((x,y,x+size[0],y+size[1]))
         self.photo=ImageTk.PhotoImage(scene,master=self.layer)
         self.layer.delete('all')
         self.layer.create_image(0,0,image=self.photo,anchor='nw')

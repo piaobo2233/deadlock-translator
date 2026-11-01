@@ -15,6 +15,18 @@ import gui.pages
 
 
 class ControlSurfaceTests(unittest.TestCase):
+    def test_background_bitmaps_are_static_opaque_and_tiles_are_bounded(self):
+        from gui.backdrop import atmosphere_source,paper_tile
+        scene=atmosphere_source()
+        self.assertIs(scene,atmosphere_source())
+        self.assertEqual(scene.mode,'RGB')
+        self.assertGreater(max(scene.getextrema()[0])-min(scene.getextrema()[0]),12)
+        for color in (C['bg'],C['module_hover']):
+            tile=paper_tile(color)
+            self.assertEqual(tile.mode,'RGB')
+            self.assertEqual(tile.size,(128,128))
+            self.assertIs(tile,paper_tile(color))
+
     def test_navigation_paper_has_straight_horizontal_edges_and_worn_ends(self):
         from gui.ink import _navigation_paper
         _,mask=_navigation_paper(384,57,C['accent'],71)
@@ -76,6 +88,34 @@ class ContinuousUiTests(unittest.TestCase):
     def open(self,key='home'):
         self.assertTrue(self.app.open_page(key))
         self.app.root.update()
+
+    def test_paper_controls_follow_module_without_recoloring_input_hint(self):
+        self.open('dictionary')
+        a=self.app;d=a.dictionary
+        a.interactions.cancel_animation()
+        a.interactions.paint(d.parent,C['module_hover'])
+        d.list._paint_selection()
+        for button in (d.import_button,*d.tabs.values()):
+            self.assertEqual(button.cget('bg'),button.master.cget('bg'))
+        active=d.tabs['formal']
+        active.event_generate('<Enter>');active.event_generate('<Leave>')
+        self.assertEqual(active.cget('fg'),C['accent'])
+        self.assertEqual(active.cget('bg'),active.master.cget('bg'))
+        pending=[d.parent];hints=[]
+        while pending:
+            widget=pending.pop();pending.extend(widget.winfo_children())
+            if getattr(widget,'_fixed_surface',False):hints.append(widget)
+        self.assertTrue(hints)
+        self.assertTrue(all(hint.cget('bg')==C['soft'] for hint in hints))
+        for parts in d.list.cards.values():
+            self.assertEqual(parts['button'].cget('bg'),d.list.frame.cget('bg'))
+        # Refreshing editor content must retain its decorative layer, and all
+        # nested frames share two small opaque tiles instead of full bitmaps.
+        layer=d.editor.layer
+        d.show(None);a.root.update()
+        self.assertTrue(layer.winfo_exists())
+        self.assertNotIn(layer,d.editor.winfo_children())
+        self.assertLessEqual(len(a.root._paper_tiles),2)
 
     def test_main_scrollbar_has_a_draggable_thumb_and_moves_the_page(self):
         self.open()
@@ -358,8 +398,10 @@ class ContinuousUiTests(unittest.TestCase):
         button._draw();face=button._face;button._draw()
         self.assertIsNot(button._face,face)
         button._pressed=False;button._draw();face=button._face
+        size=(button.winfo_reqwidth(),button.winfo_reqheight())
         button.configure(state='disabled')
-        self.assertEqual(str(button.cget('image')),'')
+        self.assertEqual(str(button.cget('image')),str(button._face))
+        self.assertEqual((button.winfo_reqwidth(),button.winfo_reqheight()),size)
         button.configure(state='normal')
         self.assertIsNot(button._face,face)
         self.assertEqual(str(button.cget('image')),str(button._face))
@@ -577,6 +619,7 @@ class ContinuousUiTests(unittest.TestCase):
         self.assertIsNotNone(button._job)
         self.assertEqual(self.app.current,'home')
         self.assertEqual(button._caption.itemcget(button._caption_text,'text'),'发言翻译')
+        self.assert_liquid_pixels_change(button)
         self.assertEqual(button._caption.coords(button._caption_text)[0],button._padx)
         for key,parts in self.app.nav_buttons.items():
             if key!='send':self.assertIsNone(parts['button']._job,key)
@@ -594,9 +637,19 @@ class ContinuousUiTests(unittest.TestCase):
         self.assertNotEqual(str(sub._face),first)
         self.assertIsNotNone(sub._job)
         self.assertEqual(sub.cget('fg'),C['fg'])
+        self.assert_liquid_pixels_change(sub)
         sub._caption.event_generate('<Leave>',x=5,y=5)
         self.app.root.after(280,self.app.root.quit);self.app.root.mainloop()
         self.assertIsNone(sub._job)
+
+    def assert_liquid_pixels_change(self,button):
+        # New PhotoImage IDs alone do not prove the visible ink is moving.
+        from PIL import ImageChops
+        with patch('gui.ink.time.monotonic',return_value=1.):
+            first=button._surface(button.winfo_width(),button.winfo_height())
+        with patch('gui.ink.time.monotonic',return_value=1.6):
+            second=button._surface(button.winfo_width(),button.winfo_height())
+        self.assertIsNotNone(ImageChops.difference(first.convert('RGB'),second.convert('RGB')).getbbox())
 
     def test_navigation_text_layer_keeps_native_click_keyboard_and_subsection_position(self):
         self.open('home')

@@ -234,8 +234,10 @@ class ContinuousWorkspace:
         count = len(self.subnav.get(app.current, (None, []))[1])
         available = app.nav.winfo_height()-65
         from gui.material import navigation_geometry
-        _,cap=navigation_geometry(app.root.winfo_width(),app.root.winfo_height())
-        height = max(30, min(cap, (available-count*26)//7-4))
+        density=round(float(app.root.tk.call('tk','scaling'))*.75,2)
+        _,cap=navigation_geometry(app.root.winfo_width(),app.root.winfo_height(),density)
+        subheight=app.th.font_small.metrics('linespace')+4
+        height = max(app.th.font_nav.metrics('linespace')+8, min(cap, (available-count*subheight)//7-4))
         padding = 2 if height < 42 else 5
         layout = (height, padding)
         if getattr(self, '_nav_layout', None) == layout:

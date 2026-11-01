@@ -20,7 +20,9 @@ class ScrollPaintTests(unittest.TestCase):
         self.assertFalse(self.errors)
 
     def test_repaint_clips_descendants_and_preserves_entry_selection(self):
-        viewport=tk.Frame(self.root,width=200,height=90)
+        from gui.material import MaterialFrame
+        from gui.theme import COLORS
+        viewport=MaterialFrame(self.root,width=200,height=90,bg=COLORS['bg'])
         viewport.place(x=10,y=10)
         visible=tk.Label(viewport,text='visible')
         visible.place(x=10,y=10,width=100,height=25)
@@ -36,10 +38,11 @@ class ScrollPaintTests(unittest.TestCase):
         self.root.update()
         painter=ScrollPaint(self.root)
         seen=[]
-        for label in (visible,clipped,outside):
+        for label in (viewport.layer,visible,clipped,outside):
             label.bind('<Expose>',lambda event:seen.append((event.widget,event.height)))
         painter.request();painter.request();self.root.update_idletasks()
         self.assertIn((visible,25),seen)
+        self.assertIn((viewport.layer,90),seen)
         self.assertIn((clipped,15),seen)
         self.assertFalse(any(widget is outside for widget,_ in seen))
         self.assertEqual(entry.get(),'草稿与选择保留')

@@ -101,8 +101,9 @@ class App:
         self.th = Theme(brand.WINDOW_TITLE,
                         # Explicit sizes are for isolated UI checks; product opens maximized.
                         size=size or "1210x850",
-                        resizable=True, minsize=(880, 560))
+                        resizable=True, minsize=(880, 560), defer_show=True)
         self.root = self.th.root
+        self._first_present=True
         self.page_callbacks = PageCallbacks(self.root)
         self.window_callbacks = PageCallbacks(self.root)
         self._coordinator = None
@@ -131,13 +132,22 @@ class App:
         if size is None:
             from gui.rendering import MaximizedWindow
             self.fullscreen_workspace = MaximizedWindow(self.root)
+            # Windows has already resolved the maximized client size here.
+            # Choose fonts/columns before constructing the seven sections,
+            # rather than resizing them on the first mainloop Configure.
+            self._fit_navigation()
 
-    def _fit_navigation(self, event):
-        if event.widget is not self.root:return
+    def _fit_navigation(self, event=None):
+        if event is not None and event.widget is not self.root:return
+        width,height=self.root.winfo_width(),self.root.winfo_height()
+        density=round(float(self.root.tk.call('tk','scaling'))*.75,2)
+        layout=(width,height,density)
+        if getattr(self,'_display_layout',None)==layout:return
+        self._display_layout=layout
         from gui.material import navigation_geometry,workspace_geometry
-        width,_=navigation_geometry(event.width,event.height)
-        if int(self.nav.cget('width'))!=width:self.nav.configure(width=width)
-        scale,margins,gap=workspace_geometry(event.width,event.height)
+        nav_width,_=navigation_geometry(width,height,density)
+        if int(self.nav.cget('width'))!=nav_width:self.nav.configure(width=nav_width)
+        scale,margins,gap=workspace_geometry(width,height,density)
         self.body.pack_configure(padx=margins)
         self.canvas.master.pack_configure(padx=(gap,0))
         self.th.set_ui_scale(scale)
@@ -255,7 +265,7 @@ class App:
         help_for(self.global_status,lambda:getattr(self,'_runtime_explanation','等待运行状态'))
         self.back_btn=th.link(self.bar,'← 返回',self.go_back)
         self.title_label=th.label(self.bar,'')  # Internal compatibility diagnostics.
-        self.body=th.tk.Frame(self.root,bg=c['shell'])
+        self.body=Atmosphere(self.root)
         self.body.pack(fill='both',expand=True)
         self.nav=th.tk.Frame(self.body,bg=c['shell'],width=225)
         self.nav.pack(side='left',fill='y');self.nav.pack_propagate(False)
@@ -371,6 +381,7 @@ class App:
         """
         if key not in _PAGES:
             self._fail(key, UnknownPage(key))
+            self._present_initial()
             return False
         key = {'ingame':'recognition'}.get(key, key)
 
@@ -383,6 +394,20 @@ class App:
             self.set_status('界面构建失败：'+str(exc), COLORS['err'])
             traceback.print_exc()
             return False
+        finally:
+            self._present_initial()
+
+    def _present_initial(self):
+        if not self._first_present:return
+        self._first_present=False
+        def present():
+            # Build and settle once at the final size, then reveal one complete
+            # frame. This changes presentation, not the time needed to build.
+            self._fit_navigation()
+            self.scroll_paint.request()
+            self.root.update_idletasks()
+            self.root.attributes('-alpha',1.)
+        self.window_callbacks.schedule(0,present)
 
     def watch_application_fields(self, values, prefix=''):
         import time

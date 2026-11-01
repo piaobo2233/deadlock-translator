@@ -162,6 +162,7 @@ class InteractionController:
     def paint(self, widget, color):
         for child in (widget, *widget.winfo_children()):
             try:
+                if getattr(child,'_fixed_surface',False):continue
                 if child.winfo_class() in ('Frame', 'Label') or getattr(child,'_hover_surface',False):
                     old = child.cget('bg')
                     if old in (C['bg'], C['panel'], C['soft'], C['module_hover'], C['row_hover']):
