@@ -621,7 +621,13 @@ class WorkspaceTests(unittest.TestCase):
 
     def test_preview_shell_and_api_fields_have_the_approved_geometry(self):
         self.app.open_page('api');self.app.root.geometry('1210x850+20+20');self.app.root.update()
-        self.assertEqual(self.app.nav.winfo_width(),225)
+        # The ribbon grows with Windows DPI; keep its text readable while
+        # reserving most of the viewport for native editing controls.
+        nav_width=self.app.nav.winfo_width()
+        widest=max(self.app.th.font_nav.measure(parts['button'].cget('text'))
+                   for parts in self.app.nav_buttons.values())
+        self.assertGreaterEqual(nav_width,widest+38)
+        self.assertLess(nav_width,self.app.root.winfo_width()*.4)
         self.assertEqual(self.app.page.cget('bg'),gui.pages.COLORS['shell'])
         controls=self.app.api_controls
         self.assertLessEqual(abs(controls['box'].winfo_rootx()-controls['entry'].winfo_rootx()),2)
