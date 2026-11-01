@@ -214,7 +214,9 @@ class OnboardingUiTests(unittest.TestCase):
         self.addCleanup(release.set)
         def prepare(*_args):
             started.set()
-            self.assertTrue(release.wait(3))
+            # Keep the worker held across construction of the continuous UI;
+            # the assertion below verifies it remains busy until release.set.
+            self.assertTrue(release.wait(30))
             return {'snapshot': {'build_id': 'fixture'}}
         with patch.object(service, 'inspect', return_value=(None, '尚未准备')), \
                 patch.object(service, 'discover', return_value=Path('fixture')), \
