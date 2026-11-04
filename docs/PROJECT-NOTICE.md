@@ -16,7 +16,7 @@
 
 | 材料 | 来源与说明 |
 | --- | --- |
-| 当前首页 `docs/assets/deadlock-ui/receive.png` | 历史版本真实 Tk 界面，使用隔离演示数据；只能说明当时界面风格。原始制作记录未提供可独立确认的精确程序版本，不能标为 1.0.0 实机验收图 |
+| 当前首页 `docs/assets/deadlock-ui/receive-v1.1.1.png` | 1.1.1 界面改版的 Tk 桌面预览，使用隔离演示环境。 |
 | 同目录 `compose.png`、`usage.png` | 同批历史界面图；不作为当前功能及效果证明 |
 | `docs/assets/app-overview.png`、`app-compose.png` | test.3 实际软件窗口，临时空配置；保留为历史材料，当前首页不再引用 |
 | [锁语品牌素材](assets/locklingo/README.md) | 项目选定的 C 版双气泡原图，由图像生成工具制作；制作时参考官方 Steam 社区图标，来源见素材中的 design-brief.md。生成方式不等于取得 Valve 商标或参考素材的授权；尺寸与格式导出见素材索引。品牌图与真实界面截图分别说明 |
