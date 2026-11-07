@@ -398,6 +398,9 @@ def build_recognition_settings(parent, app):
     config=p._load_config(app.root_dir)
     region=section(parent,th,'识别范围')
     build_recognition(region,app)
+    p._render_spec(app,region,('experimental_multilingual',),config)
+    text(region,th,'关闭时专注英语；开启后增加日语、韩语、俄语等语言。重启助手生效。',
+         small=True,muted=True,wraplength=720).pack(anchor='w',pady=(0,8))
     app.game_settings, app.region_test = build_region_tools(region,app)
     display=section(parent,th,'译文显示')
     controls=p._render_spec(app,display,('font_size',),config)

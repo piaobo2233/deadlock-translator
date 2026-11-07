@@ -212,6 +212,7 @@ def main() -> int:
     recognition_gate = RecognitionGate(config.get('recognition_mode', 'realtime'))
     region_capture = None
     overlay = None
+    receive_multilingual = bool(config.get('experimental_multilingual', False))
     if args.simulate:
         def make_source():
             return simulation.iter_simulate_source(args.simulate, loop=not args.once)
@@ -228,7 +229,7 @@ def main() -> int:
             print(f"[info] 回放输入：{args.replay}（{size[0]}x{size[1]}，{rate:g} 帧/秒）")
             return recognition_capture.iter_ocr_source(interval=interval if args.replay_realtime else 0.0,
                                    threshold=max(3, int(config.get("ocr_votes", 3))),
-                                   multilingual=True, capture_config=config,
+                                   multilingual=receive_multilingual, capture_config=config,
                                    recognition_gate=recognition_gate,
                                    glossary=glossary, exclude=None, only_in_game=False,
                                    debug=bool(getattr(args, "ocr_debug", False)),
@@ -268,7 +269,7 @@ def main() -> int:
         def capture_source(**geometry):
             return recognition_capture.iter_ocr_source(interval=float(config.get("ocr_interval", 0.25)),
                                    threshold=max(3, int(config.get("ocr_votes", 3))),
-                                   multilingual=True,
+                                   multilingual=receive_multilingual,
                                    glossary=glossary,
                                    exclude=overlay_rects,
                                    only_in_game=bool(config.get("only_in_game", True)),

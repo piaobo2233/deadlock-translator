@@ -30,6 +30,33 @@ def chat_body_sized(body, *, scale=1.):
             and body.rect[3] >= body.line_count*round(22*scale))
 
 
+def voice_indicator(mask, *, scale=1.):
+    """Recognize the solid speaker and two sound waves before running OCR."""
+    import cv2
+
+    height, width = mask.shape
+    if not (25 * scale <= height <= 37 * scale and 33 * scale <= width <= 46 * scale):
+        return False
+    _, _, components, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+    glyphs = sorted((x, y, w, h, area) for x, y, w, h, area in components[1:]
+                    if area >= max(1, 3 * scale ** 2))
+    if len(glyphs) != 3:
+        return False
+    x, y, w, h, area = glyphs[0]
+    inner_x, inner_y, inner_w, inner_h, inner_area = glyphs[1]
+    outer_x, outer_y, outer_w, outer_h, outer_area = glyphs[2]
+    return (10 * scale <= w <= 16 * scale and 17 * scale <= h <= 23 * scale
+            and area >= .63 * w * h
+            and 2 * scale <= inner_x - (x + w) <= 6 * scale
+            and 3 * scale <= outer_x - inner_x <= 7 * scale
+            and 5 * scale <= inner_w <= 9 * scale and 13 * scale <= inner_h <= 19 * scale
+            and 7 * scale <= outer_w <= 11 * scale and 20 * scale <= outer_h <= 26 * scale
+            and .35 <= inner_area / (inner_w * inner_h) <= .65
+            and .35 <= outer_area / (outer_w * outer_h) <= .65
+            and abs(y + h / 2 - (inner_y + inner_h / 2)) <= 3 * scale
+            and abs(y + h / 2 - (outer_y + outer_h / 2)) <= 3 * scale)
+
+
 def typing_indicator(image, box, *, scale=1.):
     """Three aligned, solid grey squares are the game's typing animation."""
     import cv2
@@ -37,28 +64,33 @@ def typing_indicator(image, box, *, scale=1.):
     x,y,width,height=map(int,box[:4])
     if height > 75*scale:
         return False
-    # Portraits sit on the left. Only the right-hand body can supply the three
-    # squares; normal black glyphs and their thin antialias edges cannot.
-    left=max(0,x+round(25*scale))
-    crop=image[max(0,y):max(0,y)+height,left:max(left,x+width)]
+    # Exclude the portrait and edges without cutting off a tilted first square.
+    top, bottom = max(0, y + round(8 * scale)), y + height - round(6 * scale)
+    left, right = max(0, x + round(16 * scale)), x + width - round(5 * scale)
+    if bottom <= top or right <= left:
+        return False
+    crop = image[top:bottom, left:right]
     if not crop.size:
         return False
     low,high=crop.min(axis=2),crop.max(axis=2)
     # Recorded animation phases include a dark active square and tinted faint
     # squares. Keep their solid cores; thin glyph edges/shadows must not join
     # those cores into irregular components.
-    grey=((low>=35)&(high<=210)&(high.astype(np.int16)-low<60)).astype(np.uint8)
+    # On a fading or shaded bubble the background itself can be below 210.
+    # Keep only dots with contrast against the light part of this frame.
+    max_grey = min(210, np.percentile(high, 75) - 14)
+    grey=((low>=35)&(high<=max_grey)&(high.astype(np.int16)-low<60)).astype(np.uint8)
     grey=cv2.erode(grey,np.ones((max(2,round(3*scale)),)*2,np.uint8))
     _,_,components,_=cv2.connectedComponentsWithStats(grey,connectivity=8)
     squares=[]
     for sx,sy,sw,sh,area in components[1:]:
-        if (6*scale<=sh<=16*scale and .7<=sw/sh<=1.5 and area/(sw*sh)>=.8):
+        if (6*scale<=sh<=16*scale and .7<=sw/sh<=1.65 and area/(sw*sh)>=.67):
             squares.append((sx,sy,sw,sh))
     if len(squares)!=3:
         return False
     squares.sort()
-    gaps=[b[0]-a[0]-a[2] for a,b in zip(squares,squares[1:])]
-    return (max(s[1] for s in squares)-min(s[1] for s in squares)<=6*scale
-            and max(s[3] for s in squares)-min(s[3] for s in squares)<=3*scale
-            and all(1*scale<=gap<=12*scale for gap in gaps)
+    gaps=[(b[0]+b[2]/2)-(a[0]+a[2]/2) for a,b in zip(squares,squares[1:])]
+    return (max(s[1] for s in squares)-min(s[1] for s in squares)<=8*scale
+            and max(s[3] for s in squares)-min(s[3] for s in squares)<=4*scale
+            and all(11*scale<=gap<=24*scale for gap in gaps)
             and abs(gaps[0]-gaps[1])<=4*scale)

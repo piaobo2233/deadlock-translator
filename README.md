@@ -1,10 +1,10 @@
 <p align="center"><img src="app/assets/brand/locklingo-64.png" width="56" height="56" alt="锁语图标"></p>
 <h1 align="center">锁语 · LockLingo</h1>
 <p align="center">《异锁》（Deadlock）的 Windows 聊天翻译助手</p>
-<p align="center"><strong>1.1.4 · Windows 10/11 x64 · 内置 OCR</strong></p>
+<p align="center"><strong>1.1.5 · Windows 10/11 x64 · 内置 OCR</strong></p>
 <p align="center">
-  <a href="https://github.com/piaobo2233/deadlock-translator/releases/download/v1.1.4/LockLingo-1.1.4-setup.exe"><strong>下载安装包</strong></a> ·
-  <a href="https://github.com/piaobo2233/deadlock-translator/releases/tag/v1.1.4">便携版与校验</a> ·
+  <a href="https://github.com/piaobo2233/deadlock-translator/releases/download/v1.1.5/LockLingo-1.1.5-setup.exe"><strong>下载安装包</strong></a> ·
+  <a href="https://github.com/piaobo2233/deadlock-translator/releases/tag/v1.1.5">便携版与校验</a> ·
   <a href="docs/CHANGELOG.md">更新日志</a>
 </p>
 
@@ -12,7 +12,7 @@
 
 ## 主要功能
 
-- **接收翻译**。本机 OCR 读取聊天，默认在浮窗显示简体中文。面板可查看并复制原文和译文。
+- **接收翻译**。本机 OCR 默认识别英文，译文默认以简体中文显示在浮窗。需要其他语言时，可在「识别与显示」开启「多语言识别（实验）」并重启助手。
 - **发言翻译**。主动开启后，在游戏中复制中文，助手把英文译文写入剪贴板，由你粘贴并发送。
 - **本地优先**。先查词库、记忆和缓存，未命中时可调用你配置的翻译服务。服务商可能计费。
 

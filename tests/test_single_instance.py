@@ -16,13 +16,22 @@ from app.platform import single_instance as instance
 
 
 class SingleInstanceTests(unittest.TestCase):
+    def test_restricted_legacy_install_marker_does_not_block_current_guard(self):
+        with patch.object(instance, '_install_handles', ()), patch.object(
+                instance, '_presence_mutex', side_effect=((None, 42, 0), (None, None, 5))) as open_mutex:
+            instance.retain_install_guard()
+            instance.retain_install_guard()
+            self.assertEqual(instance._install_handles, (42, None))
+            self.assertEqual([call.args[0] for call in open_mutex.call_args_list],
+                             [instance.INSTALL_MUTEX_NAME, instance.LEGACY_INSTALL_MUTEX_NAME])
+
     def test_guard_exception_never_allows_startup(self):
         with patch("ctypes.WinDLL", side_effect=OSError("private path")):
             self.assertEqual(desktop.single_instance_guard(), (None, False))
 
     def test_null_mutex_never_allows_startup(self):
         kernel = Mock()
-        kernel.CreateMutexW.return_value = None
+        kernel.CreateMutexExW.return_value = None
         kernel.GetLastError.return_value = 0
         with patch("ctypes.WinDLL", return_value=kernel):
             self.assertEqual(desktop.single_instance_guard(), (None, False))

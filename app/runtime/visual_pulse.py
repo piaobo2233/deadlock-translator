@@ -19,6 +19,8 @@ class VisualReference:
 
 
 class VisualPulse:
+    TYPING_CAPTURE_HOLD = .4
+
     def __init__(self, tracker, detect, *, scale=1.0, event=lambda reason: None, activity=None):
         self.tracker, self.detect, self.scale, self.event = tracker, detect, scale, event
         self.activity = activity
@@ -28,11 +30,11 @@ class VisualPulse:
         # Store compact body masks, not 64 full screenshots. A late first OCR
         # confirmation must prove continuity, not just match a reappeared word.
         self._history = deque(maxlen=64)
-        self._observed_at = -math.inf
+        self._observed_at = self._last_typing_at = -math.inf
 
-    def _bodies(self, image):
+    def _bodies(self, image, detected):
         bodies = [getattr(box,'visual',None) or visual_body(image, getattr(box,'region',None) or locate_body(image, box, scale=self.scale))
-                  for box in self.detect(image)]
+                  for box in detected]
         bodies = self._unique_bodies(body for body in bodies if body is not None)
         with self._lock:
             references=tuple(self._references.values())
@@ -235,10 +237,14 @@ class VisualPulse:
         if image.flags.writeable:
             image = image.copy()
             image.setflags(write=False)
-        bodies = self._bodies(image)
+        detected = tuple(self.detect(image))
+        bodies = self._bodies(image, detected)
         with self._lock:
             if captured_at <= self._observed_at:
                 return
+            if any(getattr(box, 'skip_ocr', '') == 'typing' for box in detected):
+                self._last_typing_at = captured_at
+            typing = captured_at - self._last_typing_at < self.TYPING_CAPTURE_HOLD
             changed = (self._new_activity(self._latest[2] if self._latest else (), bodies)
                        if self.activity is not None else False)
             self._observed_at = captured_at
@@ -252,7 +258,9 @@ class VisualPulse:
         if self.activity is not None:
             with self._lock:
                 tracking = any(self.tracker.identity_matches(ref.identity) for ref in self._references.values())
-            self.activity(captured_at, changed, tracking)
+            # Keep sampling through a brief gap in the typing animation.
+            # Only a real body wakes OCR.
+            self.activity(captured_at, changed, tracking or typing)
 
     @staticmethod
     def _new_activity(previous, bodies):
@@ -276,6 +284,7 @@ class VisualPulse:
             if observed_at <= self._observed_at:
                 return
             self._observed_at = observed_at
+            self._last_typing_at = -math.inf
             self._latest = None
             self._history.append((observed_at, None))
             references = list(self._references.values())

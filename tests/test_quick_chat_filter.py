@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 
 import app.recognition.ocr as ocr
 from app.recognition.quick_chat import QuickChat
-from app.recognition.chat_area import candidate_inside, chat_body_sized, typing_indicator
+from app.recognition.chat_area import candidate_inside, chat_body_sized, typing_indicator, voice_indicator
 from app.recognition.region import preset
 from app.recognition.reuse import QuickChatPixels, QuickChatTemplates
 from test_ocr_body import synthetic_chat
@@ -71,7 +71,8 @@ class QuickChatFilterTests(unittest.TestCase):
         import numpy as np
         colors = ((85,92,113),(40,48,60),(120,130,160))
         for phase in range(3):
-            image = np.full((44,130,3),(170,180,218),np.uint8)
+            background = (165, 173, 198) if phase == 2 else (170, 180, 218)
+            image = np.full((44,130,3),background,np.uint8)
             for i,(left,top) in enumerate(((45,16),(62,14),(79,20))):
                 image[top:top+10,left:left+12] = colors[(i+phase)%3]
             for scale in (.75,1.,1.5):
@@ -90,6 +91,29 @@ class QuickChatFilterTests(unittest.TestCase):
         for text in ('wait for me','go','...','mmm'):
             ordinary=synthetic_chat((text,))
             self.assertFalse(typing_indicator(ordinary,(0,0,*ordinary.shape[1::-1])))
+
+    def test_voice_indicator_skips_speaker_shape_but_keeps_short_text(self):
+        import cv2
+        import numpy as np
+        from app.vision.presence import visual_body
+
+        speaker = np.zeros((31, 39), np.uint8)
+        cone = np.array([(4, 10), (8, 10), (15, 5), (16, 5),
+                         (16, 24), (15, 24), (8, 19), (4, 19)])
+        cv2.fillPoly(speaker, [cone], 1)
+        for x, y, height, bend in ((21, 7, 16, 3), (26, 4, 23, 5)):
+            for row in range(height):
+                left = x + round(bend * (1 - (2 * row / (height - 1) - 1) ** 2))
+                speaker[y + row, left:left + 4] = 1
+        for scale in (.75, 1., 1.5):
+            with self.subTest(scale=scale):
+                mask = cv2.resize(speaker, None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
+                self.assertTrue(voice_indicator(mask, scale=scale))
+        for text in ('4))', 'mb', 'gl hf', 'tysm'):
+            with self.subTest(text=text):
+                image = synthetic_chat((text,))
+                body = locate_body(image, (0, 0, *image.shape[1::-1]))
+                self.assertFalse(voice_indicator(visual_body(image, body).mask))
 
     def test_ui_body_geometry_preserves_existing_recorded_chat(self):
         from verify.adaptive_ocr_probe import load_samples

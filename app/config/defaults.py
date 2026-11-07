@@ -16,6 +16,7 @@ DEFAULT_CONFIG = {
     "recognize_hotkey": "Ctrl+R",
     "auto_send": True,
     "recognition_mode": "realtime",
+    "experimental_multilingual": False,
     "input_translate_enabled": False,
     "capture_region": {},
     "capture_calibration": {},

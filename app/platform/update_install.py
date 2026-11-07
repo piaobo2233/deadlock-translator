@@ -151,11 +151,11 @@ def mutex_exists(name):
 
 def wait_for_exit(processes, timeout=120):
     from app.runtime.panel_instance import alive
-    from app.platform.single_instance import INSTALL_MUTEX_NAME, MUTEX_NAME
+    from app.platform.single_instance import INSTALL_MUTEX_NAME, LEGACY_INSTALL_MUTEX_NAME, MUTEX_NAME
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if not any(alive(info) for info in processes) and not any(
-                mutex_exists(name) for name in (INSTALL_MUTEX_NAME, MUTEX_NAME)):
+                mutex_exists(name) for name in (INSTALL_MUTEX_NAME, LEGACY_INSTALL_MUTEX_NAME, MUTEX_NAME)):
             return
         time.sleep(.25)
     raise UpdateError('助手未能安全退出，更新已取消；请完成保存后重试')

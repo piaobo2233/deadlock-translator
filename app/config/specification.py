@@ -118,6 +118,9 @@ SPEC = [
          hint="默认 0 = 不限制。按**本机日期**跨天自动重置。\n"
               "未知费用不会因跨日变成零；单价和用量不完整时暂停新 API。**改完要重开**。",
          live=False),
+    dict(key='experimental_multilingual', page='OCR', type='bool', label='多语言识别（实验）',
+         hint='默认只识别英文。开启后增加日语、韩语、俄语等语言，可能增加识别耗时。重启助手生效。',
+         live=False),
     dict(key="ocr_interval", page="OCR", type="float", lo=0.1, hi=2.0, step=0.05,
          label="截屏间隔（秒）",
          hint="聊天气泡存活 10 秒，默认 0.25 秒能采到约 40 帧。调大会漏消息，"

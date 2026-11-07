@@ -140,7 +140,7 @@ DEFAULT_GLOSSARY = {
     "yeah": "嗯", "nt": "打得不错", "gb": "打得好", "tyt": "等会聊",
     "gogo": "上上上", "gogogo": "上上上",
     "fuck": "操", "shit": "妈的",
+
+    # Standalone hero callout observed in chat, including before game data activation.
+    "celeste": "赛凌",
 }
-
-
-

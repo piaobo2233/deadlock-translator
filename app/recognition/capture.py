@@ -288,7 +288,7 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                                **({'capture_rect':selected_rect} if selected_rect else {}))
         if selected_rect is None:
             return found
-        from app.recognition.chat_area import candidate_inside, chat_body_sized, typing_indicator, ChatAreaBox
+        from app.recognition.chat_area import candidate_inside, chat_body_sized, typing_indicator, voice_indicator, ChatAreaBox
         kept=[b for b in found if candidate_inside(b,image.shape,scale=sh/ocr.REF_H)]
         if stats is not None:
             stats['chat_area_clipped_skipped']=stats.get('chat_area_clipped_skipped',0)+len(found)-len(kept)
@@ -312,9 +312,14 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                     skip='native_template'
                     if stats is not None:
                         stats['quick_chat_template_skipped']=stats.get('quick_chat_template_skipped',0)+1
-            # Untranslated native/typing boxes remain layout obstacles. Their
+            # Untranslated native/typing/voice boxes remain layout obstacles. Their
             # geometry cannot wake OCR, vote on text or own a message identity.
             visual=VisualBody(region.tracking_box,None) if skip else visual_body(image,region)
+            if not skip and visual is not None and voice_indicator(visual.mask, scale=sh/ocr.REF_H):
+                skip = 'voice'
+                visual = VisualBody(region.tracking_box, None)
+                if stats is not None:
+                    stats['voice_indicator_skipped'] = stats.get('voice_indicator_skipped', 0) + 1
             value=ChatAreaBox(candidate,region,visual,skip)
             duplicate=next((i for i,old in enumerate(shaped)
                 if same_body_box(old.region.rect,region.rect,scale=sh/ocr.REF_H)),None)

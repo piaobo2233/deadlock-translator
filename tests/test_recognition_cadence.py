@@ -160,6 +160,38 @@ class ActivityLifetimeTests(unittest.TestCase):
         self.assertEqual(self.cadence.capture_interval(), .4)
         self.assertFalse(self.tracker.confirmed)
 
+    def test_typing_prepares_capture_and_only_text_wakes_ocr(self):
+        from app.recognition.chat_area import ChatAreaBox
+        from app.vision.body import BodyRegion
+
+        image = np.zeros((120, 300, 3), np.uint8)
+        box = (40, 30, 100, 40)
+        region = BodyRegion(rect=box, text_rect=box)
+        self.pulse.update(image, self.now)
+        self.assertTrue(self.cadence.ocr_due())
+
+        self.now += .4
+        self.boxes = [ChatAreaBox(box, region, VisualBody(region.tracking_box, None), 'typing')]
+        self.pulse.update(image, self.now)
+        self.assertEqual(self.cadence.capture_interval(), .12)
+        self.assertFalse(self.cadence.ocr_due())
+        self.assertFalse(self.tracker.confirmed)
+
+        self.boxes = []
+        self.now += .12
+        self.pulse.update(image, self.now)
+        self.assertEqual(self.cadence.capture_interval(), .12)
+        self.assertFalse(self.cadence.ocr_due())
+        self.now += .3
+        self.pulse.update(image, self.now)
+        self.assertEqual(self.cadence.capture_interval(), .4)
+
+        self.now += .12
+        message = synthetic_chat(('go',))
+        self.boxes = [(0, 0, *message.shape[1::-1])]
+        self.pulse.update(message, self.now)
+        self.assertTrue(self.cadence.ocr_due())
+
     def test_stable_message_survives_expired_burst_without_widening_visual_lease(self):
         image, identity = self.bind()
         for _ in range(40):

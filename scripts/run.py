@@ -13,16 +13,27 @@ def run():
         return apply_update(sys.argv[2])
     if getattr(sys, 'frozen', False):
         from app.platform.update_install import mutex_exists, UPDATE_MUTEX
+        helper = sys.argv[1:2] in (['--ocr-worker'], ['--inspect-game-resources'], ['--watch-game'])
         if mutex_exists(UPDATE_MUTEX):
-            if sys.argv[1:2] not in (['--ocr-worker'], ['--inspect-game-resources'], ['--watch-game']):
+            if not helper:
                 import ctypes
                 ctypes.windll.user32.MessageBoxW(None, '锁语正在更新，请稍后重新打开。', '锁语更新', 0)
             return 1
         from app.platform.single_instance import retain_install_guard
-        retain_install_guard()
+        try:
+            retain_install_guard()
+        except OSError as exc:
+            code = getattr(exc, 'winerror', None) or exc.errno
+            message = f'Windows 无法取得锁语启动保护权限（{code}）。请完全退出其他锁语进程后重试。'
+            if not helper and '--headless' not in sys.argv and '--replay' not in sys.argv:
+                import ctypes
+                ctypes.windll.user32.MessageBoxW(None, message, '锁语启动', 0)
+            elif sys.stderr is not None:
+                print(message, file=sys.stderr)
+            return 1
         recovery = Path(sys.executable).parent / 'backups' / 'rollback'
         if mutex_exists(UPDATE_MUTEX) or any((recovery/name).exists() for name in ('pending.json','restore.json')):
-            if sys.argv[1:2] not in (['--ocr-worker'], ['--inspect-game-resources'], ['--watch-game']):
+            if not helper:
                 import ctypes
                 ctypes.windll.user32.MessageBoxW(None,
                     '更新或恢复尚未完成。请使用开始菜单中的回退入口完成恢复后再打开锁语。', '锁语恢复', 0)

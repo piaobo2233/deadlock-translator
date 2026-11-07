@@ -241,7 +241,7 @@ def configure_receive_languages(enabled=True, *, resident=True):
     global _RECEIVE_MODEL, _RESIDENT, _RESIDENT_SETTINGS
     from app.recognition.languages import RECEIVE_LANGUAGES
     model_dir = Path(__file__).resolve().parent / 'models'
-    required = RECEIVE_LANGUAGES + ('chi_sim',) if enabled else ('eng',)
+    required = RECEIVE_LANGUAGES + ('chi_sim',) if enabled else ('eng', 'chi_sim')
     missing = [name for name in required if not (model_dir / (name + '.traineddata')).is_file()]
     if missing:
         raise RuntimeError('缺少接收语言模型：' + ', '.join(missing))
@@ -250,7 +250,7 @@ def configure_receive_languages(enabled=True, *, resident=True):
     _RESIDENT_SETTINGS = None
     _DIAGNOSTICS.reset()
     _DIAGNOSTICS.backend('cli')
-    if enabled and resident:
+    if resident:
         _RESIDENT_SETTINGS = (pytesseract.pytesseract.tesseract_cmd,model_dir,_RECEIVE_MODEL,_USER_WORDS)
         try:
             from app.recognition.resident import ResidentReader

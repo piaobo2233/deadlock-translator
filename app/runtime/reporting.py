@@ -9,6 +9,7 @@ CAPTURE_DIAGNOSTIC_FIELDS = {
     'frames', 'boxes', 'boxes_distinct', 'empty_frames', 'capture_failures', 'dropped', 'no_ocr',
     'garbage_filtered', 'no_consensus', 'confirmed', 'handled', 'handled_recheck',
     'chat_area_clipped_skipped', 'chat_area_shape_skipped', 'typing_indicator_skipped',
+    'voice_indicator_skipped',
     'chat_body_duplicate_skipped', 'quick_chat_template_skipped', 'quick_chat_pixel_skipped',
     'native_chinese_filtered', 'unchanged_rejected_skip', 'verified_pixels_skip',
     'geometry_only_ocr_skipped', 'stale_source_frame_skipped', 'source_frame_reused',
