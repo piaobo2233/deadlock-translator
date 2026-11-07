@@ -1,10 +1,10 @@
 <p align="center"><img src="app/assets/brand/locklingo-64.png" width="56" height="56" alt="锁语图标"></p>
 <h1 align="center">锁语 · LockLingo</h1>
 <p align="center">《异锁》（Deadlock）的 Windows 聊天翻译助手</p>
-<p align="center"><strong>1.1.3 · Windows 10/11 x64 · 内置 OCR</strong></p>
+<p align="center"><strong>1.1.4 · Windows 10/11 x64 · 内置 OCR</strong></p>
 <p align="center">
-  <a href="https://github.com/piaobo2233/deadlock-translator/releases/download/v1.1.3/LockLingo-1.1.3-setup.exe"><strong>下载安装包</strong></a> ·
-  <a href="https://github.com/piaobo2233/deadlock-translator/releases/tag/v1.1.3">便携版与校验</a> ·
+  <a href="https://github.com/piaobo2233/deadlock-translator/releases/download/v1.1.4/LockLingo-1.1.4-setup.exe"><strong>下载安装包</strong></a> ·
+  <a href="https://github.com/piaobo2233/deadlock-translator/releases/tag/v1.1.4">便携版与校验</a> ·
   <a href="docs/CHANGELOG.md">更新日志</a>
 </p>
 

@@ -2,6 +2,7 @@
 import argparse
 import ctypes
 import json
+import os
 from pathlib import Path
 import queue
 import subprocess
@@ -137,7 +138,9 @@ def main():
                 update_install.wait_for_exit([], timeout=60)
             finally:
                 api.CloseHandle(handle)
-            subprocess.Popen([str(registered_uninstaller(root))], cwd=root)
+            # The uninstaller invokes this one-file helper again after we exit.
+            env = dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT='1')
+            subprocess.Popen([str(registered_uninstaller(root))], cwd=root, env=env)
         except (OSError, UpdateError):
             ctypes.windll.user32.MessageBoxW(None,
                 '未能打开卸载程序。请退出锁语后，从 Windows 应用列表卸载。', '卸载锁语', 0x10)

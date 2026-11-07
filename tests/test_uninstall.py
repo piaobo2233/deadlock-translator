@@ -93,4 +93,7 @@ class UninstallCleanupTests(unittest.TestCase):
              patch.object(recover.subprocess, 'Popen', side_effect=lambda *a, **k: events.append('launch')) as launch:
             self.assertEqual(recover.main(), 0)
         self.assertEqual(events, ['wait', 'release', 'launch'])
-        launch.assert_called_once_with([str(executable)], cwd=self.root)
+        launch.assert_called_once()
+        self.assertEqual(launch.call_args.args, ([str(executable)],))
+        self.assertEqual(launch.call_args.kwargs['cwd'], self.root)
+        self.assertEqual(launch.call_args.kwargs['env']['PYINSTALLER_RESET_ENVIRONMENT'], '1')

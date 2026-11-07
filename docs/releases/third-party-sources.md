@@ -1,6 +1,6 @@
 # 1.0.1 第三方源码与替换说明
 
-1.1.3 的对应源码随 [1.1.3 Release](https://github.com/piaobo2233/deadlock-translator/releases/tag/v1.1.3) 提供。OCR 和第三方源码归档沿用 1.1.2 的内容，附件名更新为 1.1.3。
+1.1.4 的对应源码随 [1.1.4 Release](https://github.com/piaobo2233/deadlock-translator/releases/tag/v1.1.4) 提供。OCR 和第三方源码归档沿用 1.1.3 的内容，附件名更新为 1.1.4。
 
 本版沿用 1.0.0 的固定 OCR 输入及 Python 组件版本。各组件许可与声明保留在发行包 `licenses/`；本版额外保留 Python 组件的 `METADATA`，便于核对实际构建输入。
 
