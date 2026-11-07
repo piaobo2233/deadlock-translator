@@ -118,6 +118,7 @@ def main():
     group.add_argument('--restore',action='store_true')
     group.add_argument('--apply-update',type=Path)
     group.add_argument('--uninstall-cleanup',action='store_true')
+    group.add_argument('--open-uninstaller',action='store_true')
     parser.add_argument('--setup',type=Path)
     parser.add_argument('--update-active',action='store_true')
     parser.add_argument('--confirmed',action='store_true')
@@ -127,6 +128,21 @@ def main():
     if args.apply_update:
         return update_install.run(args.apply_update)
     root=(args.root or Path(sys.executable).parent.parent).absolute()
+    if args.open_uninstaller:
+        from app.platform.uninstall import registered_uninstaller
+        try:
+            registered_uninstaller(root)
+            api, handle = guard(update_install.UPDATE_MUTEX)
+            try:
+                update_install.wait_for_exit([], timeout=60)
+            finally:
+                api.CloseHandle(handle)
+            subprocess.Popen([str(registered_uninstaller(root))], cwd=root)
+        except (OSError, UpdateError):
+            ctypes.windll.user32.MessageBoxW(None,
+                '未能打开卸载程序。请退出锁语后，从 Windows 应用列表卸载。', '卸载锁语', 0x10)
+            return 1
+        return 0
     if args.uninstall_cleanup:
         from app.platform.uninstall import cleanup
         try:

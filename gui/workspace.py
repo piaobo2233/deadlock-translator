@@ -421,6 +421,7 @@ def build_settings(parent, app):
     from gui.game_resources import build
     build(parent, app, inspect=False)
     build_preferences(parent,app)
+    app.updater.build_uninstall(parent)
 
 
 class Dictionary:

@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import zipfile
 
 from app.platform import game_autostart, uninstall
@@ -78,3 +78,19 @@ class UninstallCleanupTests(unittest.TestCase):
             self.assertFalse(uninstall.delete_registry_value('test-key', 'test-name', lambda *_: False))
             key.assert_called_once_with(winreg.HKEY_CURRENT_USER, 'test-key', 0, winreg.KEY_QUERY_VALUE)
             remove.assert_not_called()
+
+    def test_uninstaller_is_started_after_shutdown_and_guard_release(self):
+        from scripts import recover
+        events = []
+        executable = self.root / 'unins000.exe'
+        api = Mock()
+        api.CloseHandle.side_effect = lambda *_: events.append('release')
+        args = ['recover', '--root', str(self.root), '--open-uninstaller']
+        with patch('sys.argv', args), \
+             patch.object(uninstall, 'registered_uninstaller', return_value=executable), \
+             patch.object(recover, 'guard', return_value=(api, 1)), \
+             patch.object(recover.update_install, 'wait_for_exit', side_effect=lambda *a, **k: events.append('wait')), \
+             patch.object(recover.subprocess, 'Popen', side_effect=lambda *a, **k: events.append('launch')) as launch:
+            self.assertEqual(recover.main(), 0)
+        self.assertEqual(events, ['wait', 'release', 'launch'])
+        launch.assert_called_once_with([str(executable)], cwd=self.root)

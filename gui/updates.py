@@ -27,6 +27,8 @@ class Updater:
         self.busy = False
         self.message = ''
         self.controls = None
+        self.uninstall_button = None
+        self.uninstall_job = None
         self.can_install = update_install.installed(self.root)
         self.rollback_info = dict(available=False, message='回退到上一版本')
         from app.platform import rollback
@@ -197,6 +199,44 @@ class Updater:
             self.message = str(exc) if isinstance(exc,updates.UpdateError) else '无法打开独立恢复工具'
             self.repaint()
 
+    def uninstall(self):
+        if self.busy or not self.can_install:
+            return
+        from tkinter import messagebox
+        from app.platform import uninstall
+        from app.runtime.panel_instance import owner, alive, request_exit
+        if not messagebox.askyesno('卸载锁语', '请先保存尚未保存的编辑。\n\n'
+                '确认后将退出助手并打开卸载程序，你可以选择是否保留个人资料。继续吗？',
+                parent=self.app.root):
+            return
+        try:
+            self.uninstall_job = uninstall.launch_helper(self.root)
+        except (OSError, updates.UpdateError) as exc:
+            message = str(exc) if isinstance(exc, updates.UpdateError) else '无法启动卸载助手，请从 Windows 应用列表卸载'
+            self.app.set_status(message, COLORS['err'])
+            return
+        self.busy = True
+        self.repaint()
+        current = owner(self.root)
+        if not current.get('stopped') and alive(current.get('process')):
+            if request_exit(self.root):
+                self.app.set_status('正在保存并退出，退出后会打开卸载程序', COLORS['muted'])
+            else:
+                self.app.set_status('请从托盘退出，卸载程序会在助手退出后打开', COLORS['err'])
+        else:
+            self.app.root.destroy()
+
+    def build_uninstall(self, parent):
+        if not self.can_install:
+            return
+        from gui.appearance import section
+        area = section(parent, self.app.th, '卸载')
+        help_text(area, self.app.th, '退出助手并打开卸载程序。卸载时可选择是否保留个人资料。',
+                  small=True, muted=True, wraplength=740).pack(anchor='w')
+        self.uninstall_button = self.app.th.button(area, '卸载锁语', self.uninstall)
+        self.uninstall_button.pack(anchor='w', pady=(8, 0))
+        self.uninstall_button.configure(state='disabled' if self.busy else 'normal')
+
     def poll(self):
         latest_progress = None
         for _ in range(256):
@@ -234,6 +274,8 @@ class Updater:
             receipt = store.read_json(self.job.parent / 'result.json', {})
             self.message = receipt.get('message', '更新未完成，请重试')
             self.busy, self.job = False, None
+        if self.uninstall_job is not None and self.uninstall_job.poll() is not None:
+            self.busy, self.uninstall_job = False, None
         self.repaint()
         try:
             if self.app.root.winfo_exists():
@@ -258,6 +300,8 @@ class Updater:
         if c.get('_painted') == state:
             return
         c['_painted']=state
+        if self.uninstall_button is not None and self.uninstall_button.winfo_exists():
+            self.uninstall_button.configure(state='disabled' if self.busy else 'normal')
         c['status'].configure(text=self.message or '启动后检查当前通道；持续运行时每天检查。更新由你选择。')
         c['check'].configure(state='disabled' if self.busy else 'normal')
         c['rollback'].configure(state='normal' if self.rollback_info['available'] and not self.busy else 'disabled',

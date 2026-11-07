@@ -256,6 +256,29 @@ class UpdateUiTests(unittest.TestCase):
         self.assertFalse(updater.badge.winfo_manager())
         self.assertEqual(str(updater.controls['install'].cget('state')),'normal')
 
+    def test_uninstall_button_confirms_and_requests_safe_shutdown(self):
+        updater = self.updater
+        self.assertIsNone(updater.uninstall_button)
+        updater.can_install = True
+        updater.build_uninstall(self.app.th.frame(self.app.root))
+        self.assertEqual(updater.uninstall_button.cget('text'), '卸载锁语')
+        with patch('tkinter.messagebox.askyesno', return_value=False) as confirm, \
+             patch('app.platform.uninstall.launch_helper') as launch, \
+             patch('app.runtime.panel_instance.owner', return_value={'process': {'pid': 42}}), \
+             patch('app.runtime.panel_instance.alive', return_value=True), \
+             patch('app.runtime.panel_instance.request_exit', return_value=True) as shutdown:
+            updater.uninstall_button.invoke()
+            launch.assert_not_called()
+            shutdown.assert_not_called()
+            confirm.return_value = True
+            updater.uninstall_button.invoke()
+            launch.assert_called_once_with(self.root)
+            shutdown.assert_called_once_with(self.root)
+            self.assertEqual(str(updater.uninstall_button.cget('state')), 'disabled')
+            launch.return_value.poll.return_value = 1
+            updater.poll()
+            self.assertEqual(str(updater.uninstall_button.cget('state')), 'normal')
+
     def test_controls_remain_accessible_at_minimum_window_width(self):
         self.updater.events.put(('checked', u.parse_release(release_raw())))
         self.updater.poll()

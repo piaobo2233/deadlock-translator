@@ -102,7 +102,7 @@ UsePreviousAppDir=yes
 CloseApplications=no
 RestartApplications=no
 AppMutex=DeadlockTranslate_SingleInstance,DeadlockTranslate_InstallGuard,Local\LockLingo_RecoveryWindow
-SetupLogging=yes
+SetupLogging=no
 AllowNoIcons=yes
 DisableWelcomePage=no
 

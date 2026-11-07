@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 import shutil
 import stat
+import subprocess
 import time
 import zipfile
 
@@ -16,6 +17,26 @@ APPROVAL_KEY = r'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupAppro
 RUNTIME_DIRS = ('.temp/panel-instance', '.temp/updates', '.temp/input-runs',
                 'backups/updates', 'backups/rollback')
 RUNTIME_FILES = ('.temp/session-view.json', '.temp/diagnostic-events.json')
+
+
+def registered_uninstaller(root):
+    root = Path(root).absolute()
+    path = root / 'unins000.exe'
+    if not update_install.installed(root) or root.resolve() != root or path.resolve() != path:
+        raise update_install.UpdateError('未找到此安装的卸载程序，请从 Windows 应用列表卸载')
+    return path
+
+
+def launch_helper(root):
+    from app.platform.rollback import HELPER
+    root = registered_uninstaller(root).parent
+    helper = root / 'recovery' / HELPER
+    if helper.resolve() != helper or not helper.is_file():
+        raise update_install.UpdateError('卸载助手不可用，请从 Windows 应用列表卸载')
+    if update_install.mutex_exists(update_install.UPDATE_MUTEX):
+        raise update_install.UpdateError('正在更新或退出，请稍后再卸载')
+    return subprocess.Popen([str(helper), '--root', str(root), '--open-uninstaller'],
+                            cwd=root, creationflags=subprocess.CREATE_NO_WINDOW)
 
 
 def plain(path):
