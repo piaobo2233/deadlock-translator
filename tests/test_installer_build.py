@@ -19,6 +19,7 @@ class InstallerInputTests(unittest.TestCase):
             source=Path(directory)
             with self.assertRaisesRegex(ValueError,'源码不匹配'):build.verify_recovery_source(source)
             names=('app/platform/rollback.py','app/platform/update_install.py','app/platform/updates.py',
+                   'app/platform/uninstall.py','app/platform/game_autostart.py',
                    'app/storage/store.py','app/storage/locking.py','gui/updates.py','scripts/run.py')
             rows=[dict(path=name,sha256=build.digest(ROOT/name)) for name in names]
             (source/'BUILD-SOURCE.json').write_text(json.dumps(dict(files=rows)),encoding='utf-8')

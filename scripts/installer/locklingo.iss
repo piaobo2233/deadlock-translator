@@ -41,8 +41,11 @@
 #ifndef RunningMessage
   #define RunningMessage "LockLingo is still running. Exit it from the tray first, then run the installer again."
 #endif
-#ifndef KeepDataMessage
-  #define KeepDataMessage "Keep your personal data (settings, API key, glossary, memory)? Choose No to delete it."
+#ifndef PurgeDataMessage
+  #define PurgeDataMessage "Keep personal data and local LockLingo backups? Yes keeps them. No permanently deletes them for a full uninstall."
+#endif
+#ifndef UninstallCleanupError
+  #define UninstallCleanupError "LockLingo cleanup could not finish. Close any running LockLingo windows and retry the uninstall."
 #endif
 #ifndef UninstallRunningMessage
   #define UninstallRunningMessage "Exit LockLingo from the tray before uninstalling."
@@ -125,6 +128,9 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#LauncherFile}"; WorkingDir:
 
 [Run]
 Filename: "{app}\{#LauncherFile}"; Description: "{cm:LaunchProgram,{#AppName}}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent; Check: RecoverySucceeded
+
+[UninstallDelete]
+Type: dirifempty; Name: "{app}"
 
 [Code]
 var
@@ -248,20 +254,44 @@ begin
   if InstallerGuard <> 0 then RecoveryCloseHandle(InstallerGuard);
 end;
 
-procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
-var
-  DataDir: String;
+function PurgeUserData(): Boolean;
+var Index: Integer;
 begin
-  if CurUninstallStep = usPostUninstall then
-  begin
-    DataDir := ExpandConstant('{app}\data');
-    if DirExists(DataDir) then
-    begin
-      { 默认保留：卸载不能悄悄删掉用户的配置、密钥、词库和记忆。
-        静默卸载也一律保留，避免自动化误删。 }
-      if (not UninstallSilent)
-         and (MsgBox('{#KeepDataMessage}', mbConfirmation, MB_YESNO) = IDNO) then
-        DelTree(DataDir, True, True, True);
-    end;
+  Result := False;
+  if UninstallSilent then begin
+    for Index := 1 to ParamCount do
+      if CompareText(ParamStr(Index), '/PURGEDATA') = 0 then Result := True;
+  end else
+    Result := MsgBox('{#PurgeDataMessage}', mbConfirmation, MB_YESNO) = IDNO;
+end;
+
+procedure CleanupFailed();
+begin
+  Log('{#UninstallCleanupError}');
+  SuppressibleMsgBox('{#UninstallCleanupError}', mbError, MB_OK, IDOK);
+  Abort;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var Parameters: String; Code: Integer;
+begin
+  if CurUninstallStep <> usUninstall then Exit;
+  Parameters := '--uninstall-cleanup --root ' + AddQuotes(ExpandConstant('{app}'));
+  if PurgeUserData() then Parameters := Parameters + ' --purge-data';
+  InstallerGuard := RecoveryCreateMutex(0, False, 'Local\LockLingo_Installer');
+  if (InstallerGuard = 0) or (RecoveryLastError() = 183) then CleanupFailed();
+  UpdateGuard := RecoveryCreateMutex(0, False, 'Local\LockLingo_UpdateInProgress');
+  if (UpdateGuard = 0) or (RecoveryLastError() = 183) then CleanupFailed();
+  if not Exec(ExpandConstant('{app}\recovery\LockLingoRecovery.exe'), Parameters,
+    ExpandConstant('{tmp}'), SW_HIDE, ewWaitUntilTerminated, Code) then CleanupFailed();
+  if Code <> 0 then CleanupFailed();
+end;
+
+procedure DeinitializeUninstall();
+begin
+  ReleaseUpdateGuard();
+  if InstallerGuard <> 0 then begin
+    RecoveryCloseHandle(InstallerGuard);
+    InstallerGuard := 0;
   end;
 end;

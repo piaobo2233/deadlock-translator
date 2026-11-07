@@ -1,5 +1,7 @@
 # 1.0.1 第三方源码与替换说明
 
+1.1.2 的对应源码随 [1.1.2 Release](https://github.com/piaobo2233/deadlock-translator/releases/tag/v1.1.2) 提供。OCR 和第三方源码归档与 1.1.1 的对应归档内容相同，附件名更新为 1.1.2。
+
 本版沿用 1.0.0 的固定 OCR 输入及 Python 组件版本。各组件许可与声明保留在发行包 `licenses/`；本版额外保留 Python 组件的 `METADATA`，便于核对实际构建输入。
 
 - OCR、GNU/MinGW 运行库和图像依赖的完整 MSYS2 源码包、配方及补丁：同一 Release 的 `LockLingo-1.0.1-ocr-sources.zip`，逐包摘要见 [OCR 源码映射](ocr-msys2-sources.json)。映射中的历史资产名保留，归档内容逐项匹配。

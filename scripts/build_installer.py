@@ -41,9 +41,10 @@ RUNNING_MESSAGE = (
 UNINSTALL_RUNNING_MESSAGE = RUNNING_MESSAGE
 DIRECTORY_MESSAGE = ('请使用英文安装路径。每次安装均可修改目录；更换目录不会自动迁移个人数据。'
                      '请先备份旧目录中的整个 data 文件夹，退出助手后手动迁移。已有数据位置（如有）：')
-KEEP_DATA_MESSAGE = (
-    "是否保留个人数据（设置、API Key、词库、翻译记忆）？"
-    "选择「是」保留（推荐）；选择「否」会删除这些数据，且无法恢复。"
+PURGE_DATA_MESSAGE = (
+    "是否保留锁语的个人数据和本机备份？"
+    "选择「是」保留个人资料。选择「否」彻底卸载，"
+    "永久删除设置、API Key、词库、翻译记忆、日志和本机备份。"
 )
 
 
@@ -70,6 +71,7 @@ def build_recovery(work):
 def verify_recovery_source(source):
     """Do not pair a new recovery protocol with an older main-program ZIP."""
     names = ('app/platform/rollback.py', 'app/platform/update_install.py', 'app/platform/updates.py',
+             'app/platform/uninstall.py', 'app/platform/game_autostart.py',
              'app/storage/store.py', 'app/storage/locking.py', 'gui/updates.py', 'scripts/run.py')
     try:
         record = json.loads((Path(source)/'BUILD-SOURCE.json').read_text(encoding='utf-8'))
@@ -216,7 +218,8 @@ def main():
             "LanguageFile": str(LANGUAGE.resolve()),
             "RunningMessage": RUNNING_MESSAGE,
             "UninstallRunningMessage": UNINSTALL_RUNNING_MESSAGE,
-            "KeepDataMessage": KEEP_DATA_MESSAGE,
+            "PurgeDataMessage": PURGE_DATA_MESSAGE,
+            "UninstallCleanupError": '清理未完成。请关闭锁语窗口和正在使用安装文件的程序，检查安装目录权限后重试。',
             "LauncherFile": GUI_NAME,
             "DirectoryMessage": DIRECTORY_MESSAGE,
             "RecoveryFile": str(recovery),

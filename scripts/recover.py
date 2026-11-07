@@ -117,14 +117,23 @@ def main():
     group.add_argument('--status',action='store_true')
     group.add_argument('--restore',action='store_true')
     group.add_argument('--apply-update',type=Path)
+    group.add_argument('--uninstall-cleanup',action='store_true')
     parser.add_argument('--setup',type=Path)
     parser.add_argument('--update-active',action='store_true')
     parser.add_argument('--confirmed',action='store_true')
     parser.add_argument('--wait',action='store_true')
+    parser.add_argument('--purge-data',action='store_true')
     args=parser.parse_args()
     if args.apply_update:
         return update_install.run(args.apply_update)
     root=(args.root or Path(sys.executable).parent.parent).absolute()
+    if args.uninstall_cleanup:
+        from app.platform.uninstall import cleanup
+        try:
+            cleanup(root, purge_data=args.purge_data)
+        except (OSError, UpdateError, ValueError):
+            return 1
+        return 0
     try:
         if args.prepare or args.commit or args.abort:
             update_install.wait_for_exit([],timeout=1)

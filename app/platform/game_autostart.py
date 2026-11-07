@@ -30,8 +30,8 @@ def entry_args(root_dir=''):
             str(Path(root) / 'scripts/run.py')]
 
 
-def startup_script(root_dir=''):
-    args = entry_args(root_dir) + ['--watch-game']
+def startup_script(root_dir='', *, executable=None):
+    args = ([str(executable)] if executable is not None else entry_args(root_dir)) + ['--watch-game']
     command = subprocess.list2cmdline(args).replace('"', '""')
     # UTF-16 keeps non-ASCII installation paths valid in Windows Script Host.
     return ('\' LockLingo game launch monitor\n'
@@ -118,15 +118,19 @@ def set_enabled(enabled, root_dir=''):
         return False, '游戏联动启动设置失败，请查看 data/game-start.log'
 
 
+def watcher_mutex_name(root):
+    name = hashlib.sha256(os.path.normcase(root).encode('utf-8')).hexdigest()[:16]
+    return 'Local\\LockLingo_GameWatcher_' + name
+
+
 def _acquire_watcher(root):
     from ctypes import wintypes
-    name = hashlib.sha256(os.path.normcase(root).encode('utf-8')).hexdigest()[:16]
     kernel = ctypes.WinDLL('kernel32', use_last_error=True)
     kernel.CreateMutexW.argtypes = [wintypes.LPCVOID, wintypes.BOOL, wintypes.LPCWSTR]
     kernel.CreateMutexW.restype = wintypes.HANDLE
     kernel.CloseHandle.argtypes = [wintypes.HANDLE]
     ctypes.set_last_error(0)
-    handle = kernel.CreateMutexW(None, False, 'Local\\LockLingo_GameWatcher_' + name)
+    handle = kernel.CreateMutexW(None, False, watcher_mutex_name(root))
     error = ctypes.get_last_error()
     if not handle or error not in (0, 183):
         if handle:
