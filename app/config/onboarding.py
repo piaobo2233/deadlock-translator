@@ -53,7 +53,7 @@ def has_existing_setup(config) -> bool:
 
 
 def should_show(root_dir, config) -> bool:
-    """首次启动且还没有任何接口配置时才展示；坏标记按未完成处理，但不重复打断。"""
+    """接口和识别范围都已配置的老用户可直接进入首页。"""
     if is_complete(root_dir):
         return False
-    return not has_existing_setup(config)
+    return not config.get("capture_calibration") or not has_existing_setup(config)

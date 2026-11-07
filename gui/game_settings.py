@@ -335,9 +335,9 @@ def build_region_tools(parent,app):
     secondary=th.tk.Frame(parent,bg=C['bg']);secondary.pack(fill='x',pady=4)
     edit=th.button(secondary,'编辑范围（重新选择截图）',import_image);edit.pack(side='left');buttons.append(edit)
     test=th.button(secondary,'测试当前游戏画面',lambda:begin('test'));test.pack(side='left',padx=6);buttons.append(test)
-    app.game_settings=dict(region_status=status,state=state,editor=editor,import_image=import_image,begin=begin,
-                           reset=reset,refresh=refresh,schematic=schematic,leave=leave)
-    app.region_test=dict(button=test,preview=preview)
     periodic()
+    controls=dict(region_status=status,state=state,editor=editor,import_image=import_image,begin=begin,
+                  reset=reset,refresh=refresh,schematic=schematic,leave=leave)
+    return controls, dict(button=test,preview=preview)
 
 

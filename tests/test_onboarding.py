@@ -21,20 +21,17 @@ class OnboardingStateTests(unittest.TestCase):
     def load(self):
         return ConfigRepository(self.config, log=lambda *args: None).load(environment={})
 
-    def test_should_show_only_on_a_fresh_install(self):
+    def test_show_on_fresh_install_and_when_existing_key_has_no_calibration(self):
         self.assertTrue(onboarding.should_show(self.root, self.load()))
         store.atomic_write_json(self.config, dict(api_key='fixture-key'))
-        self.assertFalse(onboarding.should_show(self.root, self.load()))
-        store.atomic_write_json(self.config, {})
-        self.assertTrue(onboarding.should_show(self.root, self.load()))
-        store.atomic_write_json(self.config, dict(endpoint='https://custom.invalid/v1'))
-        self.assertFalse(onboarding.should_show(self.root, self.load()))
+        from gui.onboarding import gate_initial_page
+        self.assertEqual(gate_initial_page(self.root, 'home'), 'onboarding')
 
-    def test_environment_key_suppresses_the_guide(self):
+    def test_environment_key_alone_does_not_suppress_the_guide(self):
         with patch.dict(os.environ, {'DEEPSEEK_API_KEY': 'fixture-environment-key'}):
             config = ConfigRepository(self.config, log=lambda *args: None).load()
         self.assertEqual(config.key_source, 'environment')
-        self.assertFalse(onboarding.should_show(self.root, config))
+        self.assertTrue(onboarding.should_show(self.root, config))
 
     def test_marker_records_outcome_and_survives_config_rewrites(self):
         self.assertTrue(onboarding.mark_complete(self.root, outcome='saved'))
@@ -62,8 +59,9 @@ class OnboardingStateTests(unittest.TestCase):
         self.assertFalse(onboarding.is_complete(self.root))
         self.assertTrue(onboarding.should_show(self.root, self.load()))
 
-    def test_old_user_with_custom_model_is_not_interrupted(self):
-        store.atomic_write_json(self.config, dict(model='legacy-model'))
+    def test_old_user_with_existing_interface_and_calibration_is_not_interrupted(self):
+        from tests.test_region_calibration import calibration
+        store.atomic_write_json(self.config, dict(model='legacy-model', capture_calibration=calibration()))
         self.assertFalse(onboarding.should_show(self.root, self.load()))
 
     def test_gate_only_redirects_the_default_home_page(self):

@@ -1,10 +1,10 @@
 <p align="center"><img src="app/assets/brand/locklingo-64.png" width="56" height="56" alt="锁语图标"></p>
 <h1 align="center">锁语 · LockLingo</h1>
 <p align="center">《异锁》（Deadlock）的 Windows 聊天翻译助手</p>
-<p align="center"><strong>1.1.2 · Windows 10/11 x64 · 内置 OCR</strong></p>
+<p align="center"><strong>1.1.3 · Windows 10/11 x64 · 内置 OCR</strong></p>
 <p align="center">
-  <a href="https://github.com/piaobo2233/deadlock-translator/releases/download/v1.1.2/LockLingo-1.1.2-setup.exe"><strong>下载安装包</strong></a> ·
-  <a href="https://github.com/piaobo2233/deadlock-translator/releases/tag/v1.1.2">便携版与校验</a> ·
+  <a href="https://github.com/piaobo2233/deadlock-translator/releases/download/v1.1.3/LockLingo-1.1.3-setup.exe"><strong>下载安装包</strong></a> ·
+  <a href="https://github.com/piaobo2233/deadlock-translator/releases/tag/v1.1.3">便携版与校验</a> ·
   <a href="docs/CHANGELOG.md">更新日志</a>
 </p>
 
@@ -18,7 +18,7 @@
 
 ## 安装、更新与卸载
 
-- **首次安装**。选择纯英文可写目录，例如 `D:\LockLingo`。可跳过 API 配置，先用本地词库。
+- **首次安装**。选择纯英文可写目录，例如 `D:\LockLingo`。在首次设置中确认聊天识别范围，可先用参考范围和本地词库。
 - **更新**。安装版在「设置 → 软件更新」检查更新，也可将新安装包覆盖到原目录。个人资料随原目录保留。
 - **卸载**。安装版在「设置 → 卸载 → 卸载锁语」打开卸载程序。彻底卸载时，在保留资料提示中选「否」，会永久删除安装目录内的个人资料和锁语备份。
 

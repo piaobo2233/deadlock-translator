@@ -36,7 +36,7 @@ def build_onboarding(parent, app):
     from app.config import onboarding
     from app.config.credentials import is_key_placeholder
     from app.config.providers import DEEPSEEK, PROVIDERS
-    from gui.game_settings import connection_button
+    from gui.game_settings import build_region_tools, connection_button
     from gui.secret_entry import SOURCE_LABELS
     from gui.workspace import MODELS
 
@@ -49,22 +49,30 @@ def build_onboarding(parent, app):
                                       key="", dirty=False)
 
     heading(parent, th, "首次设置",
-            "锁语 · LockLingo 已经装好了。填写你自己的翻译接口就能开始；"
-            "也可以先跳过，离线词库和翻译记忆照常可用。")
+            "先确认游戏聊天的识别范围，再按需配置翻译接口。")
 
     intro = panel(parent, th, bg=c["soft"])
     intro.pack(fill="x", pady=(0, 18))
     inner = panel(intro, th, bg=c["soft"])
     inner.pack(fill="x", padx=18, pady=14)
-    text(inner, th, "三步开始：① 选翻译服务商 ② 填 API Key ③ 保存并开始",
+    text(inner, th, "已有的设置会保留。离线可使用词库、翻译记忆和本地缓存。",
          small=True, muted=True, wraplength=820, justify="left").pack(anchor="w")
-    text(inner, th, "不填也不会坏：词库、翻译记忆和本地缓存都能离线用；"
-                    "未命中的新句子才需要联网接口。",
-         small=True, muted=True, wraplength=820, justify="left").pack(anchor="w", pady=(4, 0))
+
+    region = section(parent, th, "① 识别范围")
+    text(region, th, "可导入完整局内截图，或截取当前游戏画面，框出聊天出现的范围。"
+                    "暂时没进游戏可先用参考范围，之后在「识别与显示」调整。",
+         small=True, muted=True, wraplength=820, justify="left").pack(anchor="w", pady=(0, 8))
+
+    def show_region_tools():
+        build_region_tools(region, app)
+        region_button.destroy()
+
+    region_button = th.button(region, "设置识别范围", show_region_tools)
+    region_button.pack(anchor="w")
 
     from gui.game_resources import build
     build(parent, app)
-    area = section(parent, th, "① 翻译服务商")
+    area = section(parent, th, "② 翻译服务商")
     text(area, th, "选预设会带出官方接口地址和默认模型；选「自定义兼容接口」后地址与模型都可以自己改。",
          small=True, muted=True, wraplength=820, justify="left").pack(anchor="w", pady=(0, 8))
     initial_provider = (PROVIDERS[draft["provider"]] if draft["endpoint"] == DEEPSEEK["endpoint"]
@@ -76,7 +84,7 @@ def build_onboarding(parent, app):
                                    state="readonly", font=th.font)
     provider_box.pack(fill="x", ipady=5)
 
-    area = section(parent, th, "② 接口与密钥")
+    area = section(parent, th, "③ 接口与密钥")
     fields = panel(area, th)
     fields.pack(fill="x")
     fields.columnconfigure(0, weight=1, uniform="onboarding")
@@ -160,17 +168,20 @@ def build_onboarding(parent, app):
                            c["warn"])
 
     def skip():
+        configured = p._load_config(app.root_dir).key_source != "none"
         marked = onboarding.mark_complete(app.root_dir, outcome="skipped")
         app.open_page("home")
         if marked:
-            app.set_status("已跳过接口配置：离线词库 / 翻译记忆可用；未命中的新句子需要联网接口。"
-                           "之后可在「设置 → 首次设置」重新进入。", c["warn"])
+            message = ("已保留现有接口设置。" if configured else
+                       "已跳过接口配置，离线词库和翻译记忆可用。")
+            app.set_status(message + "可在「设置 → 首次设置」重新进入。", c["muted"])
         else:
-            app.set_status("跳过标记写入失败；下次启动还会显示本页。离线词库照常可用。", c["err"])
+            app.set_status("完成标记写入失败，下次启动可能再次显示引导。", c["err"])
 
     save_button = th.button(actions, "保存并开始", save, kind="primary")
     save_button.pack(side="left")
-    skip_button = th.button(actions, "跳过，先用离线词库", skip)
+    skip_label = "保留现有接口并开始" if config.key_source != "none" else "跳过，先用离线词库"
+    skip_button = th.button(actions, skip_label, skip)
     skip_button.pack(side="left", padx=(10, 0))
 
     def snapshot():

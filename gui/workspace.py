@@ -398,7 +398,7 @@ def build_recognition_settings(parent, app):
     config=p._load_config(app.root_dir)
     region=section(parent,th,'识别范围')
     build_recognition(region,app)
-    build_region_tools(region,app)
+    app.game_settings, app.region_test = build_region_tools(region,app)
     display=section(parent,th,'译文显示')
     controls=p._render_spec(app,display,('font_size',),config)
     from gui.display_preview import DisplayPreview

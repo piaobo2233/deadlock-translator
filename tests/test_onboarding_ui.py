@@ -112,6 +112,47 @@ class OnboardingUiTests(unittest.TestCase):
         self.assertEqual(self.app.current, "home")
         self.assertIn("联网翻译", self.app.status.cget("text"))
 
+    def test_calibrates_in_guide_and_keeps_existing_interface(self):
+        from PIL import Image
+        from gui.region_editor import RegionEditor
+        from gui.onboarding import gate_initial_page
+
+        store.atomic_write_json(self.config, dict(api_key="fixture-existing-key"))
+        self.assertEqual(gate_initial_page(self.root, "home"), "onboarding")
+        self.open_guide()
+        settings_controls = self.app.game_settings
+        image = self.root / "game.png"
+        Image.new("RGB", (1920, 1080), "white").save(image)
+        editors = []
+
+        def open_editor(*args, **kwargs):
+            editor = RegionEditor(*args, **kwargs)
+            editors.append(editor)
+            return editor
+
+        with patch("tkinter.filedialog.askopenfilename", return_value=str(image)), \
+                patch("gui.region_editor.RegionEditor", side_effect=open_editor):
+            self.button("设置识别范围").invoke()
+            self.assertIs(self.app.game_settings, settings_controls)
+            self.button("导入局内截图").invoke()
+            self.wait_until(lambda: bool(editors))
+        editor = editors[0]
+        editor.set_rect([100, 100, 1400, 700])
+        editor.confirmed.set(True)
+        editor.save_state()
+        editor.save()
+        self.assertEqual(store.read_json(self.config)["capture_calibration"]["rect"], [100, 100, 1400, 700])
+        self.assertFalse(onboarding.is_complete(self.root))
+        self.app.open_page("recognition")
+        self.app.root.update()
+        self.assertIsNone(self.app.root.grab_current())
+        self.assertFalse(self.errors)
+
+        self.open_guide()
+        self.button("保留现有接口并开始").invoke()
+        self.assertEqual(store.read_json(self.config)["api_key"], "fixture-existing-key")
+        self.assertTrue(onboarding.is_complete(self.root))
+
     def test_mask_and_failed_save_keep_draft_and_leave_marker_unset(self):
         controls = self.open_guide()
         controls["key"].set("********")
