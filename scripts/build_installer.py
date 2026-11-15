@@ -130,8 +130,13 @@ def prepare_source(archive, work):
         raise ValueError("ZIP 缺少无控制台启动入口 " + GUI_NAME)
     if (source / "data").exists():
         raise ValueError("ZIP 含用户数据目录，拒绝打包")
-    from build_portable import check_contents
+    from build_portable import check_contents, program_files
     check_contents(source)
+    from app.platform.updates import UpdateError
+    try:
+        program_files(source)
+    except UpdateError as exc:
+        raise ValueError('ZIP 与升级校验器不兼容：' + str(exc)) from exc
     manifest = json.loads((source / "manifest.json").read_text(encoding="utf-8"))
     expected = {row["path"] for row in manifest}
     actual = {path.relative_to(source).as_posix() for path in source.rglob("*") if path.is_file()}

@@ -18,9 +18,11 @@ import tempfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 import ocr_runtime  # noqa: E402  (sibling build helper)
 import release_gate
+from app.platform.update_install import program_files
 
 EXE_NAME = "DeadlockTranslate"
 GUI_NAME = "LockLingo"
@@ -32,9 +34,10 @@ def digest(path):
 
 
 def copy_licenses(destination):
-    shared = ROOT / 'docs/licenses/ValveResourceFormat'
-    if shared.is_dir():
-        shutil.copytree(shared, destination / 'ValveResourceFormat', dirs_exist_ok=True)
+    for name in ('ValveResourceFormat', 'project', 'ttkbootstrap-icons'):
+        shared = ROOT / 'docs/licenses' / name
+        if shared.is_dir():
+            shutil.copytree(shared, destination / name, dirs_exist_ok=True)
     packages = ('numpy', 'opencv-python', 'pillow', 'pytesseract', 'ttkbootstrap',
                 'packaging', 'defusedxml', 'darkdetect', 'pyinstaller', 'pystray', 'six')
     for name in packages:
@@ -101,7 +104,7 @@ def copy_ocr_licenses(bundle, distribution='local_test_only', *, version=None):
         "逐文件 SHA-256 见 licenses/tesseract/runtime-manifest.json 与包内 manifest.json。",
         "各组件的原始许可、NOTICE、GCC runtime exception 与构建元数据均保留。",
         "MSYS2 二进制包原样提取，未修改；Tesseract 原始许可 Apache-2.0 不覆盖其余 DLL。",
-        "GPL 适用的 OCR 组合按 GPL-3.0-or-later 条款提供，原创 MIT 声明保留。",
+        "GPL 适用的 OCR 组合按 GPL-3.0-or-later 条款提供，第三方原许可及历史 MIT 声明保留。",
         "完整对应源码、配方和补丁与本版本二进制一同免费提供：",
         f"https://github.com/piaobo2233/deadlock-translator/releases/tag/v{version}",
         f"附件名：LockLingo-{version}-ocr-sources.zip；精确逐包目录见包内 source evidence。",
@@ -179,13 +182,10 @@ def main():
         bundle = work / 'dist' / EXE_NAME
         shutil.copy2(ROOT / 'LICENSE', bundle / 'LICENSE')
         shutil.copy2(ROOT / 'docs/THIRD-PARTY-NOTICES.md', bundle / 'THIRD-PARTY-NOTICES.md')
-        for name in ('BRAND.md', 'PROJECT-NOTICE.md', 'THIRD-PARTY-NOTICES.md'):
-            target = bundle / 'docs' / name
+        for name in ('BRAND.md', 'PROJECT-NOTICE.md', 'THIRD-PARTY-NOTICES.md', 'LICENSE-SCOPE.md'):
+            target = bundle / 'licenses' / 'project' / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / 'docs' / name, target)
-        audit = bundle / 'docs/releases/20261114-license-migration-audit.md'
-        audit.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(ROOT / 'docs/releases/20261114-license-migration-audit.md', audit)
         sources_notice = ROOT / 'docs/releases/third-party-sources.md'
         if sources_notice.is_file():
             shutil.copy2(sources_notice, bundle / 'THIRD-PARTY-SOURCES.md')
@@ -204,6 +204,9 @@ def main():
                               sha256=digest(path)) for path in files]
         (bundle / 'manifest.json').write_text(
             json.dumps(manifest_rows, ensure_ascii=False, indent=2), encoding='utf-8')
+        # The already-running 1.1.5 helper validates this manifest after install.
+        # Keep its path contract; validate the complete artifact before exporting.
+        program_files(bundle)
         if args.no_zip:
             shutil.copytree(bundle, bundle_out)
             print(json.dumps(dict(bundle=str(bundle_out), files=len(manifest_rows) + 1),

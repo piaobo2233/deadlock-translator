@@ -2,7 +2,7 @@
 
 ## 项目代码与第三方材料
 
-项目原创源码和文档采用根目录 [MIT](../LICENSE)，版权声明为 `Copyright (c) 2026 piaobo2233`。第三方代码、运行库、模型、字体和游戏内容另有适用条款，不由根许可统一覆盖。原许可、NOTICE 和署名按原文保留；具体来源见[第三方说明](THIRD-PARTY-NOTICES.md)。
+自 1.2.1 起，项目新版本整体及新增、修改的原创源码与文档采用根目录 [GPL-3.0-only](../LICENSE)，版权声明为 `Copyright (c) 2026 piaobo2233`。1.2.0 及以前的 MIT 授权和继承代码的原条件保留，详见[许可范围](LICENSE-SCOPE.md)。第三方代码、运行库、模型、字体和游戏内容另有适用条款，不由根许可统一覆盖。原许可、NOTICE 和署名按原文保留；具体来源见[第三方说明](THIRD-PARTY-NOTICES.md)。
 
 ## 游戏内容与本机资料
 
@@ -14,7 +14,7 @@
 
 ## 图片、品牌与字体
 
-官方来源、第三方发行身份及代码许可与品牌的边界见[品牌识别说明](BRAND.md)。GPL 迁移的材料清点与未决项见[本次候选许可审计](releases/20261114-license-migration-audit.md)。
+官方来源、第三方发行身份及代码许可与品牌的边界见[品牌识别说明](BRAND.md)。GPL 迁移的材料清点、处置及验证边界见[本次候选许可审计](releases/20261114-license-migration-audit.md)。
 
 | 材料 | 来源与说明 |
 | --- | --- |
@@ -22,7 +22,7 @@
 | 同目录 `compose.png`、`usage.png` | 同批历史界面图；不作为当前功能及效果证明 |
 | `docs/assets/app-overview.png`、`app-compose.png` | test.3 实际软件窗口，临时空配置；保留为历史材料，当前首页不再引用 |
 | [锁语品牌素材](assets/locklingo/README.md) | 项目选定的 C 版双气泡原图，由图像生成工具制作；制作时参考官方 Steam 社区图标，来源见素材中的 design-brief.md。生成方式不等于取得 Valve 商标或参考素材的授权；尺寸与格式导出见素材索引。品牌图与真实界面截图分别说明 |
-| Bootstrap Icons 图标字体 | 随 ttkbootstrap 分发，保留其 MIT 许可；精确字体版本尚待核实 |
+| Bootstrap Icons 图标字体 | 随 ttkbootstrap 分发，保留其 MIT 许可；固定输入为 ttkbootstrap 2.2.3 源码包内的 bootstrap.ttf（内部字体版本 1.0），源码与本机文件逐字节一致；精确摘要及来源见[字体记录](licenses/ttkbootstrap-icons/PROVENANCE.md) |
 
 私人对局截图和人工真值不进入公开仓库。界面图来自真实软件窗口；窗口中的 `app/assets/ui/cursed-city.png` 背景由 imagegen 于 2026-10-18 生成，制作记录见[背景说明](../app/assets/ui/README.md)，并非从 Valve 游戏提取。实际 Tk 控件与生成背景应分别说明。系统字体仅按族名引用；源码不附游戏字体，运行时可从用户自己的游戏安装私有加载。品牌文字排版使用系统字体，未随素材分发字体文件。
 

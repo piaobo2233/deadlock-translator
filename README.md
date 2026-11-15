@@ -31,4 +31,4 @@
 
 [文档](docs/README.md) · [测试状态](docs/TESTING.md) · [反馈问题](https://github.com/piaobo2233/deadlock-translator/issues/new/choose) · [安全反馈](.github/SECURITY.md) · [第三方许可](docs/THIRD-PARTY-NOTICES.md)
 
-原创源码采用 [MIT](LICENSE)。锁语由社区独立维护，感谢开源项目和玩家的反馈。 [项目与素材说明](docs/PROJECT-NOTICE.md)
+自 1.2.1 起，新版本整体及新增原创修改采用 [GPL-3.0-only](LICENSE)，保留历史 MIT 授权；见[许可范围](docs/LICENSE-SCOPE.md)和[品牌规则](docs/BRAND.md)。锁语由社区独立维护，感谢开源项目和玩家的反馈。 [项目与素材说明](docs/PROJECT-NOTICE.md)

@@ -35,7 +35,7 @@ class InstallerInputTests(unittest.TestCase):
             'ocr/tesseract.exe': b'ocr', 'ocr/libtesseract-5.dll': b'dll',
             '_internal/app/assets/brand/locklingo.ico': b'icon',
         }
-        for variant in ('valid', 'missing-gui', 'changed', 'extra', 'private', 'traversal'):
+        for variant in ('valid', 'missing-gui', 'changed', 'extra', 'private', 'traversal', 'docs'):
             with self.subTest(variant=variant), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 files = dict(original)
@@ -43,6 +43,8 @@ class InstallerInputTests(unittest.TestCase):
                     del files['LockLingo.exe']
                 if variant == 'private':
                     files['_internal/config.json'] = b'{}'
+                if variant == 'docs':
+                    files['docs/BRAND.md'] = b'notice rejected by old update helper'
                 rows = [dict(path=name, bytes=len(body), sha256=hashlib.sha256(body).hexdigest())
                         for name, body in files.items()]
                 if variant == 'changed':

@@ -30,4 +30,4 @@
 - ttkbootstrap / pystray 应继续作为可选增强；避免将它们改成启动所必需。
 - 不提交密钥、聊天日志、完整 data、私人截图、构建缓存或无关改动；新增工具应有实际复用价值。
 
-项目源码许可见 [MIT](../LICENSE)，第三方及素材归属见[项目说明](PROJECT-NOTICE.md)。
+从 1.2.1 起，原创贡献按 [GPL-3.0-only](../LICENSE) 提供；保留[历史 MIT 权利](LICENSE-SCOPE.md)及第三方原条款。贡献者须有权按该许可提供提交内容。第三方及素材归属见[项目说明](PROJECT-NOTICE.md)。

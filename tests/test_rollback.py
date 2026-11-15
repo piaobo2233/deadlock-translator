@@ -88,6 +88,27 @@ class RollbackTests(unittest.TestCase):
         self.assertEqual(r.read(self.base/'ready.json'),previous)
         self.assertEqual(self.data.read_bytes(),b'latest paid request\n')
 
+    def test_notice_paths_cover_commit_recovery_and_data_continuity(self):
+        for name in ('docs/BRAND.md', 'licenses/project/BRAND.md'):
+            with self.subTest(path=name):
+                before=r.version(self.root)
+                r.prepare(self.root,'1.2.1');program(self.root,'1.2.1')
+                path=self.root/name;path.parent.mkdir(parents=True,exist_ok=True)
+                path.write_bytes(b'project notice')
+                rows=json.loads((self.root/'manifest.json').read_text(encoding='utf-8'))
+                rows.append(dict(path=name,sha256=install.file_digest(path),bytes=path.stat().st_size))
+                (self.root/'manifest.json').write_text(json.dumps(rows),encoding='utf-8')
+                if name.startswith('docs/'):
+                    with self.assertRaisesRegex(UpdateError,'无效路径'):r.commit(self.root)
+                    r.abort(self.root)
+                else:
+                    r.commit(self.root)
+                    self.assertEqual(r.version(self.root),'1.2.1')
+                    self.assertEqual(r.restore(self.root),before)
+                install.program_files(self.root)
+                self.assertEqual(r.version(self.root),before)
+                self.assertEqual(self.data.read_bytes(),b'latest paid request\n')
+
     def test_modified_backup_is_rejected_before_touching_current_program(self):
         self.upgrade('1.0.1');record=r.read(self.base/'ready.json')
         (r.snapshot(self.root,record)/'program/LockLingo.exe').write_bytes(b'bad backup')

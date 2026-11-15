@@ -1,10 +1,10 @@
-# 1.2.0 第三方源码与替换说明
+# 1.2.1 第三方源码与替换说明
 
 本版沿用 1.0.0 的固定 OCR 输入及 Python 组件版本。各组件许可与声明保留在发行包 `licenses/`；本版额外保留 Python 组件的 `METADATA`，便于核对实际构建输入。
 
-- OCR、GNU/MinGW 运行库和图像依赖的完整 MSYS2 源码包、配方及补丁：同一 Release 的 `LockLingo-1.2.0-ocr-sources.zip`，逐包摘要见 [OCR 源码映射](ocr-msys2-sources.json)。映射中的历史资产名保留，归档内容逐项匹配。
-- LGPL 托盘组件 pystray 0.19.5 的上游源码、许可及构建工具源码：同一 Release 的 `LockLingo-1.2.0-third-party-sources.zip`。归档内记录来源 URL、版本和 SHA-256；上游代码未修改。
-- 应用原创源码、构建脚本与冻结规范：[v1.2.0 标签](https://github.com/piaobo2233/deadlock-translator/tree/v1.2.0)。OCR worker 由同一公开源码构建；涉及 GPL 的 OCR 组合按包内 `OCR-RUNTIME.txt` 及相应原文条款提供，原创 MIT 声明保留。
+- OCR、GNU/MinGW 运行库和图像依赖的完整 MSYS2 源码包、配方及补丁：同一 Release 的 `LockLingo-1.2.1-ocr-sources.zip`，逐包摘要见 [OCR 源码映射](ocr-msys2-sources.json)。映射中的历史资产名保留，归档内容逐项匹配。
+- LGPL 托盘组件 pystray 0.19.5 的上游源码、许可及构建工具源码：同一 Release 的 `LockLingo-1.2.1-third-party-sources.zip`。归档内记录来源 URL、版本和 SHA-256；上游代码未修改。
+- 应用整体及新增原创修改采用 GPL-3.0-only，保留历史 MIT 文本与第三方原条款。应用源码、构建脚本与冻结规范：[v1.2.1 标签](https://github.com/piaobo2233/deadlock-translator/tree/v1.2.1)。OCR worker 由同一公开源码构建；涉及 GPL 的 OCR 组合按包内 `OCR-RUNTIME.txt` 及相应原文条款提供，继承的 MIT 声明保留；本项目新版本的适用范围见 [LICENSE-SCOPE.md](../LICENSE-SCOPE.md)。
 
 日语质量模型由既有上游模型转换，固定来源、许可和转换摘要见 `app/recognition/models/quality-provenance.json`、同目录 `QUALITY-LICENSE` 及[第三方说明](../THIRD-PARTY-NOTICES.md)。没有以模型新增代替或改变 OCR 运行库源码提供材料。
 

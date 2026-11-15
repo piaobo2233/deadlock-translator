@@ -1,6 +1,12 @@
 # 第三方组件、技术来源与许可
 
-## 1.2.0-rc.2 本地候选：日语质量回退
+## 1.2.1
+
+项目新版本整体及新增原创修改采用 [GPL-3.0-only](../LICENSE)，保留[历史 MIT 权利](LICENSE-SCOPE.md)与所有第三方原许可。字体固定为 ttkbootstrap 2.2.3 源码内的 Bootstrap Icons 字体（内部版本 1.0）；字体、映射、度量及原声明已逐字节核对，精确版本输入、SHA-256 与源码映射见[字体来源](licenses/ttkbootstrap-icons/PROVENANCE.md)。不推断上游未记载的独立字体发布标签。
+
+本版对应源码、配方、补丁和替换方式见[源码说明](releases/third-party-sources.md)。以下历史版本记录保留当时事实，不作为当前项目许可声明。
+
+## 1.2.0：日语质量回退
 
 新增 `jpn_quality.traineddata`，来源为 [tessdata_best 固定提交](https://github.com/tesseract-ocr/tessdata_best/tree/e12c65a915945e4c28e237a9b52bc4a8f39a0cec) 的日语模型，按 Apache-2.0 分发。使用上游 `combine_tessdata -c` 将 LSTM 权重整数化并重命名，保留原 fast 模型；修改情况、输入/输出与转换器摘要见 `app/recognition/models/quality-provenance.json`，上游原始许可见同目录 `QUALITY-LICENSE`。包内模型目录随既有规则收集，不以旧 fast 模型清单概括新增文件。
 
