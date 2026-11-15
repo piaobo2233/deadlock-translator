@@ -30,7 +30,8 @@ from tests.test_presentation import overlay
 class UiDecisionTests(unittest.TestCase):
     def test_supported_keys_and_page_ownership_are_exact(self):
         from gui.pages import INGAME_KEYS, SETTINGS_KEYS, DICTIONARY_KEYS, _advanced_keys
-        self.assertEqual(len(BY_KEY),34)
+        # Existing 35 settings plus confirmation and revision for outgoing language.
+        self.assertEqual(len(BY_KEY),37)
         self.assertNotIn('dev_key_fallback', BY_KEY)
         self.assertEqual(set(default_config()),set(BY_KEY))
         self.assertFalse(RETIRED_UI_KEYS.intersection(BY_KEY))

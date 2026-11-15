@@ -30,7 +30,9 @@ def _score(rows):
         correctness_unconfirmed=sum(row['elapsed'] is not None and row['correct'] is None for row in rows),
         within_2s=timely, within_2s_rate=timely / len(rows) if rows else None,
         between_2s_and_4s=sum(2 < value <= 4 for value in drawn), over_4s=late,
+        p50_drawn_seconds=drawn[math.ceil(.5 * len(drawn)) - 1] if drawn else None,
         p90_drawn_seconds=drawn[math.ceil(.9 * len(drawn)) - 1] if drawn else None,
+        p95_drawn_seconds=drawn[math.ceil(.95 * len(drawn)) - 1] if drawn else None,
         stage_seconds={name: dict(samples=len(values), mean=sum(values) / len(values), maximum=max(values))
                        for name, values in sorted(stages.items())},
         target_met=bool(rows and timely / len(rows) >= .9 and late == 0))

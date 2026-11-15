@@ -1,8 +1,8 @@
-"""Body-only admission for the eight receive languages and mixed messages."""
+"""Body-only admission for four supported receive languages and mixed messages."""
 import re
 import unicodedata
 
-RECEIVE_LANGUAGES = ('eng', 'spa', 'por', 'fra', 'deu', 'jpn', 'kor', 'rus')
+RECEIVE_LANGUAGES = ('eng', 'rus', 'jpn', 'kor')
 LATIN_WORDS = re.compile(r"[^\W\d_]+(?:['’][^\W\d_]+)*", re.UNICODE)
 FOREIGN_COMMON = frozenset(('hola gracias ayuda vamos juntos espera necesito atacar defender '
     'izquierda derecha ahora medio bien equipo por favor sí si no está están dónde qué '
@@ -31,7 +31,7 @@ def latin_words(text):
 
 def native_chinese(text):
     # Han-only Japanese is ambiguous: keep it unchanged without inventing a language.
-    return contains_han(text) and not foreign_chat(text)
+    return contains_han(text) and not script_model(text) and not foreign_chat(text)
 
 
 def script_model(text):
@@ -42,6 +42,15 @@ def script_model(text):
     if any('CYRILLIC' in unicodedata.name(c, '') for c in text):
         return 'rus'
     return ''
+
+
+def clean_ocr_spacing(text):
+    if script_model(text) == 'jpn':
+        # Japanese OCR APIs differ in inter-character spacing. Korean spaces
+        # and Latin/Cyrillic word boundaries carry meaning and stay intact.
+        text = re.sub(r'(?<=[\u3040-\u30ff\u3400-\u9fff])\s+'
+                      r'(?=[\u3040-\u30ff\u3400-\u9fff])', '', text)
+    return text.strip()
 
 
 def foreign_chat(text):

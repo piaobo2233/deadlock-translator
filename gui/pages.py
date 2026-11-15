@@ -22,11 +22,12 @@ from gui.theme import COLORS, GAP, PAD
 # 键 → 归到哪一页。**每个 spec 键都必须出现在这里**（有用例守着）。
 INGAME_KEYS = ("translate_api", "font_size")
 SETTINGS_KEYS = ("api_key", "model", "close_action", "endpoint", "provider", "send_target", "receive_target",
-                 "input_translate_enabled", "capture_preset")
+                 "input_translate_enabled", "capture_preset", "experimental_multilingual")
 HIDDEN_KEYS = ("price_in", "price_out", "only_in_game", "budget_session", "budget_daily",
                "ocr_interval", "ocr_votes", "tesseract", "chatlog_path", "dump_dir", "schema_version", "region_reselect",
                "capture_region", "capture_calibration", "width", "max_messages", "fade_seconds", "fade_extension",
-               "send_hotkey", "recognize_hotkey", "auto_send", "recognition_mode")
+               "send_hotkey", "recognize_hotkey", "auto_send", "recognition_mode",
+               "send_target_confirmed", "send_target_revision")
 DICTIONARY_KEYS = ("builtins_enabled",)
 _CORE = set(INGAME_KEYS) | set(SETTINGS_KEYS) | set(DICTIONARY_KEYS) | set(HIDDEN_KEYS)
 
@@ -115,6 +116,8 @@ def _save(key, value, app):
     try:
         if key == "api_key":
             ok = _config_repository(app.root_dir).save_key(str(value))
+        elif key == 'send_target':
+            ok = _config_repository(app.root_dir).save_send_target(value)
         else:
             # A field edit is a patch, not a stale full-config rewrite.
             ok = _config_repository(app.root_dir).save({key: value})

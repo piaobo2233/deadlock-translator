@@ -19,6 +19,21 @@ import gui.pages
 
 
 class WorkspaceTests(unittest.TestCase):
+    def test_fresh_personal_zero_and_separate_readonly_reference(self):
+        config = store.read_json(self.config)
+        config['builtins_enabled'] = True
+        store.atomic_write_json(self.config, config)
+        d = self.dictionary('formal')
+        self.assertEqual(d.rows, [])
+        self.assertEqual(d.tabs['formal'].cget('text'), '个人词库 0')
+        d.pick('reference')
+        self.app.root.update()
+        self.assertGreater(len(d.rows), 100)
+        d.show(d.rows[0])
+        self.app.root.update()
+        self.assertEqual(str(d.draft.cget('state')), 'disabled')
+        self.assertEqual(store.load_glossary_file(self.glossary), {})
+
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.root=Path(self.temp.name)
@@ -102,9 +117,12 @@ class WorkspaceTests(unittest.TestCase):
                 d = self.app.dictionary
                 self.assertTrue(entered.wait(2))
                 self.assertTrue(any(r['key'] == 'first' for r in d.rows))
-                self.assertTrue(any(r['key'] == 'rejuv' for r in d.rows))
+                self.assertFalse(any(r['key'] == 'rejuv' for r in d.rows))
                 self.assertFalse(any(r['key'] == 'fixture beacon' for r in d.rows))
                 self.assertIn('校验中', d.resource_status.cget('text'))
+                d.pick('reference')
+                self.assertTrue(any(r['key'] == 'rejuv' for r in d.rows))
+                d.pick('formal')
                 self.choose(d, 'first'); self.draft(d, '补齐时保留草稿')
                 d.keyword.set('first'); d.filter.set('全部'); d.refresh()
                 editor = str(d.draft)
@@ -125,6 +143,8 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(str(d.draft), editor)
         self.assertEqual(d.draft.get('1.0','end-1c'), '补齐时保留草稿')
         d.keyword.set(''); d.refresh()
+        self.assertFalse(any(r['key'] == 'fixture beacon' for r in d.rows))
+        d.pick('reference')
         self.assertTrue(any(r['key'] == 'fixture beacon' for r in d.rows))
         archive = self.root / 'installation/steamapps/common/Deadlock/game/citadel/pak01_000.vpk'
         archive.write_bytes(archive.read_bytes() + b'changed')
@@ -488,7 +508,10 @@ class WorkspaceTests(unittest.TestCase):
         store.save_glossary_file(self.glossary,{'gg':store.glossary_entry('人工优先',source='user')})
         d=self.dictionary('formal');self.assertEqual(len(d.rows),1)
         d.builtins.set(True);gui.pages._save('builtins_enabled',True,self.app)
-        self.assertGreater(len(d.rows),1);self.assertEqual(next(r for r in d.rows if r['key']=='gg')['translation'],'人工优先')
+        self.assertEqual(len(d.rows),1);self.assertEqual(d.tabs['formal'].cget('text'),'个人词库 1')
+        self.assertEqual(next(r for r in d.rows if r['key']=='gg')['translation'],'人工优先')
+        d.pick('reference');self.assertGreater(len(d.rows),100)
+        d.pick('formal')
         d.builtins.set(False);gui.pages._save('builtins_enabled',False,self.app);self.assertEqual(len(d.rows),1)
 
     def test_real_import_export_and_cancel_not_success(self):
@@ -526,8 +549,9 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(store.load_glossary_file(self.glossary)['first']['zh'],'已有正式译文')
         self.button('保存修改').invoke();self.assertEqual(store.load_glossary_file(self.glossary)['first']['zh'],'正式保存草稿')
 
-    def test_builtin_disable_retains_translation_and_restore_and_manual_priority(self):
+    def test_manual_builtin_override_retains_translation_through_disable_and_restore(self):
         ConfigRepository(self.config).save({'builtins_enabled':True})
+        store.save_glossary_file(self.glossary,{'afk':store.glossary_entry('自定义挂机说明',source='user')})
         d=self.dictionary('formal');self.choose(d,'afk');value=d.selected['translation']
         self.button('停用这条').invoke()
         saved=store.load_glossary_file(self.glossary)['afk'];self.assertEqual(saved['zh'],value);self.assertFalse(saved['enabled'])
@@ -535,7 +559,9 @@ class WorkspaceTests(unittest.TestCase):
         self.assertTrue(store.load_glossary_file(self.glossary)['afk']['enabled'])
 
     def test_global_builtin_gate_does_not_offer_restore_for_already_enabled_entry(self):
-        store.save_glossary_file(self.glossary,{'afk':store.glossary_entry('挂机中',source='builtin',enabled=True)})
+        from app.translation.builtins import DEFAULT_GLOSSARY
+        value=DEFAULT_GLOSSARY['afk']+'（个人修订）'
+        store.save_glossary_file(self.glossary,{'afk':store.glossary_entry(value,source='builtin',enabled=True)})
         d=self.dictionary('formal');d.filter.set('已停用');d.refresh();self.choose(d,'afk')
         with self.assertRaises(StopIteration):self.button('重新启用')
         self.assertFalse(d.selected['can_restore'])
@@ -575,7 +601,7 @@ class WorkspaceTests(unittest.TestCase):
         store.save_memory_file(store.data_path(self.root,'translations.json'),{'historic':store.memory_entry('历史译文')})
         from app.translation import memory_ops
         self.assertEqual(memory_ops.rows(store.data_path(self.root,'translations.json'))[0]['translation'], '历史译文')
-        self.assertEqual(set(d.tabs), {'formal','review','processed'})
+        self.assertEqual(set(d.tabs), {'formal','reference','review','processed'})
         d.tabs['formal'].invoke();self.app.root.update();self.button('＋ 添加词条').invoke()
         self.assertEqual(d.state['tab'],'formal');self.assertTrue(all(r['key']!='historic' for r in d.rows))
         d.new_original.insert(0,'history button formal');self.draft(d,'只写正式词库');self.button('保存新词条').invoke()

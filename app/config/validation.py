@@ -73,6 +73,9 @@ def normalize_config(raw):
             invalid.append(key)
     if 'capture_calibration' in invalid:
         result['_capture_calibration_error'] = True
+    if 'send_target' in invalid:
+        result['send_target_confirmed'] = False
+        result['send_target_revision'] = ''
     from app.platform.game_input import parse_hotkey
     if parse_hotkey(result['send_hotkey']) == parse_hotkey(result['recognize_hotkey']):
         supplied = [key for key in ('send_hotkey','recognize_hotkey') if key in raw and key not in invalid]

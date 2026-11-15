@@ -1,5 +1,9 @@
 # 第三方组件、技术来源与许可
 
+## 1.2.0-rc.2 本地候选：日语质量回退
+
+新增 `jpn_quality.traineddata`，来源为 [tessdata_best 固定提交](https://github.com/tesseract-ocr/tessdata_best/tree/e12c65a915945e4c28e237a9b52bc4a8f39a0cec) 的日语模型，按 Apache-2.0 分发。使用上游 `combine_tessdata -c` 将 LSTM 权重整数化并重命名，保留原 fast 模型；修改情况、输入/输出与转换器摘要见 `app/recognition/models/quality-provenance.json`，上游原始许可见同目录 `QUALITY-LICENSE`。包内模型目录随既有规则收集，不以旧 fast 模型清单概括新增文件。
+
 ## 1.0.1
 
 本版沿用下文记录的固定 OCR 输入和 Python 组件版本，新增包内 `licenses/<组件>/METADATA` 作为构建输入版本证据。许可、NOTICE、模型来源和未修改的上游字节均保留。OCR 源码、pystray 与构建工具源码在本版 Release 提供，详见包内 `THIRD-PARTY-SOURCES.md` 或公开[源码与替换说明](releases/third-party-sources.md)。

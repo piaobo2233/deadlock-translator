@@ -267,9 +267,17 @@ class RegionCapture:
                        bool(snapshot[2].get('capture_region', {}).get('screen') and
                             snapshot[2]['capture_region']['screen'] != list(snapshot[0])))
             previous_screen = snapshot[0]
+            invalidated = threading.Event()
             def changed():
-                try:return self.snapshot() != snapshot
-                except ValueError:return True
+                # A source that observed invalid geometry must be rebuilt even
+                # if the window recovers before the outer loop checks again.
+                if invalidated.is_set():
+                    return True
+                try: different = self.snapshot() != snapshot
+                except ValueError: different = True
+                if different:
+                    invalidated.set()
+                return invalidated.is_set()
             def ready():
                 with self._lock:
                     if not changed():

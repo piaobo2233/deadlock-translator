@@ -68,3 +68,8 @@ class RecognitionCadence:
     def snapshot(self):
         with self._lock:
             return dict(self._counts)
+
+    def begin_tracking(self):
+        """A late OCR confirmation needs fresh pixels before the next idle tick."""
+        with self._lock:
+            self._tracking = True

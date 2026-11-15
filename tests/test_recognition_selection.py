@@ -10,7 +10,7 @@ import app.translation.policy as chat_policy
 
 import unittest
 from unittest.mock import Mock
-from app.recognition.source import SourceEvidence
+from app.recognition.source import SourceEvidence, assess_source
 
 from app.recognition.selection import RecognitionRules, select_candidate
 
@@ -28,6 +28,43 @@ def rules(**changes):
 
 
 class RecognitionSelectionTests(unittest.TestCase):
+    def test_verified_multiline_body_can_remove_terminal_frame_mark(self):
+        text='Wait for the team near the bridge\nwe must not attack before 7 minutes. |'
+        expected=text.removesuffix(' |')
+        policy=recognition_capture.recognition_rules()
+        glossary=translation_builtins_module.DEFAULT_GLOSSARY
+        self.assertTrue(policy.is_garbage(text,glossary))
+        source=assess_source('text\tconf\n'+expected.replace('\n',' ')+'\t95\n',text)
+        self.assertTrue(source.verified)
+        result=select_candidate([('body6',text)],glossary,policy,
+                                verify_body=Mock(return_value=source))
+        self.assertTrue(result.accepted,result)
+        self.assertEqual(result.text,policy.clean(expected,glossary))
+        self.assertIn('not attack before 7',result.text)
+        self.assertEqual(result.variants,(('body6',text),))
+
+    def test_terminal_frame_mark_repair_needs_verified_multiline_body(self):
+        text='Wait for the team\nwe must not attack before 7 minutes. |'
+        expected=text.removesuffix(' |')
+        policy=recognition_capture.recognition_rules()
+        glossary=translation_builtins_module.DEFAULT_GLOSSARY
+        for kind,reading,confidence in (
+                ('body7',expected,95),('block6',expected,95),
+                ('body6',expected,30),
+                ('body6',expected.replace('7','8'),95),
+                ('body6',expected.replace('not ',''),95),
+                ('body6',expected+' l',95)):
+            source=assess_source('text\tconf\n'+reading.replace('\n',' ')+'\t'+str(confidence)+'\n',text)
+            result=select_candidate([(kind,text)],glossary,policy,
+                                    verify_body=Mock(return_value=source))
+            self.assertFalse(result.accepted,(kind,reading,confidence,result))
+        for text in ('Wait for | the team\nwe must not attack before 7 minutes.',
+                     'Wait for the team\nwe must not attack before 7 minutes. = |'):
+            source=assess_source('text\tconf\n'+text.replace('\n',' ')+'\t95\n',text)
+            result=select_candidate([('body6',text)],glossary,policy,
+                                    verify_body=Mock(return_value=source))
+            self.assertFalse(result.accepted,result)
+
     def test_chinese_source_stops_fallbacks_when_preferred_latin_text_is_rejected(self):
         def variants():
             yield 'body7', 'MY'

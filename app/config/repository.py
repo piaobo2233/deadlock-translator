@@ -94,6 +94,17 @@ class ConfigRepository:
             return True
         return self._change(update)
 
+    def save_send_target(self, value):
+        from uuid import uuid4
+        from app.config.specification import BY_KEY
+        if value not in BY_KEY['send_target']['options']:
+            return False
+        def update(raw):
+            raw.update(send_target=value, send_target_confirmed=True,
+                       send_target_revision=uuid4().hex)
+            return True
+        return self._change(update)
+
     def upgrade(self):
         if not os.path.exists(self.path):
             return []

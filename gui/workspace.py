@@ -11,7 +11,7 @@ from gui.theme import COLORS as C
 from gui.appearance import EntryCards, panel, text, heading, section, module, bordered_button, placeholder
 
 MODELS = ('deepseek-flash', 'deepseek-v4-pro')
-SOURCE_NAMES = {'api':'API 翻译','builtin':'内置词表','user':'我的词条','user_corrected':'人工审核','import':'导入'}
+SOURCE_NAMES = {'api':'API 翻译','builtin':'内置词表','official':'本机官方术语','user':'我的词条','user_corrected':'人工审核','import':'导入'}
 STATUS_NAMES = {'pending':'待审核','accepted':'已接受','edited':'已修改','rejected':'已忽略'}
 
 
@@ -154,9 +154,7 @@ def build_translation(parent, app):
     _,controls=p._row(receive_options,th,'联网翻译',app=app)
     config=p._load_config(app.root_dir)
     p._switch(app,controls,'translate_api',config)
-    from gui.game_settings import language_control
-    language_control(receive_options,app,'receive_target','收到的消息译成',config)
-    text(receive_options,th,'修改后重启助手生效',small=True,muted=True).pack(anchor='w')
+    text(receive_options,th,'英语 / 俄语 / 日语 / 韩语 → 中文',small=True,muted=True).pack(anchor='w')
     button,body,toggle=fold(receive_options, app, '诊断详情', build_diagnostics)
     app.diagnostic_controls=dict(button=button,body=body,toggle=toggle)
     def tick():
@@ -399,7 +397,7 @@ def build_recognition_settings(parent, app):
     region=section(parent,th,'识别范围')
     build_recognition(region,app)
     p._render_spec(app,region,('experimental_multilingual',),config)
-    text(region,th,'关闭时专注英语；开启后增加日语、韩语、俄语等语言。重启助手生效。',
+    text(region,th,'默认识别英语、俄语、日语、韩语等语言；可关闭多语言以仅识别英语。修改后重启助手生效。',
          small=True,muted=True,wraplength=720).pack(anchor='w',pady=(0,8))
     app.game_settings, app.region_test = build_region_tools(region,app)
     display=section(parent,th,'译文显示')
@@ -444,7 +442,7 @@ class Dictionary:
         self.resources = app.game_resources
         self.resources.inspect()
         self._resource_state = None
-        if self.state['tab'] not in {'formal', 'review', 'processed'}:
+        if self.state['tab'] not in {'formal', 'reference', 'review', 'processed'}:
             self.state.update(tab='formal', selected=None)
         head=heading(parent,th,'词库','修改常用译文，或停用当前选中的词条。')
         self.subtitle=head.subtitle
@@ -455,7 +453,7 @@ class Dictionary:
         tabbar=panel(parent,th);tabbar.pack(fill='x')
         tabs=panel(tabbar,th);tabs.pack(side='left')
         self.tabs={};self.tab_rails={}
-        for name,label in (('formal','使用中的词库'),('review','待审核'),('processed','已处理')):
+        for name,label in (('formal','个人词库'),('reference','内置参考'),('review','待审核'),('processed','已处理')):
             wrap=panel(tabs,th);wrap.pack(side='left',padx=(0,14))
             button=th.button(wrap,label,lambda n=name:self.pick(n),kind='disclosure');button.configure(font=th.font,pady=9,padx=8)
             button.pack(fill='x');self.tabs[name]=button
@@ -501,6 +499,13 @@ class Dictionary:
         self.filter=th.tk.StringVar(value='使用中')
         self.selector=th.combobox(filters,textvariable=self.filter,values=('使用中','已停用','已删除','全部'),state='readonly',width=8,font=th.font_small)
         self.selector.pack(side='right',padx=(9,0),ipady=5,before=search_border);self.selector.bind('<<ComboboxSelected>>',self.refresh)
+        self.category_filters=panel(left,th);self.category_filters.pack(fill='x',pady=(0,10))
+        self.category=th.tk.StringVar(value=self.state.get('category','全部分类'))
+        self.origin=th.tk.StringVar(value=self.state.get('origin','全部来源'))
+        for var,values in ((self.category,('全部分类',*glossary_ops.CATEGORIES,'地图与目标','内置')),
+                           (self.origin,('全部来源','个人词条','内置词条','官方术语'))):
+            selector=th.combobox(self.category_filters,textvariable=var,values=values,state='readonly',width=12,font=th.font_small)
+            selector.pack(side='left',padx=(0,8));selector.bind('<<ComboboxSelected>>',self.refresh)
         self.list=EntryCards(left,th,self.select)
         foot=panel(left,th);foot.pack(fill='x',pady=(10,0))
         self.count=text(foot,th,'',small=True,muted=True);self.count.pack(side='left')
@@ -559,6 +564,10 @@ class Dictionary:
             entries = store.glossary_entries(self.read(self.gpath))
             try:
                 queue = self.service.items(formal=entries)
+                for row in queue:
+                    entry = entries.get(row.get('normalized') or row.get('original', '').lower(), {})
+                    row['auto_collected'] = (entry.get('source') == 'api'
+                        and entry.get('zh') == row.get('translation'))
             except (OSError, ValueError, TypeError, KeyError) as exc:
                 raise ValueError(f'pending.json 读取异常：{exc}') from exc
             config = self.read(self.config_path)
@@ -567,7 +576,9 @@ class Dictionary:
                 can_restore=not entries.get(row['word'], {}).get('quarantine_reason') and bool(
                     entries.get(row['word'], {}).get('deleted') or entries.get(row['word'], {}).get('enabled') is False))
                 for row in glossary_ops.rows(self.gpath, entries=entries, config=config,
-                                             official_terms=self.resources.terms)]
+                                             official_terms=self.resources.terms,
+                                             official_records=self.resources.records,
+                                             include_reference=True)]
             if (self.file_stamps(), self.resources.revision) != stamp:
                 raise ValueError('数据正在更新，请重新读取')
             self._snapshot = (formal, queue)
@@ -590,13 +601,24 @@ class Dictionary:
             self.clear_processed_button.configure(state='normal' if self.processed_records else 'disabled')
             self.tabs['review'].configure(text=f"待审核 {len(review)}")
             self.tabs['processed'].configure(text=f"已处理 {len(self.processed_records)}")
+            references = [row for row in formal if glossary_ops.is_reference(row)]
+            personal = [row for row in formal if not glossary_ops.is_reference(row)]
+            self.tabs['formal'].configure(text=f"个人词库 {len(personal)}")
+            self.tabs['reference'].configure(text=f"内置参考 {len(references)}")
             tab=self.state['tab']
             if tab=='formal':
-                rows=[row for row in formal if self.filter.get()=='全部' or row['status']==self.filter.get()]
+                self.state.update(category=self.category.get(),origin=self.origin.get())
+                rows=[row for row in personal if self.filter.get()=='全部' or row['status']==self.filter.get()
+                      or self.filter.get()=='使用中' and row['status']=='术语参考']
+                rows=[row for row in rows if self.category.get()=='全部分类' or row['cat']==self.category.get()
+                      or self.category.get()=='聊天口语' and row['source']=='builtin' and row['cat']=='内置']
+                sources={'个人词条': {'user','user_corrected','import','api','builtin'},'内置词条': {'builtin'},'官方术语': {'official'}}
+                rows=[row for row in rows if self.origin.get()=='全部来源' or row['source'] in sources.get(self.origin.get(),set())]
             else:
-                rows=review if tab=='review' else self.processed_records
+                rows=references if tab=='reference' else review if tab=='review' else self.processed_records
             kw=self.keyword.get().strip().lower()
-            self.rows=[r for r in rows if not kw or kw in str(r.get('original','')).lower() or kw in str(r.get('translation','')).lower()]
+            self.rows=[r for r in rows if not kw or kw in ' '.join(str(r.get(k,'')) for k in
+                      ('original','translation','official_name','aliases')).lower()]
             self.blocked=False
         except (OSError,ValueError,TypeError,KeyError) as exc:
             self.blocked=True
@@ -646,8 +668,11 @@ class Dictionary:
     def pick(self,tab):
         self.remember();self.state['tab']=tab;self.state['selected']=None;self.selected=None
         self.keyword.set('')
-        if tab=='formal':self.selector.pack(side='right',padx=(9,0),ipady=5,before=self.selector.master.winfo_children()[0])
-        else:self.selector.pack_forget()
+        if tab=='formal':
+            self.selector.pack(side='right',padx=(9,0),ipady=5,before=self.selector.master.winfo_children()[0])
+            self.category_filters.pack(fill='x',pady=(0,10),before=self.list.frame)
+        else:
+            self.selector.pack_forget();self.category_filters.pack_forget()
         self.paint_tabs()
         self.refresh()
 
@@ -672,14 +697,27 @@ class Dictionary:
             text(self.editor,self.th,'先从左侧选择一条\n操作根据条目状态显示',small=True,muted=True,justify='center').pack(pady=45)
             return
         th=self.th
-        tab=self.state['tab'];readonly=tab=='processed'
+        tab=self.state['tab'];readonly=tab in {'processed','reference'}
         self.editor_title.configure(text='核对这条译文' if tab=='review' else '查看记录' if readonly else '编辑词条')
         self.editor_state.configure(text='只读' if readonly else STATUS_NAMES.get(row.get('status'),row.get('status','')))
         text(self.editor,th,'原文',small=True,muted=True).pack(anchor='w')
         original=panel(self.editor,th);original.pack(fill='x',pady=(7,4))
         th.label(original,row.get('original') or row['key'],font=th.font,justify='left',wraplength=360).pack(fill='x',padx=12,pady=6)
         source=SOURCE_NAMES.get(row.get('source'),row.get('source','未知'))
+        if row.get('source')=='official':source='本机官方术语'
         text(self.editor,th,source+(' · 保存将记为人工词条' if tab=='review' else ''),small=True,muted=True).pack(anchor='w',pady=(0,4))
+        if tab=='review' and row.get('auto_collected'):
+            text(self.editor,th,'已自动收录；未经人工审核，可继续核对或修改。',small=True,muted=True,wraplength=340).pack(anchor='w')
+        if tab=='formal':
+            if row.get('status')=='术语参考':
+                text(self.editor,th,'普通词义可能有歧义，仅作术语参考；保存后才作为个人词条。',small=True,muted=True,wraplength=340).pack(anchor='w')
+            if row.get('official_name'):
+                text(self.editor,th,'官方名称：'+row['official_name'],small=True,muted=True).pack(anchor='w')
+            text(self.editor,th,'原始写法：'+' / '.join(row.get('aliases', [row['original']])),small=True,muted=True,wraplength=340).pack(anchor='w')
+            self.category_draft=th.tk.StringVar(value=self.state.setdefault('category_drafts',{}).get(self.identity(row),row.get('cat','自定义')))
+            category_box=th.combobox(self.editor,textvariable=self.category_draft,values=glossary_ops.CATEGORIES,state='readonly',width=15)
+            category_box.pack(anchor='w',pady=6)
+            self.category_draft.trace_add('write',lambda *_:self.state['category_drafts'].__setitem__(self.identity(row),self.category_draft.get()))
         if row.get('api_translation') and row['api_translation']!=row.get('translation'):
             text(self.editor,th,'API 初稿：'+row['api_translation'],small=True,muted=True,wraplength=340).pack(anchor='w',pady=(0,8))
         if row.get('previous_translation'):
@@ -700,7 +738,7 @@ class Dictionary:
         self.selected=dict(snapshot if self.state['tab']=='review' else row)
         tab=self.state['tab']
         self.actions=frame(self.editor,th);self.actions.pack(fill='x')
-        if tab=='processed':
+        if readonly:
             self.draft.configure(state='disabled')
             th.label(self.actions,'译文只读',font=th.font_small).pack(anchor='w')
             if tab=='processed':
@@ -846,6 +884,9 @@ class Dictionary:
         self.editor_title.configure(text='添加正式词条');self.editor_state.configure(text='新词条')
         self.new_original=self.th.tk.Entry(self.editor,font=self.th.font);self.new_original.pack(fill='x',pady=8)
         self.draft=self.th.tk.Text(self.editor,height=5,width=20,font=self.th.font);self.draft.pack(fill='x',pady=8)
+        self.category_draft=self.th.tk.StringVar(value=self.state.get('new_category','自定义'))
+        self.th.combobox(self.editor,textvariable=self.category_draft,values=glossary_ops.CATEGORIES,state='readonly',width=15).pack(anchor='w',pady=6)
+        self.category_draft.trace_add('write',lambda *_:self.state.__setitem__('new_category',self.category_draft.get()))
         self.th.label(self.editor,'新增正式词条：原文 / 译文',font=self.th.font_small).pack(anchor='w')
         self.state['selected']=('new','')
         if restore and self.state.get('new_draft'):
@@ -858,10 +899,11 @@ class Dictionary:
         if not new and (not self.selected or self.state['tab']!='formal'):return
         self.remember()
         word=self.new_original.get() if new else self.selected['original']
-        ok,why=glossary_ops.upsert(self.gpath,word,self.draft.get('1.0','end-1c'),source='user')
+        ok,why=glossary_ops.upsert(self.gpath,word,self.draft.get('1.0','end-1c'),cat=self.category_draft.get(),source='user')
         if not ok:self.message('保存失败：'+why+'；草稿保留，可重试。',error=True);return
         if self.selected:
             identity=self.identity(self.selected);self.state['drafts'].pop(identity,None);self.state['snapshots'].pop(identity,None)
+            self.state.get('category_drafts',{}).pop(identity,None)
         self.selected=None;self.state['selected']=None;self.refresh();self.app.set_status('正式词条已保存',C['ok'])
 
     def disable(self):
@@ -870,7 +912,7 @@ class Dictionary:
         # Existing set_enabled creates a marker for builtins; save its effective
         # translation through the official upsert interface first so it is retained.
         if row.get('in_file')=='—':
-            ok,why=glossary_ops.upsert(self.gpath,row['original'],row['translation'],source='builtin')
+            ok,why=glossary_ops.upsert(self.gpath,row['original'],row['translation'],cat=row['cat'],source='builtin')
             if not ok:self.message(why,error=True);return
         ok=glossary_ops.set_enabled(self.gpath,row['original'],False)
         if ok:self.refresh();self.app.set_status('词条已停用，译文与记录保留',C['ok'])
@@ -905,7 +947,9 @@ class Dictionary:
         path=filedialog.asksaveasfilename(parent=self.app.root,title='导出使用中的词库',defaultextension='.json',filetypes=[('JSON','*.json'),('CSV','*.csv')])
         if not path:return
         try:
-            rows=glossary_ops.export_rows(self.gpath)
+            rows=[{key:row[key] for key in glossary_ops.EXPORT_COLUMNS}
+                  for row in glossary_ops.rows(self.gpath)
+                  if row['status']=='使用中' and not glossary_ops.is_reference(row)]
             with open(path,'w',encoding='utf-8-sig' if path.lower().endswith('.csv') else 'utf-8',newline='') as f:
                 if path.lower().endswith('.csv'):
                     writer=csv.DictWriter(f,fieldnames=glossary_ops.EXPORT_COLUMNS);writer.writeheader();writer.writerows(rows)

@@ -138,7 +138,7 @@ def main() -> int:
         usage_stats.start_session()
         if not usage_stats.save():
             print("[warn] 消费台账启动保存失败，新增 API 请求将暂停，本地翻译继续。")
-    print(f"[info] 词库 {len(glossary)} 条｜翻译记忆可用 {len(memory.data)} 条"
+    print(f"[info] 可用词条（含内置参考）{len(glossary)} 条｜翻译记忆可用 {len(memory.data)} 条"
           f"（停用 {memory.suspect} 条）"
           f"｜本地缓存 {local_cache.count()} 条｜{pending.summary()}"
           f"（文件都在 {input_scope.APP_DIR}，可直接编辑）")
@@ -169,11 +169,6 @@ def main() -> int:
         allow_popup=not (args.headless or args.simulate),
         learning=LearnedGlossary(input_scope.GLOSSARY_PATH, DEFAULT_GLOSSARY),
     )
-    if config.get('receive_target', 'zh-Hans') != 'zh-Hans':
-        from app.translation.manual import ManualEngine
-        translator = ManualEngine(input_scope.APP_DIR, config, outgoing=False, usage=usage_stats,
-                                  hard_offline=bool(args.offline) or bool(input_scope._DIAGNOSTIC_ROOT))
-
     # 现场统计：让「钱花在哪、有没有漏抓」变成可查的数据，而不是靠估。
     # 抓取层和翻译层都会往这个 dict 里累加，退出时汇总打印。
     # 键的口径在 new_capture_stats() 里，与回放探针共用同一份。
@@ -212,7 +207,7 @@ def main() -> int:
     recognition_gate = RecognitionGate(config.get('recognition_mode', 'realtime'))
     region_capture = None
     overlay = None
-    receive_multilingual = bool(config.get('experimental_multilingual', False))
+    receive_multilingual = bool(config.get('experimental_multilingual', True))
     if args.simulate:
         def make_source():
             return simulation.iter_simulate_source(args.simulate, loop=not args.once)
@@ -230,6 +225,7 @@ def main() -> int:
             return recognition_capture.iter_ocr_source(interval=interval if args.replay_realtime else 0.0,
                                    threshold=max(3, int(config.get("ocr_votes", 3))),
                                    multilingual=receive_multilingual, capture_config=config,
+                                   receive_target=getattr(translator, 'target', 'zh-Hans'),
                                    recognition_gate=recognition_gate,
                                    glossary=glossary, exclude=None, only_in_game=False,
                                    debug=bool(getattr(args, "ocr_debug", False)),
@@ -270,6 +266,7 @@ def main() -> int:
             return recognition_capture.iter_ocr_source(interval=float(config.get("ocr_interval", 0.25)),
                                    threshold=max(3, int(config.get("ocr_votes", 3))),
                                    multilingual=receive_multilingual,
+                                   receive_target=getattr(translator, 'target', 'zh-Hans'),
                                    glossary=glossary,
                                    exclude=overlay_rects,
                                    only_in_game=bool(config.get("only_in_game", True)),

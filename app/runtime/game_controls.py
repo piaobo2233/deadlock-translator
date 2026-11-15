@@ -61,3 +61,9 @@ class GameControls:
 
     def applied(self, value):
         return bool(self.ready and self.controller and self.controller.enabled is value)
+
+    def target_applied(self, value):
+        from app.runtime.clipboard_translation import signature
+        config = self.load_config()
+        return bool(self.ready and self.controller and signature(config)[0] == value
+                    and self.controller.settings == signature(config))

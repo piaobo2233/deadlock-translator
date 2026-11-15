@@ -29,12 +29,17 @@ class VisualCaptureTests(unittest.TestCase):
         present[140:235, 490:610] = part
         absent = present.copy()
         absent[140:194, 490:610] = (30, 25, 32)
+        next_part = ocr.imread_unicode(str(root / 'verify/truth/body/together.png'))
+        self.assertIsNotNone(next_part)
+        new_message = threading.Event()
         disappeared, ocr_started, release, hidden = (threading.Event() for _ in range(4))
         stop, health = threading.Event(), RuntimeHealth()
         owners, messages, reader_errors = [], [], []
         def capture(*, bbox):
             x0, y0, x1, y1 = bbox
-            pixels = absent if disappeared.is_set() else present
+            pixels = (absent if disappeared.is_set() else present).copy()
+            if new_message.is_set():
+                pixels[140:140+next_part.shape[0], 700:700+next_part.shape[1]] = next_part
             return Image.fromarray(cv2.cvtColor(pixels[y0:y1, x0:x1], cv2.COLOR_BGR2RGB))
         update = VisualPulse.update
         def observe(pulse, pixels, at):
@@ -72,7 +77,10 @@ class VisualCaptureTests(unittest.TestCase):
                         pass
                     except Exception as exc:
                         reader_errors.append(repr(exc))
-                with patch.object(ocr, "_read_ocr", side_effect=blocked_read):
+                # Verified unchanged pixels correctly skip OCR. Introduce a
+                # second bubble and block the backend-independent first read.
+                with patch.object(ocr, "_preferred_read", side_effect=blocked_read):
+                    new_message.set()
                     reader = threading.Thread(target=consume, name="test-blocked-ocr")
                     reader.start()
                     self.assertTrue(ocr_started.wait(2))
@@ -85,8 +93,9 @@ class VisualCaptureTests(unittest.TestCase):
                     reader.join(3)
                     self.assertFalse(reader.is_alive())
                 self.assertEqual(reader_errors, [])
-                self.assertEqual(len(owners), 1)
-                self.assertTrue(owners[0].finished)
+                from app.runtime.frame_source import FrameSource
+                self.assertEqual(sum(isinstance(owner,FrameSource) for owner in owners),1)
+                self.assertTrue(all(owner.finished for owner in owners))
             finally:
                 stop.set()
                 release.set()

@@ -6,7 +6,7 @@ import csv
 import io
 import re
 import unicodedata
-from app.recognition.languages import native_chinese
+from app.recognition.languages import native_chinese, script_model
 
 
 @dataclass(frozen=True)
@@ -29,6 +29,10 @@ def comparable(text):
     # Latin words and digits still retain their boundaries; kana voicing stays intact.
     plain = re.sub(r'(?<=[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af])\s+'
                    r'(?=[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af])', '', plain)
+    # TSV also separates numeric tokens from CJK units (20 秒 / 20 초).
+    # Never join two numbers or an English word to a number.
+    cjk = r'\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af'
+    plain = re.sub(rf'(?<=[{cjk}])\s+(?=\d)|(?<=\d)\s+(?=[{cjk}])', '', plain)
     plain = ''.join(''.join(d for d in unicodedata.normalize('NFKD', c)
                            if unicodedata.category(d) != 'Mn')
                     if 'LATIN' in unicodedata.name(c, '') else c for c in plain)
@@ -42,10 +46,10 @@ def assess_source(tsv, expected, *, png=b"", elapsed_ms=0):
     reading = ' '.join(text for text, _ in words)
     confidence = min((score for _, score in words), default=0.0)
     # Compare the whole body, including Han. Names outside the body cannot opt it out.
-    if native_chinese(reading):
-        reason = 'native_chinese'
-    elif not comparable(reading) or confidence < 65:
+    if not comparable(reading) or confidence < 65:
         reason = 'source_uncertain'
+    elif native_chinese(reading) and not script_model(expected):
+        reason = 'native_chinese'
     elif comparable(reading) != comparable(expected):
         reason = 'source_disagrees'
     else:
@@ -53,8 +57,11 @@ def assess_source(tsv, expected, *, png=b"", elapsed_ms=0):
     return SourceEvidence(not reason, reason, reading, confidence, elapsed_ms, png)
 
 
-def for_text(evidence, expected):
+def for_text(evidence, expected, *, allow_chinese=False):
     """Reuse one independent pixel reading when variant selection changes the text."""
+    if (allow_chinese and evidence.reason == 'native_chinese' and evidence.confidence >= 65
+            and comparable(evidence.reading) == comparable(expected)):
+        return replace(evidence, verified=True, reason='')
     if evidence.reason not in ('', 'source_disagrees'):
         return evidence
     matches = bool(comparable(evidence.reading)) and comparable(evidence.reading) == comparable(expected)
@@ -62,7 +69,7 @@ def for_text(evidence, expected):
 
 
 class FrameSourceReadings:
-    """Reuse a successful source read only within one body of one captured frame."""
+    """Reuse completed model reads only within one body of one captured frame."""
 
     MAX_MODELS = 4
 
@@ -79,7 +86,7 @@ class FrameSourceReadings:
             self.hits += 1
             return for_text(previous, text)
         evidence = self.read(text, deadline)
-        if evidence.reason in ('', 'source_disagrees', 'native_chinese'):
+        if evidence.reason in ('', 'source_disagrees', 'native_chinese', 'source_uncertain'):
             self._readings[key] = evidence
             if len(self._readings) > self.MAX_MODELS:
                 self._readings.popitem(last=False)

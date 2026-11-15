@@ -31,6 +31,11 @@ def _join_stroke_bands(sub, bands, scale):
     typical_height = float(np.median([g[3] for g in glyphs])) if glyphs else 0
     edge = max(1, round(2 * scale))
     merged = [bands[0]]
+    pale = sub.min(axis=2) > 160
+    def span(top, bottom):
+        row = top + int(np.argmax(pale[top:bottom].sum(axis=1)))
+        runs = _runs(pale[row], gap=max(1, round(2 * scale)))
+        return max(runs, key=lambda run:run[1]-run[0], default=(0,0))
     for top, bottom in bands[1:]:
         start, previous_bottom = merged[-1]
         crosses = any(.65 * typical_height <= height <= 1.6 * typical_height
@@ -38,7 +43,19 @@ def _join_stroke_bands(sub, bands, scale):
                       and y + origin + height > previous_bottom + edge
                       and y + origin + height >= top - edge
                       for _, y, _, height in glyphs)
-        if crosses:
+        # Dense Cyrillic/Hangul rows can cover almost the whole width. Join
+        # projection gaps only when one pale side margin stays continuous and
+        # the other remains mostly visible (an avatar can overlap that side);
+        # separate panels have a dark border/gutter and must stay separate.
+        left, right = span(start, previous_bottom)
+        inset = max(2, round(3 * scale))
+        left_rail = pale[previous_bottom:top,left+inset:left+2*inset].mean(axis=1)
+        right_rail = pale[previous_bottom:top,right-2*inset:right-inset].mean(axis=1)
+        same_rectangle = (right-left >= 50*scale and top-previous_bottom <= 60*scale
+            and pale[top:bottom,left:right].mean() >= .5
+            and ((np.all(left_rail >= .8) and np.mean(right_rail >= .8) >= .5)
+                 or (np.all(right_rail >= .8) and np.mean(left_rail >= .8) >= .5)))
+        if crosses or same_rectangle:
             merged[-1] = (start, bottom)
         else:
             merged.append((top, bottom))
@@ -110,15 +127,25 @@ def _preserves_glyphs(sub, old, candidate, scale):
 
 
 def _cluster_glyphs(glyphs):
-    """Shared baseline grouping, including descenders at larger screen scales."""
-    tolerance = max(2, float(np.median([g[3] for g in glyphs])) * .5)
+    """Group physical rows by vertical overlap, including detached script parts."""
     lines = []
-    for glyph in sorted(glyphs, key=lambda g: g[1] + g[3]):
-        baseline = glyph[1] + glyph[3]
-        if lines and abs(baseline - np.median([g[1] + g[3] for g in lines[-1]])) <= tolerance:
-            lines[-1].append(glyph)
-        else:
+    for glyph in sorted(glyphs, key=lambda g: (g[1],-g[3])):
+        y,height=glyph[1],glyph[3]
+        matched=None
+        for line in reversed(lines):
+            top=min(g[1] for g in line)
+            bottom=max(g[1]+g[3] for g in line)
+            overlap=min(y+height,bottom)-max(y,top)
+            # Hangul/Han can have detached upper and lower components. Their
+            # shared vertical overlap with whole glyphs establishes one row;
+            # comparing component baselines invents extra rows in that case.
+            if overlap >= .4*min(height,bottom-top):
+                matched=line
+                break
+        if matched is None:
             lines.append([glyph])
+        else:
+            matched.append(glyph)
     return lines
 
 
@@ -140,17 +167,45 @@ class BodyRegion:
         return self.rect + (0,) if self.accepted else None
 
 
+def _without_edge_fragments(crop):
+    """Remove strokes attached to side borders through a coloured portrait.
+
+    Text is detached inside the pale body. A portrait can connect its dark
+    strokes to the edge through coloured pixels that a dark-only mask misses.
+    Work on the complete body before taking the text crop; never trim a fixed
+    strip that could remove a leading letter, minus sign or decimal.
+    """
+    side_width = int(max(8, crop.shape[1] * .08))
+    sides = np.concatenate((crop[:, :side_width], crop[:, -side_width:]), axis=1)
+    if not np.any((sides.min(axis=2) <= 160)
+                  & (sides.max(axis=2).astype(np.int16) - sides.min(axis=2) > 30)):
+        return crop
+    _, labels, stats, _ = cv2.connectedComponentsWithStats(
+        (crop.min(axis=2) <= 160).astype(np.uint8), connectivity=8)
+    crossing = np.unique(np.concatenate((labels[:, 0], labels[:, -1])))
+    colour = crop.max(axis=2).astype(np.int16) - crop.min(axis=2)
+    crossing = [label for label in crossing if label != 0
+                and stats[label, cv2.CC_STAT_WIDTH] <= max(8, crop.shape[1] * .08)
+                and np.count_nonzero((labels == label) & (colour > 30)) >= 3]
+    if not crossing:
+        return crop
+    cleaned = crop.copy()
+    cleaned[np.isin(labels, crossing)] = 225
+    return cleaned
+
+
 def _glyph_lines(crop, scale, *, exclude_edge_components=False):
-    dark = (crop.max(axis=2) < 120).astype(np.uint8)
     if exclude_edge_components:
         # A portrait may overlap the body's left border. Clearing a narrow
         # border first splits it into letter-sized strokes (e.g. "\\ afk").
         # Remove connected strokes crossing a horizontal body boundary before
         # measuring glyphs; don't strip punctuation from the recognized text.
+        crop = _without_edge_fragments(crop)
+    dark = (crop.max(axis=2) < 120).astype(np.uint8)
+    if exclude_edge_components:
         _, labels = cv2.connectedComponents(dark, connectivity=8)
         crossing = np.unique(np.concatenate((labels[:, 0], labels[:, -1])))
-        crossing = crossing[crossing != 0]
-        dark[np.isin(labels, crossing)] = 0
+        dark[np.isin(labels, crossing[crossing != 0])] = 0
     # Body outlines/remaining tail pixels are not characters.
     edge = max(1, round(2 * scale))
     dark[:edge] = dark[-edge:] = 0
@@ -167,7 +222,7 @@ def _glyph_lines(crop, scale, *, exclude_edge_components=False):
     lines = _cluster_glyphs(glyphs)
     consistent = []
     for line in lines:
-        typical_height = float(np.median([g[3] for g in line]))
+        typical_height = float(np.percentile([g[3] for g in line],75))
         consistent.append([g for g in line if typical_height * .45 <= g[3] <= typical_height * 1.6])
     # One arbitrary connected symbol is insufficient, even if OCR calls it "ff".
     coherent = [line for line in consistent if len(line) >= 2
@@ -176,6 +231,32 @@ def _glyph_lines(crop, scale, *, exclude_edge_components=False):
     if not selected:
         return [], 0
     typical_height = float(np.median([g[3] for g in selected]))
+    # Detached Hangul pieces can each be shorter than the row's height filter.
+    # They cannot establish a row, but may extend an already coherent row's
+    # complete text bounds (e.g. the final 주). Do not admit a new texture row.
+    for glyph in glyphs:
+        if glyph in selected:
+            continue
+        x, y, width, height = glyph
+        # Require two vertically separated pieces of one glyph. An isolated
+        # short texture beside an English line must not expand its old crop.
+        partners = [other for other in glyphs if other != glyph
+                    and width >= height * 1.2 and other[2] >= other[3] * 1.2
+                    and max(y, other[1]) >= min(y + height, other[1] + other[3])
+                    and min(x + width, other[0] + other[2]) - max(x, other[0])
+                    >= .5 * min(width, other[2])
+                    and .65 * typical_height <= max(y + height, other[1] + other[3])
+                    - min(y, other[1]) <= 1.3 * typical_height]
+        if not partners:
+            continue
+        for line in coherent:
+            top = min(g[1] for g in line)
+            bottom = max(g[1] + g[3] for g in line)
+            if (top - edge <= y and y + height <= bottom + edge
+                    and any(min(abs(x + width - g[0]), abs(x - g[0] - g[2]))
+                            <= typical_height * 1.5 for g in line)):
+                selected.append(glyph)
+                break
     baselines = [float(np.median([g[1] + g[3] for g in line])) for line in coherent]
     text_left = min(g[0] for g in selected)
     # A paragraph may finish with a single letter/number. It cannot establish
@@ -221,15 +302,34 @@ def locate_body(image, box, *, scale=1.0):
         return BodyRegion(reason="empty_box")
     sub = image[y0:y1, x0:x1]
     mn, mx = sub.min(axis=2), sub.max(axis=2)
-    bright = (mn > 160) & (mx.astype(np.int16) - mn > 8)
-    rect, reason = _body_rect(sub, bright, scale)
-    if rect is None:
-        return BodyRegion(reason=reason)
-    left, top, right, bottom = rect
-    crop = sub[top:bottom, left:right]
-    glyphs, lines = _glyph_lines(crop, scale, exclude_edge_components=True)
-    if not lines:
-        return BodyRegion(reason="no_aligned_glyphs")
+    pale = mn > 160
+    original_reason = ''
+    selected = None
+    for attempt, bright in enumerate((pale & (mx.astype(np.int16)-mn > 8), pale)):
+        rect, reason = _body_rect(sub, bright, scale)
+        if rect is not None:
+            left, top, right, bottom = rect
+            crop = sub[top:bottom, left:right]
+            glyphs, lines = _glyph_lines(crop, scale, exclude_edge_components=True)
+            if lines and (attempt == 0 or lines >= 2):
+                if selected is not None:
+                    (ol,ot,orr,ob), _, _, old_lines = selected
+                    # Compression can leave only the first rows tinted. Prefer
+                    # the complete aligned paragraph inside the same-width pale
+                    # rectangle, never a wider panel or a separate neighbour.
+                    edge = max(2, round(3 * scale))
+                    if (lines <= old_lines or left > ol+edge or right < orr-edge
+                            or top > ot+edge or bottom < ob-edge
+                            or right-left > max(orr-ol+edge*2, (orr-ol)*1.15)):
+                        continue
+                selected = rect, crop, glyphs, lines
+            else:
+                reason = 'no_aligned_glyphs'
+        if attempt == 0:
+            original_reason = reason
+    if selected is None:
+        return BodyRegion(reason=original_reason)
+    (left,top,right,bottom), crop, glyphs, lines = selected
     # Crop around aligned glyphs, not outlines which Tesseract reads as "|"/"}".
     # Extra margin retains detached dots and punctuation next to valid letters.
     margin = max(3, round(4 * scale))
@@ -242,11 +342,18 @@ def locate_body(image, box, *, scale=1.0):
                       glyph_count=len(glyphs), line_count=lines)
 
 
+def text_pixels(image, region):
+    """Use the same portrait-free body for OCR and visual continuity."""
+    bx, by, bw, bh = region.rect
+    body = _without_edge_fragments(image[by:by + bh, bx:bx + bw])
+    x, y, width, height = region.text_rect
+    return body[y - by:y - by + height, x - bx:x - bx + width]
+
+
 def padded_text(image, region, *, scale=1.0):
     """Common pixel preparation for preferred OCR and every fallback variant."""
-    x, y, width, height = region.text_rect
     pad = max(4, round(8 * scale))
-    return cv2.copyMakeBorder(image[y:y + height, x:x + width], pad, pad, pad, pad,
+    return cv2.copyMakeBorder(text_pixels(image, region), pad, pad, pad, pad,
                              cv2.BORDER_CONSTANT, value=(225, 225, 225))
 
 

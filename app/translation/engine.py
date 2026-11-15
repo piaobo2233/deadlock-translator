@@ -303,12 +303,22 @@ class TranslationEngine:
         value = decision[0][0]
         quality = record.get('quality_checks') or self.rules.quality_report(text, value, self.glossary)
         self._record_candidate(text, value, quality, request_id=decision[3], origin='recovery')
-        receipt = self.learning_cache.save(text, value, request_id=decision[3],
-            policy_fingerprint=self.learning_policy(), quality_checks=quality,
+        receipt = self._save_personal_result(text, value, decision[3], quality,
             provenance=dict(recovery=True, model=record['attempts'][-1].get('params', {}).get('model', 'unknown')))
         with self._state_lock:
             self._refresh_state()
-        return ((value, 'learning_cache' if receipt.saved else 'recovery_unsaved'), False, 0, decision[3], receipt)
+        return ((value, 'glossary' if receipt.saved else 'recovery_unsaved'), False, 0, decision[3], receipt)
+
+    def _save_personal_result(self, text, value, request_id, quality, *, provenance):
+        # Commit the formal entry first. A failed write stays recoverable from
+        # the qualified journal, rather than being hidden by a cache hit.
+        learned = self.learning.learn(text, value, request_id=request_id, quality_checks=quality)
+        receipt = learned.receipt
+        if receipt.saved:
+            self.learning_cache.save(text, value, request_id=request_id,
+                policy_fingerprint=self.learning_policy(), quality_checks=quality,
+                provenance=provenance)
+        return receipt
 
     def _record_candidate(self, original, translation, quality, *, request_id=None, origin='translate'):
         if self.review_queue is None:
@@ -371,7 +381,8 @@ class TranslationEngine:
         if result.api_attempts and self.journal_error:
             warning = "请求记录更新异常；请检查恢复记录，未自动重复发送"
             result = replace(result, warning="；".join(filter(None, (result.warning, warning))))
-        if control is not None and result.successful and not control.active():
+        if (control is not None and result.successful and not control.active()
+                and not getattr(control, 'retain_validated_result', False)):
             # The final accounting health read can itself take time. Learning
             # remains valid, but an expired subscriber must not receive a late
             # successful display after that read.
@@ -471,7 +482,7 @@ class TranslationEngine:
         result = (("", "internal_error"), False, 0)
         try:
             result = self._translate_owned(text, flight)
-            if not control.active():
+            if not control.active() and not getattr(control, 'retain_validated_result', False):
                 return (("", "expired"), False, result[2], *result[3:])
             return result
         except Exception as exc:
@@ -793,9 +804,8 @@ class TranslationEngine:
                 return '', current_gate
             if recovery_failed:
                 return cleaned, 'api_recovery_failed'
-            receipt = self.learning_cache.save(text, cleaned,
-                request_id=request_id, policy_fingerprint=self.learning_policy(),
-                quality_checks=quality, provenance=dict(model=self.model, origin='translate'))
+            receipt = self._save_personal_result(text, cleaned, request_id, quality,
+                provenance=dict(model=self.model, origin='translate'))
             self._request.save_receipt = receipt
             with self._state_lock:
                 self._refresh_state()

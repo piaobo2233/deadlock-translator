@@ -4,6 +4,7 @@ import threading
 import time
 import traceback
 import math
+from queue import Empty
 
 from app.runtime.channels import BoundedChannel, ChannelClosed
 from app.runtime.events import PipelineStage, RuntimeHealth
@@ -30,6 +31,7 @@ class TranslationPipeline:
         self.reliable = reliable
         self.pending = BoundedChannel(pending_limit)
         self.outbox = BoundedChannel(display_limit)
+        self._visual_deliveries = BoundedChannel(display_limit)
         self.network = BoundedChannel(network_limit)
         self.task_timeout, self.is_current, self.clock = task_timeout, is_current, clock
         self.split = not reliable and all(callable(getattr(type(processor), method, None))
@@ -96,6 +98,7 @@ class TranslationPipeline:
         self.pending.close(discard=True)
         self.network.close(discard=True)
         self.outbox.close(discard=True)
+        self._visual_deliveries.close(discard=True)
         deadline = time.monotonic() + max(0, timeout)
         if self._started:
             for thread in self._threads:
@@ -256,6 +259,29 @@ class TranslationPipeline:
         else:
             self._trace(work.candidate, 'delivery', reason='not_current', request_id=result.request_id,
                         network_participated=result.network_participated, attempts=result.api_attempts)
+            if (result.successful and work.candidate.identity is not None
+                    and not self.stop_event.is_set() and not self.paused()):
+                # Await one short refresh asynchronously. The API worker stays
+                # free for English; never draw until this exact identity is live.
+                self._offer(self._visual_deliveries, (work, result, time.monotonic() + .5),
+                            PipelineStage.DISPLAY)
+
+    def _refresh_deliveries(self):
+        for _ in range(self._visual_deliveries.qsize()):
+            try:
+                work, result, until = self._visual_deliveries.get_nowait()
+            except Empty:
+                return
+            control = work.control
+            unexpired = control.deadline is None or control.clock() < control.deadline
+            if control.current() and unexpired:
+                self._publish(work, self.processor.deliver_group(work, result))
+            elif (unexpired and not self.paused() and time.monotonic() < until
+                    and not self.stop_event.is_set()):
+                self._offer(self._visual_deliveries, (work, result, until), PipelineStage.DISPLAY)
+            else:
+                self._trace(work.candidate, 'delivery', reason='not_current',
+                            request_id=result.request_id)
 
     def _trace(self, candidate, stage, **fields):
         if callable(getattr(type(self.processor), 'trace', None)):
@@ -297,7 +323,8 @@ class TranslationPipeline:
                     if group.closed:
                         self._remove_group(group)
                         self.processor.release_group(group)
-                if self._network_finished.is_set():
+                self._refresh_deliveries()
+                if self._network_finished.is_set() and self._visual_deliveries.empty():
                     return
                 self.stop_event.wait(0.05)
         except ChannelClosed:

@@ -48,8 +48,8 @@ class VisualDropVisibilityTests(unittest.TestCase):
         for reason in ("confirmation_expired", "confirmation_not_visible", "no_current_box"):
             self.assertIn(f'note_visual_drop("{reason}")', source,
                           f"{reason} 这个丢弃点没有接上记录器")
-        # 一处定义 + 三处调用；多出来说明有人绕过了这个出口
-        self.assertEqual(source.count("note_visual_drop("), 4)
+        # 一处定义；绑定前刷新失败与绑定失败分别记录不可见。
+        self.assertEqual(source.count("note_visual_drop("), 5)
 
     def test_summary_reports_the_counts_when_something_was_dropped(self):
         stats = recognition_capture.new_capture_stats()

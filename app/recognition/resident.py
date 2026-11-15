@@ -12,6 +12,36 @@ import queue
 import subprocess
 import sys
 import threading
+import time
+
+
+class ReadDeadlineExpired(TimeoutError):
+    """The current frame expired; the helper still owns an unfinished read."""
+
+
+def script_data_name(language, models):
+    if language == 'jpn_context':
+        return script_data_name('jpn_combined', models) + '+chi_sim'
+    if language == 'jpn_quality':
+        return 'jpn_quality' if (Path(models) / 'jpn_quality.traineddata').is_file() else 'jpn'
+    if language == 'jpn_standard':
+        return 'jpn'
+    if language == 'jpn_combined':
+        return 'jpn_quality+jpn' if (Path(models) / 'jpn_quality.traineddata').is_file() else 'jpn'
+    if language == 'jpn' and (Path(models) / 'jpn_quality.traineddata').is_file():
+        return 'jpn_quality'
+    return language
+
+
+def script_languages(language, models, *, source=False):
+    model = script_data_name(language, models)
+    if language == 'jpn_context':
+        return model
+    if language in ('jpn_combined', 'jpn_quality', 'kor', 'rus'):
+        # English competition can turn kana into "Do", Hangul into "SC", or
+        # Cyrillic меня into Latin "mena". Source still includes Chinese.
+        return model + ('+chi_sim' if source else '')
+    return '+'.join(dict.fromkeys((model, 'eng', 'chi_sim')))
 
 
 def native_library(executable):
@@ -28,6 +58,7 @@ class ResidentReader:
         self.process = None
         self._lock = threading.Lock()
         self._responses = queue.Queue()
+        self._pending_at = None
         dll = native_library(executable)
         if sys.platform != 'win32':
             raise OSError('Resident C API unavailable')
@@ -70,21 +101,45 @@ class ResidentReader:
     def finished(self):
         return self.process is None or self.process.poll() is not None
 
-    def read(self, image, mode, *, source=False, timeout=2, language=''):
+    def read(self, image, mode, *, source=False, timeout=2, language='', soft_deadline=False):
         # One helper owns both language contexts; no native thread touches Tk.
         with self._lock:
             if self.process is None or self.process.poll() is not None:
                 raise OSError('Resident OCR stopped')
+            deadline = time.monotonic() + max(.001, timeout)
+            def response():
+                try:
+                    try:
+                        result = self._responses.get_nowait()
+                    except queue.Empty:
+                        remaining = min(deadline, self._pending_at + 8) - time.monotonic()
+                        if remaining <= 0:
+                            raise
+                        result = self._responses.get(timeout=remaining)
+                except queue.Empty:
+                    if soft_deadline and time.monotonic() < self._pending_at + 8:
+                        raise ReadDeadlineExpired from None
+                    raise
+                self._pending_at = None
+                if 'error' in result:
+                    raise OSError(result['error'])
+                return result['text']
             try:
+                # A late response belongs to old pixels. Drain it before sending
+                # the next frame; it must never become another frame's vote.
+                if self._pending_at is not None:
+                    response()
+                if time.monotonic() >= deadline:
+                    raise ReadDeadlineExpired
                 height, width = image.shape[:2]
                 payload = dict(width=width, height=height, mode=mode, source=source, language=language,
                     pixels=base64.b64encode(image.tobytes()).decode('ascii'))
                 self.process.stdin.write(json.dumps(payload) + '\n')
                 self.process.stdin.flush()
-                result = self._responses.get(timeout=max(.001, timeout))
-                if 'error' in result:
-                    raise OSError(result['error'])
-                return result['text']
+                self._pending_at = time.monotonic()
+                return response()
+            except ReadDeadlineExpired:
+                raise
             except Exception:
                 self.close()
                 raise
@@ -161,18 +216,21 @@ def worker(dll, models, languages, words):
                 raise ValueError('Invalid grayscale image')
             language = request.get('language', '')
             if language:
-                if language not in ('jpn', 'kor', 'rus'):
+                if language not in ('jpn', 'jpn_standard', 'jpn_combined', 'jpn_quality', 'jpn_context', 'kor', 'rus', 'chi_sim'):
                     raise ValueError('Invalid script model')
                 key = (language, bool(request['source']))
                 if key not in scripts:
-                    # Keep one script pair, rather than retaining six more full
-                    # model contexts after a multilingual conversation.
-                    if scripts and next(iter(scripts))[0] != language:
+                    # Keep one script family; Japanese standard and quality
+                    # contexts coexist without reinitializing each other.
+                    if (scripts and next(iter(scripts))[0].partition('_')[0]
+                            != language.partition('_')[0]):
                         for old in scripts.values():
                             lib.TessBaseAPIDelete(old)
                             contexts.remove(old)
                         scripts.clear()
-                    scripts[key] = initialize(language + '+eng+chi_sim', not request['source'])
+                    # The optional user word list is English; applying it to a
+                    # Korean/Japanese/Russian context biases glyphs into Latin.
+                    scripts[key] = initialize(script_languages(language, models, source=bool(request['source'])))
                 api = scripts[key]
             elif request['source'] == 'english':
                 if english is None:

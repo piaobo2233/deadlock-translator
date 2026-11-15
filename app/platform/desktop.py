@@ -3,6 +3,7 @@ from app import brand
 from app.platform.single_instance import acquire_instance, instance_running
 import ctypes
 import os
+from functools import lru_cache
 
 def _enable_dpi_awareness() -> bool:
     """必须在创建任何窗口之前调用。
@@ -35,27 +36,58 @@ GAME_EXE = "deadlock.exe"
 
 
 _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+_FOREGROUND_STATUS = {}
+
+
+def foreground_status():
+    """Privacy-safe reason for a blocked foreground gate, without process names."""
+    return dict(_FOREGROUND_STATUS)
+
+
+@lru_cache(maxsize=1)
+def _foreground_apis():
+    from ctypes import wintypes as w
+    user = ctypes.WinDLL('user32', use_last_error=True)
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    for library, name, args, result in (
+            (user, 'GetForegroundWindow', [], w.HWND),
+            (user, 'GetWindowThreadProcessId', [w.HWND, ctypes.POINTER(w.DWORD)], w.DWORD),
+            (kernel, 'OpenProcess', [w.DWORD, w.BOOL, w.DWORD], w.HANDLE),
+            (kernel, 'QueryFullProcessImageNameW', [w.HANDLE, w.DWORD, w.LPWSTR, ctypes.POINTER(w.DWORD)], w.BOOL),
+            (kernel, 'CloseHandle', [w.HANDLE], w.BOOL)):
+        function = getattr(library, name)
+        function.argtypes, function.restype = args, result
+    return user, kernel
 
 
 def _foreground_exe() -> str:
     """返回当前前台窗口对应的可执行文件名（小写）。取不到就返回空串。"""
-    user32 = ctypes.windll.user32
-    kernel32 = ctypes.windll.kernel32
+    user32, kernel32 = _foreground_apis()
+    global _FOREGROUND_STATUS
+    _FOREGROUND_STATUS = dict(method='query', error=0)
     hwnd = user32.GetForegroundWindow()
     if not hwnd:
+        _FOREGROUND_STATUS = dict(method='window_missing', error=0)
         return ""
     pid = ctypes.c_ulong(0)
     user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
     if not pid.value:
+        _FOREGROUND_STATUS = dict(method='pid_missing', error=ctypes.get_last_error())
         return ""
     handle = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid.value)
     if not handle:
-        return ""
+        # A foreground game can deny opening its process. A process snapshot
+        # still proves the executable for that exact PID; titles never do.
+        error = ctypes.get_last_error()
+        name = next((name for process_id, name in _processes() if process_id == pid.value), '')
+        _FOREGROUND_STATUS = dict(method='snapshot' if name else 'unavailable', error=error)
+        return name
     try:
         buf = ctypes.create_unicode_buffer(1024)
         size = ctypes.c_ulong(1024)
         if kernel32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
             return os.path.basename(buf.value).lower()
+        _FOREGROUND_STATUS = dict(method='unavailable', error=ctypes.get_last_error())
         return ""
     finally:
         kernel32.CloseHandle(handle)
@@ -102,11 +134,8 @@ def translator_is_running() -> bool:
     return instance_running()
 
 
-def process_running(exe_name: str) -> bool:
-    """目标进程在不在（不区分大小写）。不依赖 psutil —— 它不在 requirements 里。"""
-    target = (exe_name or "").strip().lower()
-    if not target:
-        return False
+def _processes():
+    """Read PID/name pairs without requiring access to each process handle."""
     try:
         import ctypes
         from ctypes import wintypes
@@ -129,27 +158,34 @@ def process_running(exe_name: str) -> bool:
 
         # [!] 结构体布局错了会读出垃圾名字（还不报错）。先验尺寸再干活。
         if ctypes.sizeof(PROCESSENTRY32) != 304:
-            return False
+            return
 
         k = ctypes.WinDLL("kernel32", use_last_error=True)
+        k.CreateToolhelp32Snapshot.argtypes = (wintypes.DWORD, wintypes.DWORD)
+        k.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+        k.Process32First.argtypes = (wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32))
+        k.Process32Next.argtypes = (wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32))
+        k.CloseHandle.argtypes = (wintypes.HANDLE,)
         snap = k.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
-        if not snap or snap == -1:
-            return False
+        if not snap or snap == ctypes.c_void_p(-1).value:
+            return
         entry = PROCESSENTRY32()
         entry.dwSize = ctypes.sizeof(PROCESSENTRY32)
-        found = False
         try:
             ok = k.Process32First(snap, ctypes.byref(entry))
             while ok:
-                if entry.szExeFile.decode("mbcs", "replace").lower() == target:
-                    found = True
-                    break
+                yield entry.th32ProcessID, entry.szExeFile.decode("mbcs", "replace").lower()
                 ok = k.Process32Next(snap, ctypes.byref(entry))
         finally:
             k.CloseHandle(snap)
-        return found
     except Exception:
-        return False
+        return
+
+
+def process_running(exe_name: str) -> bool:
+    """目标进程在不在（不区分大小写），不依赖 psutil。"""
+    target = (exe_name or '').strip().lower()
+    return bool(target) and any(name == target for _, name in _processes())
 
 
 def has_console() -> bool:

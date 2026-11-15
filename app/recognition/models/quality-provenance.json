@@ -1,0 +1,20 @@
+{
+  "repository": "https://github.com/tesseract-ocr/tessdata_best",
+  "commit": "e12c65a915945e4c28e237a9b52bc4a8f39a0cec",
+  "license": "Apache-2.0",
+  "upstream_file": "jpn.traineddata",
+  "upstream_sha256": "36bdf9ac823f5911e624c30d0553e890b8abc7c31a65b3ef14da943658c40b79",
+  "modification": "LSTM weights compacted to int using upstream combine_tessdata -c; file renamed to retain existing fast model",
+  "conversion_command": "combine_tessdata -c jpn.traineddata",
+  "converter_sha256": "545c92f43d74a4479f5f5056b705ffd96d9553ee22dee428d23f2d68e96242dc",
+  "files": {
+    "jpn_quality.traineddata": {
+      "bytes": 3039374,
+      "sha256": "1a0175291ea145d4a66be681d1084496f10af938aacab247c5d40b31359a604e"
+    },
+    "QUALITY-LICENSE": {
+      "bytes": 10173,
+      "sha256": "a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9"
+    }
+  }
+}

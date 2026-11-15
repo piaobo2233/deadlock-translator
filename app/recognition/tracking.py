@@ -194,7 +194,7 @@ class Consensus:
                    for e in self.recent_pos)
 
     @_synchronized
-    def feed(self, text, width=0, box=None, *, captured_at=None):
+    def feed(self, text, width=0, box=None, *, captured_at=None, can_emit=None):
         self.last_resumed = None
         key = normalize(text)
         if len(key) < 2:
@@ -233,7 +233,7 @@ class Consensus:
                 group['box'] = tuple((ob[i] * 0.7 + box[i] * 0.3 for i in range(min(len(ob), len(box)))))
         if group['emitted'] and group.get('suspended'):
             group['resume_votes'] += 1
-            if group['resume_votes'] >= self.threshold:
+            if group['resume_votes'] >= self.threshold and can_emit is not False:
                 group['suspended'] = False
                 previous = self.confirmed[group['id']]
                 renewed = replace(previous, text_version=previous.text_version + 1, confirmed_at=now)
@@ -246,7 +246,11 @@ class Consensus:
         group['last'] = now
         group['width'] = max(group['width'], width)
         vote_key, vote_count = group['votes'].most_common(1)[0]
-        if not group['emitted'] and vote_count >= self.threshold:
+        # Realtime may collect readable frames while the independent source is
+        # weak. Only a fresh verified reading of the actual winner can publish
+        # it; a rejected frame must not permanently consume this message.
+        if (not group['emitted'] and vote_count >= self.threshold and can_emit is not False
+                and (can_emit is None or vote_key == normalize_query(text))):
             group['emitted'] = True
             winner = next(value for value, _ in group['variants'].most_common()
                           if normalize_query(value) == vote_key)

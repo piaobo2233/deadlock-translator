@@ -91,6 +91,7 @@ def run_desktop(
             lambda message: overlay.status_queue.put(FailureNotice('game_input', message)), paused=live_state.is_paused)
         game_controls.start()
         overlay._input_translate_applied = game_controls.applied
+        overlay._send_target_applied = game_controls.target_applied
     last_save = {"at": time.time()}
 
     # ---- 系统托盘（阶段 5 · §三）----

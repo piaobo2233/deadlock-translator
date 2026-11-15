@@ -137,7 +137,7 @@ class AuthorityTests(unittest.TestCase):
         result = self.engine.translate_result("Together!")
         self.assertEqual((result.source, result.api_attempts), ("api", 1))
         entry = self.engine.learning_cache.read()[QueryKey.from_text('Together!').fingerprint]
-        self.assertFalse(self.path.exists())
+        self.assertTrue(self.path.exists())
         self.assertEqual(len(self.engine.review_queue.items()),1)
         self.assertEqual(entry["query_key"], QueryKey.from_text("Together!").as_dict())
         self.assertEqual((entry["original"], entry["source"]), ("Together!", "api_candidate"))

@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import re
 import time
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, HTTPRedirectHandler, build_opener
 
@@ -22,6 +22,15 @@ DOWNLOAD_HOSTS = {'github.com', 'api.github.com', 'release-assets.githubusercont
 
 class UpdateError(Exception):
     pass
+
+
+class UpdateCancelled(UpdateError):
+    pass
+
+
+def check_cancelled(cancelled):
+    if cancelled():
+        raise UpdateCancelled('更新已取消，尚未启动安装；可重新下载')
 
 
 def version_key(value):
@@ -232,28 +241,37 @@ def checksum_for(release):
     return match[1].lower()
 
 
-def file_digest(path):
+def file_digest(path, cancelled=lambda: False):
     digest = hashlib.sha256()
     with Path(path).open('rb') as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            check_cancelled(cancelled)
             digest.update(chunk)
     return digest.hexdigest()
 
 
-def download(release, directory, progress=lambda done, total: None):
+def download(release, directory, progress=lambda done, total: None, *, cancelled=lambda: False,
+             phase=lambda value: None):
+    check_cancelled(cancelled)
     if not release.setup_url:
         raise UpdateError('该版本没有安装包，请打开官方下载页')
     directory = Path(directory)
     # Each attempt owns a new directory, so retries never replace an older artifact.
-    directory.mkdir(parents=True, exist_ok=False)
+    try:
+        directory.mkdir(parents=True, exist_ok=False)
+    except PermissionError as exc:
+        raise UpdateError('更新目录写入权限不足，尚未启动安装；请检查目录权限或手动更新') from exc
     partial = directory / 'setup.part'
     target = directory / f'LockLingo-{release.version}-setup.exe'
     try:
+        phase('正在获取校验信息…')
         expected = checksum_for(release)
+        check_cancelled(cancelled)
         received = 0
         deadline = time.monotonic() + 15 * 60
         with open_url(release.setup_url) as response, partial.open('xb') as stream:
             while True:
+                check_cancelled(cancelled)
                 chunk = response.read(256 * 1024)
                 if not chunk:
                     break
@@ -264,12 +282,19 @@ def download(release, directory, progress=lambda done, total: None):
                 progress(received, release.setup_size)
             stream.flush()
             os.fsync(stream.fileno())
-        if received != release.setup_size or file_digest(partial) != expected:
+        check_cancelled(cancelled)
+        phase('正在校验安装包…')
+        if received != release.setup_size or file_digest(partial, cancelled) != expected:
             raise UpdateError('安装包不完整或校验失败，旧版本未更改，请重试')
+        check_cancelled(cancelled)
         partial.replace(target)
         return target, expected
     except Exception as exc:
         partial.unlink(missing_ok=True)
         if isinstance(exc, UpdateError):
             raise
+        if isinstance(exc, PermissionError):
+            raise UpdateError('更新目录写入权限不足，尚未启动安装；请检查目录权限或手动更新') from exc
+        if isinstance(exc, (URLError, TimeoutError)):
+            raise UpdateError('下载网络连接失败，尚未启动安装；请检查网络后重试') from exc
         raise UpdateError('下载失败，请检查网络、磁盘空间和目录权限后重试') from exc

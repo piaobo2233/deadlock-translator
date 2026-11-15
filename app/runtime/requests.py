@@ -9,6 +9,9 @@ from app.translation.control import wait_while_active
 
 class QueuedRequest:
     MAX_MEMBERS = 128
+    # Validated HTTP belongs to the request; each subscriber separately gates
+    # its display. Do not erase that response during a transient visual gap.
+    retain_validated_result = True
 
     def __init__(self, key, work, *, started=None):
         self.key = key
@@ -66,7 +69,16 @@ class QueuedRequest:
                 self._started(work.candidate, request_id, attempts, bool(owned and work is self._attributed))
 
     def take_expired(self):
-        expired = [work for work in self._snapshot() if not work.control.active()]
+        def still_inflight(work):
+            control = work.control
+            # A visual lease can briefly lapse while HTTP is already running.
+            # Keep this identity subscribed, without authorizing any new call
+            # or retry. Deadline/stop still end it; delivery rechecks visibility.
+            return (self._attempts > 0 and work.candidate.identity is not None
+                    and not (control.stop_event and control.stop_event.is_set())
+                    and (control.deadline is None or control.clock() < control.deadline))
+        expired = [work for work in self._snapshot()
+                   if not work.control.active() and not still_inflight(work)]
         expired_ids = {id(work) for work in expired}
         with self._lock:
             claimed = [work for work in self._members if id(work) in expired_ids]

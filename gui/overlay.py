@@ -243,6 +243,18 @@ class Overlay:
         if key in self._wrap_cache:
             self._wrap_cache.move_to_end(key)
             return list(self._wrap_cache[key])
+        if '\n' in text or '\r' in text:
+            # Canvas renders embedded newlines itself. Split them before
+            # measuring so every physical row reserves its own line height.
+            lines=[]
+            for paragraph in text.replace('\r\n','\n').replace('\r','\n').split('\n'):
+                lines.extend(self._wrap(paragraph,font,max_px,len(paragraph)+1))
+            if len(lines)>max_lines:
+                lines=lines[:max_lines]
+                last=lines[-1]
+                while last and font.measure(last+'…')>max_px:last=last[:-1]
+                lines[-1]=last+'…'
+            return lines or ['']
         lines,cur,offset=[],"",0
         while offset<len(text):
             rest=text[offset:]

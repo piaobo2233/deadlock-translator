@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 import cv2
 import numpy as np
+from app.vision.body import _without_edge_fragments, text_pixels
 
 
 @dataclass(frozen=True)
@@ -17,7 +18,7 @@ def visual_body(image, region, *, with_context=False):
     if not region.accepted:
         return None
     x, y, width, height = region.text_rect
-    mask = (image[y:y + height, x:x + width].max(axis=2) < 120).astype(np.uint8)
+    mask = (text_pixels(image, region).max(axis=2) < 120).astype(np.uint8)
     if not mask.size or np.count_nonzero(mask) < 3:
         return None
     mask.setflags(write=False)
@@ -35,6 +36,7 @@ def _body_context(image,region):
     valid[max(6,ty+th-y):height-6,6:width-6]=1
     valid[6:height-6,6:min(width-6,tx-x)]=1
     valid[(crop.max(axis=2)<120)]=0
+    valid[np.any(_without_edge_fragments(crop) != crop, axis=2)]=0
     valid.setflags(write=False)
     return (x,y,width,height),None,valid
 
@@ -53,12 +55,18 @@ def context_matches(image,context,dx=0,dy=0):
     x,y=x+dx,y+dy
     if x<0 or y<0 or x+width>image.shape[1] or y+height>image.shape[0]:
         return False
-    crop=image[y:y+height,x:x+width]
+    crop=_without_edge_fragments(image[y:y+height,x:x+width])
     return not np.any((crop.max(axis=2)<120)&valid.astype(bool))
 
 
 def same_glyphs(first, second):
     """A pixel-change detector, not proof of equal text; OCR still owns text."""
+    # Equal-sized crops can still have different left/right blank margins.
+    # Align ink rather than canvas centres; no ink or component is removed.
+    def ink(mask):
+        x, y, width, height = cv2.boundingRect(mask)
+        return mask[y:y+height, x:x+width] if width and height else mask
+    first, second = ink(first), ink(second)
     if any(abs(a - b) > 2 for a, b in zip(first.shape, second.shape)):
         return False
     height, width = max(first.shape[0], second.shape[0]) + 6, max(first.shape[1], second.shape[1]) + 6

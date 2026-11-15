@@ -31,6 +31,8 @@ class TranslationProcessor:
         if seen_limit < 1:
             raise ValueError("seen_limit must be positive")
         self.translator = translator
+        target = getattr(translator, 'target', 'zh-Hans')
+        self.receive_target = target if isinstance(target, str) else 'zh-Hans'
         self.is_chinese = is_chinese
         self.chatlog = chatlog
         self.matchlog = matchlog
@@ -65,13 +67,16 @@ class TranslationProcessor:
         if not self._claim(candidate):
             return None
         try:
-            if candidate.evidence is not None and candidate.evidence.reason == 'native_chinese':
+            if self.receive_target != 'zh-Hans' and candidate.evidence is not None:
+                from app.recognition.source import for_text
+                candidate = replace(candidate, evidence=for_text(candidate.evidence, candidate.text, allow_chinese=True))
+            if self.receive_target == 'zh-Hans' and candidate.evidence is not None and candidate.evidence.reason == 'native_chinese':
                 self.capture_evidence(candidate)
                 self.trace(candidate, 'admission', reason='native_chinese', api_allowed=False)
                 self._increment('native_chinese_skipped')
                 self.log('[ocr ] 原图为纯中文正文，已跳过，不调用 API')
                 return None
-            if native_chinese(candidate.text) or self.is_chinese(candidate.text):
+            if self.receive_target == 'zh-Hans' and (native_chinese(candidate.text) or self.is_chinese(candidate.text)):
                 self._record(self.chatlog, candidate.text, "chinese", box=candidate.position)
                 self._increment("chinese_skipped")
                 return None

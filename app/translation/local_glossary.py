@@ -6,7 +6,7 @@ import app.runtime.input_scope as input_scope
 import os
 
 def load_glossary(path: str = "", *, builtins_enabled=True) -> dict:
-    """加载词库并保留首次导出、旧数据迁移的入口契约。
+    """加载个人词库，在内存中合并内置参考并保留旧数据迁移。
 
     纯合并规则由 translation.glossary 维护；迁移只作用于当前运行根目录，
     显式传入的外部路径不能触碰程序用户数据。已有坏文件不覆盖。
@@ -40,12 +40,9 @@ def load_glossary(path: str = "", *, builtins_enabled=True) -> dict:
                 print(f"[info] 根目录的老词库已迁入：{path}")
 
     if not entries and not os.path.exists(path):
-        # 首次运行（根目录也没有老词库）：把内置词库导出成文件，方便用户直接改
-        exported = {k: store.glossary_entry(v, source="builtin")
-                    for k, v in DEFAULT_GLOSSARY.items()}
-        if store.save_glossary_file(path, exported):
-            print(f"[info] 已导出内置词汇库：{path}"
-                  f"（{len(DEFAULT_GLOSSARY)} 条，可以用记事本直接改）")
+        # 新安装的个人库从零开始，内置词仅在内存合并。
+        if store.save_glossary_file(path, {}):
+            print(f"[info] 已创建空的个人词库：{path}")
         return builtins
 
     if not entries:

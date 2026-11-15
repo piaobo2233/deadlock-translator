@@ -21,6 +21,15 @@ ROOT=Path(__file__).resolve().parents[1]
 
 
 class ResidentTests(unittest.TestCase):
+    def test_quality_japanese_reader_is_supported_by_the_actual_worker_protocol(self):
+        reader = ResidentReader(self.executable, self.models, 'eng')
+        self.addCleanup(reader.close)
+        for language in ('jpn_quality', 'jpn_context'):
+            value = reader.read(np.full((60, 240), 225, np.uint8), 6,
+                                language=language, timeout=3)
+            self.assertIsInstance(value, str)
+            self.assertIsNone(reader.process.poll())
+
     def setUp(self):
         executable=ocr.find_tesseract()
         if not executable or not any((Path(executable).parent/name).is_file()
@@ -38,6 +47,21 @@ class ResidentTests(unittest.TestCase):
                 reader.read(np.full((40,150),255,dtype=np.uint8),7,timeout=.02)
         self.assertIsNotNone(process.poll())
         self.assertTrue(reader.stop())
+
+    def test_soft_frame_expiry_keeps_native_worker_and_drains_old_pixels(self):
+        from app.recognition.resident import ReadDeadlineExpired
+        from verify.multilingual_probe import sample_image
+        reader = ResidentReader(self.executable, self.models, 'eng')
+        self.addCleanup(reader.close)
+        image = sample_image('wait for me', 'arialbd.ttf')
+        gray = ocr.cv2.cvtColor(image, ocr.cv2.COLOR_BGR2GRAY)
+        with patch.object(reader._responses, 'get', side_effect=queue.Empty):
+            with self.assertRaises(ReadDeadlineExpired):
+                reader.read(np.full((40, 150), 255, np.uint8), 7, timeout=.01, soft_deadline=True)
+        self.assertIsNone(reader.process.poll())
+        value = reader.read(gray, 7, timeout=3, soft_deadline=True)
+        self.assertIn('wait for me', value.lower())
+        self.assertIsNone(reader._pending_at)
 
     def test_pipeline_exit_reaps_registered_native_reader(self):
         reader=ResidentReader(self.executable,self.models,'eng')

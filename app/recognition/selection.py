@@ -1,9 +1,10 @@
 """Shared OCR candidate selection, without image, desktop or network dependencies."""
 
 from dataclasses import dataclass
+import re
 from typing import Callable
 
-BODY_VARIANTS = {"body7", "body6", "body_jpn", "body_kor", "body_rus"}
+BODY_VARIANTS = {"body7", "body6", "body_jpn", "body_kor", "body_rus", "body_zh"}
 SHORT_FALLBACK_MAX = 3
 
 
@@ -36,7 +37,7 @@ class CandidateSelection:
         return max(self.tried, key=lambda text: sum(c.isalpha() for c in text), default="")
 
 
-def select_candidate(variants, glossary, rules: RecognitionRules, *, early_known=3, verify_body=None):
+def select_candidate(variants, glossary, rules: RecognitionRules, *, early_known=3, verify_body=None, skip_chinese=True):
     """Keep the production ranking, first-on-tie and known-word early exit.
 
     Known words help rank readings; they are not evidence that an image is chat.
@@ -45,6 +46,7 @@ def select_candidate(variants, glossary, rules: RecognitionRules, *, early_known
     """
     tried, consumed, admitted = [], [], []
     best = None
+    best_rank = None
     for kind, raw in variants:
         consumed.append((kind, raw))
         if not raw:
@@ -60,8 +62,19 @@ def select_candidate(variants, glossary, rules: RecognitionRules, *, early_known
             # variants; otherwise the same Chinese bubble consumes them all.
             evidence = verify_body(text)
             if evidence.reason == 'native_chinese':
-                return CandidateSelection(reason='native_chinese', tried=tuple(tried), variants=tuple(consumed))
+                if skip_chinese:
+                    return CandidateSelection(reason='native_chinese', tried=tuple(tried), variants=tuple(consumed))
+                from app.recognition.source import for_text
+                evidence = for_text(evidence, text, allow_chinese=True)
+            if kind == 'body6' and evidence.verified:
+                # A paragraph border can become a standalone final pipe. Only
+                # an independently verified body may remove this edge mark;
+                # retain internal symbols, every word/digit and the raw variants.
+                text = re.sub(r'\s+\|+\s*\Z', '', text)
         is_chat = rules.is_chat(text, glossary)
+        if not skip_chinese and evidence is not None and evidence.verified:
+            from app.recognition.languages import native_chinese
+            is_chat = is_chat or native_chinese(text)
         if (not is_chat and evidence is not None and evidence.verified
                 and text[:1].isupper() and text[1:] == text[1:].lower()
                 and rules.word_count(text) >= 2):
@@ -76,15 +89,35 @@ def select_candidate(variants, glossary, rules: RecognitionRules, *, early_known
         tokens = normalized.split()
         score = (sum(t in glossary for t in tokens),
                  sum(t in rules.common_words for t in tokens), rules.word_count(text))
-        if best is None or score > best[0]:
+        if evidence is not None and evidence.verified:
+            # Normal verified English retains its existing immediate exit.
             best = score, text, kind
-        if evidence is not None:
-            if evidence.verified:
-                # A separate unrestricted source model agrees on these pixels.
-                # More preprocessing cannot provide another temporal vote.
+            break
+        from app.recognition.source import comparable
+        # A complete but weak reading may rank the OCR vote; it still cannot
+        # authorize a request. Avoid preferring a stray English "Do" over the
+        # matching CJK body merely because the artifact is a common word.
+        source_match = bool(evidence and evidence.reason == 'source_uncertain' and comparable(evidence.reading)
+                            and comparable(evidence.reading) == comparable(text))
+        rank = (source_match, *score)
+        if best is None or rank > best_rank:
+            best = score, text, kind
+            best_rank = rank
+        # A long English reading and a nearly matching independent Latin source
+        # need fresh pixels, not seconds of unrelated script trials. This vote
+        # remains UNVERIFIED: confidence, full agreement and can_emit still gate
+        # every request. A CJK source can never take this scheduling shortcut.
+        if evidence is not None and evidence.reason in ('source_disagrees', 'source_uncertain'):
+            words, source_words = comparable(text).split(), comparable(evidence.reading).split()
+            if (len(words) >= 8 and len(words) == len(source_words)
+                    and all(word.isascii() for word in words + source_words)
+                    and sum(word in rules.common_words for word in words) >= 6
+                    and sum(a != b for a, b in zip(words, source_words)) <= 1):
                 best = score, text, kind
                 break
-        if early_known is not None and score[0] >= early_known:
+        # Familiar Latin words must not hide a later script reading when the
+        # independent source has already failed to verify this body candidate.
+        if evidence is None and early_known is not None and score[0] >= early_known:
             break
     details = dict(tried=tuple(tried), variants=tuple(consumed))
     if best is None:

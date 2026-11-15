@@ -329,7 +329,7 @@ class SchedulingTests(unittest.TestCase):
         learning = LearnedGlossary(self.path)
         engine = self.engine(learning=learning)
         self.slow_client(engine)
-        with patch.object(engine.learning_cache, "save", return_value=LearningReceipt(False, reason="write_failed")):
+        with patch('app.translation.learning.store.update_glossary_file', return_value=False):
             pipe = self.pipeline(engine, lambda: self.after_request(self.candidate("together", 2)))
             self.local_finished(pipe)
             self.release.set()
@@ -622,7 +622,7 @@ class SchedulingTests(unittest.TestCase):
         self.assertEqual(engine.learning_cache.read()[QueryKey.from_text('together').fingerprint]['translation'],'一起行动')
         restarted = self.engine(learning=LearnedGlossary(self.path))
         restarted.client.request = Mock(side_effect=AssertionError("Paid request"))
-        self.assertEqual(restarted.translate_result("together").source, "learning_cache")
+        self.assertEqual(restarted.translate_result("together").source, "glossary")
 
     def test_network_queue_eviction_explains_live_message_without_requesting_it(self):
         engine = self.engine(glossary={"gg": "打得好"})

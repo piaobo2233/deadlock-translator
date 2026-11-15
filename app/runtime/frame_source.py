@@ -27,6 +27,7 @@ class FrameSource:
         self.cadence = cadence
         self._condition = threading.Condition()
         self._stop = threading.Event()
+        self._wake = threading.Event()
         self._latest, self._failure = None, "not_started"
         self._sequence = 0
         self._started = False
@@ -41,11 +42,16 @@ class FrameSource:
 
     def stop(self, timeout=.5):
         self._stop.set()
+        self._wake.set()
         with self._condition:
             self._condition.notify_all()
         if self._started and self.thread is not threading.current_thread():
             self.thread.join(max(0, timeout))
         return self.finished
+
+    def request_capture(self):
+        """Wake an idle owner for a newly confirmed visual subscription."""
+        self._wake.set()
 
     @property
     def finished(self):
@@ -83,6 +89,7 @@ class FrameSource:
     def _run(self):
         try:
             while not self._stop.is_set():
+                self._wake.clear()
                 started = self.clock()
                 try:
                     if not self.allowed():
@@ -107,6 +114,6 @@ class FrameSource:
                 except Exception as exc:
                     self._unavailable("visual_capture_" + type(exc).__name__)
                 period = self.cadence() if self.cadence is not None else self.interval
-                self._stop.wait(max(0, period - (self.clock() - started)))
+                self._wake.wait(max(0, period - (self.clock() - started)))
         finally:
             self._unavailable("capture_stopped")

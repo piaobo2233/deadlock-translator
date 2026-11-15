@@ -43,6 +43,28 @@ class OverlayLayoutWorkTests(unittest.TestCase):
         with patch('tkinter.font.Font',return_value=Font()):self.view._build_fonts()
         self.assertEqual(len(self.view._wrap_cache),0)
 
+    def test_explicit_newlines_are_physical_rows_before_width_wrapping(self):
+        text='别没我就开团。\n我20秒后复活，然后我们一起走'
+        lines=self.view._wrap(text,self.font,9,len(text)+1)
+        self.assertEqual(lines,['别没我就开团。','我20秒后复活，然','后我们一起走'])
+        self.assertTrue(all('\n' not in line for line in lines))
+
+    def test_crlf_blank_lines_and_line_limit(self):
+        self.assertEqual(self.view._wrap('alpha\r\n\r\nbeta',self.font,20,4),['alpha','','beta'])
+        self.assertEqual(self.view._wrap('alpha\nbeta\ngamma',self.font,5,2),['alpha','beta…'])
+
+    def test_multiline_canvas_items_each_reserve_one_row(self):
+        view=overlay();view._wrap=MethodType(Overlay._wrap,view)
+        view.line_height=18
+        message=('', 'fixture','别没我就开团。\n我20秒后复活，然后我们一起走','team',(100,200,280,95),1)
+        with patch('app.recognition.live.live_box',return_value=(100,200,280,95)):
+            view.render([message])
+        items=view.canvas.create_text.call_args_list
+        self.assertGreaterEqual(len(items),2)
+        self.assertTrue(all('\n' not in call.kwargs['text'] for call in items))
+        self.assertEqual(items[1].args[1]-items[0].args[1],18)
+        self.assertGreaterEqual(view._draw_bubble.call_args.args[3],len(items)*18+10)
+
     def test_cached_line_breaks_do_not_cache_live_position(self):
         view=overlay();view._wrap=MethodType(Overlay._wrap,view)
         message=('', 'fixture','一起推进中路','team',(100,200,180,35),1)

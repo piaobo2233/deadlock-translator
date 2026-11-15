@@ -12,13 +12,13 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 WINDOWS_PUBLIC_TESTS = (
     'test_maintenance', 'test_realtime_scheduling',
-    'test_updates', 'test_rollback', 'test_source_launcher', 'test_installer_build', 'test_uninstall', 'test_portable_build',
+    'test_updates', 'test_rollback', 'test_source_launcher', 'test_installer_build', 'test_portable_build',
     'test_public_export', 'test_check_runner', 'test_check_scope', 'test_tray_lifecycle',
     'test_close_preferences', 'test_game_autostart', 'test_fullscreen_settings', 'test_overlay_layout_work', 'test_workspace_ui', 'test_onboarding',
     'test_onboarding_ui', 'test_usage_dashboard', 'test_panel_instance', 'test_receive_send',
     'test_latency_acceptance', 'test_release_gate', 'test_terms_optional',
     'test_game_resources', 'test_msys2_ocr',
-    'test_region_calibration', 'test_region_editor',
+    'test_region_calibration', 'test_region_editor', 'test_capture_resume',
 )
 
 

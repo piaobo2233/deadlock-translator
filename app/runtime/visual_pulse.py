@@ -7,7 +7,7 @@ import threading
 
 from app.recognition.messages import ConfirmedMessage
 from app.recognition.visual import Presence, VisualObservation
-from app.vision.body import locate_body
+from app.vision.body import BodyRegion, locate_body, text_pixels
 from app.vision.presence import VisualBody, visual_body, same_glyphs, nearby, distance, context_matches, shifted_context, same_body_box
 
 
@@ -30,6 +30,7 @@ class VisualPulse:
         # Store compact body masks, not 64 full screenshots. A late first OCR
         # confirmation must prove continuity, not just match a reappeared word.
         self._history = deque(maxlen=64)
+        self._detections = deque(maxlen=64)
         self._observed_at = self._last_typing_at = -math.inf
 
     def _bodies(self, image, detected):
@@ -112,7 +113,11 @@ class VisualPulse:
         height,width=reference.mask.shape
         if x<0 or y<0 or x+width>image.shape[1] or y+height>image.shape[0]:
             return None
-        mask=(image[y:y+height,x:x+width].max(axis=2)<120).astype(np.uint8)
+        bx,by,bw,bh=reference.box[:4]
+        if bx<0 or by<0 or bx+bw>image.shape[1] or by+bh>image.shape[0]:
+            return None
+        region=BodyRegion(rect=(bx,by,bw,bh),text_rect=(x,y,width,height))
+        mask=(text_pixels(image,region).max(axis=2)<120).astype(np.uint8)
         if same_glyphs(reference.mask,mask):
             if not context_matches(image,reference.context):
                 return None
@@ -205,7 +210,8 @@ class VisualPulse:
                             and not same_text(text,ref.identity.original)):
                         self.event('unverified_ocr_conflict')
                         return True,None
-            return True,self.tracker.feed(text,width=region.rect[2],box=box,captured_at=first_seen_at)
+            return True,self.tracker.feed(text,width=region.rect[2],box=box,captured_at=first_seen_at,
+                                          can_emit=source_verified)
 
     def touch_current(self,image,region,captured_at,text):
         with self._lock:
@@ -250,6 +256,7 @@ class VisualPulse:
             self._observed_at = captured_at
             self._latest = (image, captured_at, bodies)
             self._history.append((captured_at, bodies))
+            self._detections.append((captured_at, detected))
             self._references = {bid: ref for bid, ref in self._references.items()
                                 if self.tracker.identity_matches(ref.identity)}
             references = list(self._references.values())
@@ -261,6 +268,12 @@ class VisualPulse:
             # Keep sampling through a brief gap in the typing animation.
             # Only a real body wakes OCR.
             self.activity(captured_at, changed, tracking or typing)
+
+    def detections_at(self, captured_at):
+        """Reuse geometry only for the exact immutable frame already observed."""
+        with self._lock:
+            return next((boxes for at, boxes in reversed(self._detections)
+                         if at == captured_at), None)
 
     @staticmethod
     def _new_activity(previous, bodies):
@@ -286,6 +299,7 @@ class VisualPulse:
             self._observed_at = observed_at
             self._last_typing_at = -math.inf
             self._latest = None
+            self._detections.clear()
             self._history.append((observed_at, None))
             references = list(self._references.values())
         for ref in references:

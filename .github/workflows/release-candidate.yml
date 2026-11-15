@@ -1,0 +1,74 @@
+name: Build Windows release candidate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - name: Check out the selected commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13.14'
+          architecture: x64
+      - name: Install locked dependencies
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          python -m pip install -r requirements-build.txt
+          python -m pip check
+      - name: Prepare and verify OCR inputs
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          python -X utf8 scripts/prepare_msys2_ocr.py stage `
+            --lock docs/releases/ocr-msys2-packages.lock.json `
+            --sevenzip "$env:ProgramFiles\7-Zip\7z.exe" `
+            --cache .temp/ocr-packages --output .temp/ocr-stage
+          python -X utf8 scripts/ocr_runtime.py verify --runtime .temp/ocr-stage/runtime
+      - name: Install verified Inno Setup
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.3.exe'
+          $sha256 = '9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732'
+          $url = 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe'
+          Invoke-WebRequest $url -OutFile $installer
+          if ((Get-FileHash $installer -Algorithm SHA256).Hash -ne $sha256) {
+            throw 'Inno Setup download hash mismatch'
+          }
+          $install = Join-Path $env:RUNNER_TEMP 'inno'
+          $result = Start-Process $installer -WindowStyle Hidden -Wait -PassThru -ArgumentList `
+            '/CURRENTUSER', '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$install`""
+          if ($result.ExitCode -ne 0 -or !(Test-Path (Join-Path $install 'ISCC.exe'))) {
+            throw "Inno Setup install failed: $($result.ExitCode)"
+          }
+      - name: Build and record the installer and portable ZIP
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $version = (Get-Content -Raw VERSION).Trim()
+          $iscc = Join-Path $env:RUNNER_TEMP 'inno/ISCC.exe'
+          $work = Join-Path $env:RUNNER_TEMP 'locklingo-inno'
+          python -X utf8 scripts/build_portable.py --version $version --ocr-runtime .temp/ocr-stage/runtime
+          python -X utf8 scripts/build_installer.py --version $version `
+            --archive "dist/LockLingo-$version-windows-x64.zip" --iscc $iscc --work-dir $work
+          python -X utf8 scripts/candidate_manifest.py record dist --commit $env:GITHUB_SHA
+      - name: Store candidate for acceptance
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: locklingo-candidate-${{ github.sha }}
+          path: |
+            dist/LockLingo-*-setup.exe
+            dist/LockLingo-*-windows-x64.zip
+            dist/*.sha256
+            dist/candidate.json
+            scripts/ocr-runtime-manifest.json
+            docs/releases/ocr-msys2-packages.lock.json
+          if-no-files-found: error
+          compression-level: 0

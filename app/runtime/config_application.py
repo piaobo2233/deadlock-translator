@@ -41,6 +41,7 @@ def apply_config(config, overlay=None, translator=None, *, api_toggle=True, repo
     applied = []
     evidence = report if report is not None else {}
     visual = []
+    check_target = None
     labels = dict(font_size='字号')
 
     def failed(key, exc, label=None):
@@ -48,6 +49,16 @@ def apply_config(config, overlay=None, translator=None, *, api_toggle=True, repo
         print(f'[warn] {label or labels.get(key,key)}热更失败：{type(exc).__name__}（设置已存进文件，但本次运行没生效）')
 
     if overlay is not None:
+        check_target = vars(overlay).get('_send_target_applied')
+        if 'send_target' in config and callable(check_target):
+            key = 'send_target'
+            try:
+                state = 'applied' if check_target(config[key]) else 'pending'
+                evidence[key] = result(key, config[key], state)
+                if state == 'applied':
+                    applied.append(key)
+            except Exception as exc:
+                failed(key, exc, '发言目标')
         check_input = vars(overlay).get('_input_translate_applied')
         if 'input_translate_enabled' in config and callable(check_input):
             key = 'input_translate_enabled'
@@ -135,7 +146,7 @@ def apply_config(config, overlay=None, translator=None, *, api_toggle=True, repo
                         translator.offline = want_offline
                         applied.append('translate_api')
             for key in backend:
-                if key in config:
+                if key in config and not (key == 'send_target' and callable(check_target)):
                     protected = (key in {'translate_api','realtime_learn'} and bool(config[key]) and
                                  bool(getattr(translator, 'hard_offline', False)))
                     evidence[key] = result(key, config[key], 'protected' if protected else 'applied')

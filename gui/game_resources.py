@@ -18,6 +18,7 @@ class GameResources:
         self.message = '正在检查本机游戏资料…'
         self.controls = None
         self.terms = {}
+        self.records = ()
         self.revision = 0
         self._checked_stamp = None
         self._next_check = 0
@@ -59,6 +60,7 @@ class GameResources:
         def inspect():
             from app.runtime.diagnostics import record
             from app.translation.terms import exact_terms
+            from app.translation.terms import records
             started = time.perf_counter()
             record(self.app.root_dir, 'resources', 'started', code='inspect')
             bundle, message = service.inspect(self.app.root_dir, background=True)
@@ -68,12 +70,13 @@ class GameResources:
             checked = service.inspected_stamp(self.app.root_dir) or service.inspection_stamp(self.app.root_dir)
             record(self.app.root_dir, 'resources', 'ready' if bundle else 'blocked', code='inspect',
                    elapsed_ms=(time.perf_counter()-started)*1000)
-            return message, terms, checked
+            return message, terms, checked, records(root=self.app.root_dir)
         self.work(inspect)
 
-    def _set_terms(self, terms):
-        if terms != self.terms:
+    def _set_terms(self, terms, records=()):
+        if terms != self.terms or records != self.records:
             self.terms = terms
+            self.records = records
             self.revision += 1
 
     def repaint(self):
@@ -138,7 +141,8 @@ class GameResources:
 
     def poll(self):
         try:
-            message, terms, stamp = self.events.get_nowait()
+            result = self.events.get_nowait()
+            message, terms, stamp = result[:3]
         except queue.Empty:
             pass
         else:
@@ -146,7 +150,7 @@ class GameResources:
             if stamp == service.inspection_stamp(self.app.root_dir):
                 self.message = message
                 self._checked_stamp = stamp
-                self._set_terms(terms)
+                self._set_terms(terms, result[3] if len(result) > 3 else ())
             else:
                 self._checked_stamp = None
                 self._set_terms({})

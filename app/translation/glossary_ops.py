@@ -23,7 +23,7 @@ __all__ = ["CATEGORIES", "rows", "upsert", "delete", "restore", "set_enabled",
            "export_rows", "import_rows", "stats"]
 
 # §十 建议的分类
-CATEGORIES = ("英雄", "技能", "地图", "游戏术语", "缩写", "聊天口语",
+CATEGORIES = ("英雄", "物品", "技能", "地图", "游戏术语", "缩写", "聊天口语",
               "玩家昵称", "自定义")
 
 STATUS_ACTIVE = "使用中"
@@ -58,7 +58,7 @@ def _aliases(entries, name):
     return [key for key in entries if _norm(key) == name] or [name]
 
 
-def rows(path: str = "", hits=None, *, entries=None, config=None, official_terms=None) -> list:
+def rows(path: str = "", hits=None, *, entries=None, config=None, official_terms=None, official_records=(), include_reference=False) -> list:
     """合并视图 → 界面用的行。
 
     [!] 必须用**合并后**的视图（内置表 + 文件），不能只列文件条目：
@@ -75,14 +75,19 @@ def rows(path: str = "", hits=None, *, entries=None, config=None, official_terms
     raw = store.read_json(config_path,{}) if config is None else config
     config,_ = normalize_config(raw if isinstance(raw,dict) else {})
     merged = merge_glossary(entries, builtins_enabled=config['builtins_enabled'], official_terms=official_terms)
+    metadata = {row['english'].casefold(): row for row in official_records} if config['builtins_enabled'] or include_reference else {}
     out = []
-    for word in sorted(set(merged) | set(entries)):
+    references = DEFAULT_GLOSSARY if include_reference else {}
+    for word in sorted(set(merged) | set(entries) | set(metadata) | set(references)):
         entry = entries.get(word) or {}
+        official = metadata.get(word, {})
         in_file = word in entries
         if word in merged:
             status = STATUS_ACTIVE
         elif entry.get("deleted"):
             status = STATUS_DELETED
+        elif not in_file and official and config['builtins_enabled']:
+            status = '术语参考'
         else:
             status = STATUS_DISABLED
         stat = hits.get(word) if hits is not None else {}
@@ -90,12 +95,14 @@ def rows(path: str = "", hits=None, *, entries=None, config=None, official_terms
         out.append({
             "__key": word,
             "word": word,
-            "translation": merged.get(word) or str(entry.get("zh") or ""),
-            "cat": str(entry.get("cat") or ("内置" if not in_file else "自定义")),
+            "translation": merged.get(word) or str(entry.get("zh") or official.get('chinese') or references.get(word) or ""),
+            "cat": str(entry.get("cat") or official.get('category') or ("聊天口语" if not in_file else "自定义")),
+            "official_name": str(official.get('english') or ''),
+            "aliases": list(dict.fromkeys(str(key) for key in (word, entry.get('original', word)) if key)),
             "hits": int(stat.get("hits") or 0),
             "last_used": str(stat.get("last_used") or "").replace("T", " ")[:16],
             "status": status,
-            "source": str(entry.get("source") or ("builtin" if not in_file else "user")),
+            "source": str(entry.get("source") or ('official' if official else "builtin" if not in_file else "user")),
             "in_file": "是" if in_file else "—",
             "__tag": "" if status == STATUS_ACTIVE else "flagged",
         })
@@ -197,6 +204,17 @@ def set_enabled(path: str, word: str, enabled: bool) -> bool:
                 entry["query_key"] = QueryKey.from_text(str(word)).as_dict()
             entries[key] = entry
     return _update(path, toggle)
+
+
+def is_reference(row):
+    """Legacy exported builtins stay references unless their value was edited."""
+    source = row.get('source')
+    if source == 'official':
+        return True
+    if source != 'builtin':
+        return False
+    original = DEFAULT_GLOSSARY.get(_norm(row.get('word', '')))
+    return original is not None and row.get('translation') == original
 
 
 def stats(path: str = "") -> dict:

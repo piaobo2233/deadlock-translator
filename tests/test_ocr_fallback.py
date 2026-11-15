@@ -27,8 +27,8 @@ class FrameSourceReadingsTests(unittest.TestCase):
         FrameSourceReadings(read, lambda _: 'eng').for_text('do not go', 4)
         self.assertEqual(read.call_count, 3)
 
-    def test_uncertain_or_failed_read_is_retried(self):
-        for reason in ('source_uncertain', 'source_ocr_timeout', 'source_ocr_failed'):
+    def test_failed_read_is_retried(self):
+        for reason in ('source_ocr_timeout', 'source_ocr_failed'):
             read = Mock(return_value=SourceEvidence(False, reason))
             cache = FrameSourceReadings(read, lambda _: 'eng')
             cache.for_text('go', 4)

@@ -13,7 +13,7 @@ from app.translation.engine import TranslationEngine
 from app.translation.query import normalize_query
 from app.translation.rules import TranslationRules
 from app.translation.results import TranslationResult, TranslationStatus
-from app.translation.directions import prompt_for, quality_for, query_scope
+from app.translation.directions import LANGUAGES, prompt_for, quality_for, query_scope
 
 PROMPT = ('Translate the Chinese player message into concise natural English for Deadlock chat. '
           'Return only the translation. Preserve names, game terms, numbers and intent. '
@@ -134,4 +134,8 @@ class ManualTranslator:
                     '接口结果未知，可能已产生费用；已阻止同句自动重发，请核对接口服务商的请求记录')
             elif result.source == 'pending':
                 result = replace(result, reason='在线翻译已关闭，请先开启主面板的在线补充翻译')
+            elif result.source == 'api_failed' and 'target_language' in result.reason:
+                name = LANGUAGES[self.engine.target]
+                result = replace(result, reason=f'接口没有按{name}返回译文；请检查接口设置后重新复制',
+                                 reason_code='target_language')
             return result

@@ -4,24 +4,20 @@ import ctypes
 from ctypes import wintypes
 
 MUTEX_NAME = "DeadlockTranslate_SingleInstance"
-INSTALL_MUTEX_NAME = "Local\\LockLingo_InstallGuard_v2"
-LEGACY_INSTALL_MUTEX_NAME = "DeadlockTranslate_InstallGuard"
-_install_handles = ()
+INSTALL_MUTEX_NAME = "DeadlockTranslate_InstallGuard"
+_install_handle = None
 ERROR_ALREADY_EXISTS = 183
 SYNCHRONIZE = 0x00100000
 
 
 def retain_install_guard():
     """冻结程序的每个进程均阻止安装覆盖，独立面板/OCR 辅助进程也适用。"""
-    global _install_handles
-    if not _install_handles:
+    global _install_handle
+    if _install_handle is None:
         _, handle, error = _presence_mutex(INSTALL_MUTEX_NAME)
         if not handle:
             raise ctypes.WinError(error)
-        # Older installers still check the legacy name. A restricted legacy
-        # marker may already exist. The new marker protects current installers.
-        _, legacy, _ = _presence_mutex(LEGACY_INSTALL_MUTEX_NAME)
-        _install_handles = (handle, legacy)
+        _install_handle = handle
     # Windows 在进程结束时释放句柄；多个进程均可持有，不影响原有单实例协议。
 
 

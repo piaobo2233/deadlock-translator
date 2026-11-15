@@ -130,6 +130,21 @@ class CadenceTests(unittest.TestCase):
 
 
 class ActivityLifetimeTests(unittest.TestCase):
+    def test_late_confirmation_starts_tracking_without_waiting_for_idle_capture(self):
+        self.cadence.observe(self.now,True,False)
+        self.now+=4
+        self.cadence.observe(self.now,False,False)
+        self.assertEqual(self.cadence.capture_interval(),.4)
+        self.cadence.ocr_due()
+        counts=self.cadence.snapshot()
+        self.cadence.begin_tracking()
+        self.assertEqual(self.cadence.capture_interval(),.12)
+        self.assertEqual(self.cadence.snapshot(),counts)
+        self.assertFalse(self.cadence.ocr_due())
+        self.now+=.12
+        self.cadence.observe(self.now,False,False)
+        self.assertEqual(self.cadence.capture_interval(),.4)
+
     def setUp(self):
         self.now = 10.0
         self.cadence = RecognitionCadence(clock=lambda: self.now)
@@ -309,6 +324,7 @@ class CaptureAndWorkerTests(unittest.TestCase):
                 raise OSError('fixture failed read')
             return 'go'
         with patch.object(ocr, '_preferred_read', return_value=''), \
+                patch.object(ocr, '_RECEIVE_MODEL', 'eng'), \
                 patch.object(ocr, '_read_ocr', side_effect=read):
             variants = list(ocr.ocr_variants(image, box, max_workers=1))
         self.assertEqual(variants[1][1], '')

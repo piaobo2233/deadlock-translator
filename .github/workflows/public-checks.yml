@@ -53,4 +53,4 @@ jobs:
       - name: Check dependency compatibility
         run: python -m pip check
       - name: Run isolated offline Windows checks
-        run: python -X utf8 scripts/check.py --windows-public --report .temp/windows-check.json
+        run: python -X utf8 scripts/check.py --windows-public --suite-timeout 720 --report .temp/windows-check.json

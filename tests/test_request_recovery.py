@@ -65,7 +65,7 @@ class RequestRecoveryTests(unittest.TestCase):
         self.assertTrue(result.save_receipt.saved)
         self.assertEqual(len(result.save_receipt.revision),64)
         entry=engine.learning_cache.read()[QueryKey.from_text('together').fingerprint]
-        self.assertFalse(Path(self.path).exists())
+        self.assertTrue(Path(self.path).exists())
         self.assertEqual(engine.review_queue.items()[0]['request_ids'],[result.request_id])
         self.assertEqual(entry["request_id"], result.request_id)
         encoded = Path(engine.journal.path("together")).read_text(encoding="utf-8")
@@ -208,7 +208,7 @@ class RequestRecoveryTests(unittest.TestCase):
     def test_save_failure_has_recovery_copy_and_new_engine_only_retries_disk(self):
         engine = self.engine()
         engine.client.request.side_effect = self.accepted
-        with patch.object(engine.learning_cache, "save", return_value=LearningReceipt(False,reason="disk")):
+        with patch('app.translation.learning.store.update_glossary_file', return_value=False):
             result = engine.translate_result("together")
             again = engine.translate_result("together")
         self.assertTrue(result.successful)
@@ -218,7 +218,7 @@ class RequestRecoveryTests(unittest.TestCase):
         self.assertEqual(engine.journal.read("together")["state"], "validated")
         restarted = self.engine()
         recovered = restarted.try_local_result("TOGETHER")
-        self.assertEqual((recovered.text, recovered.source, recovered.api_attempts), ("一起行动", "learning_cache", 0))
+        self.assertEqual((recovered.text, recovered.source, recovered.api_attempts), ("一起行动", "glossary", 0))
         self.assertEqual(restarted.journal.read("together")["state"], "validated")
         engine.client.request.assert_called_once()
         restarted.client.request.assert_not_called()
@@ -284,7 +284,7 @@ class RequestRecoveryTests(unittest.TestCase):
             engine.client.request.assert_called_once()
         self.assertTrue(engine.retry_review_records())
         restarted=self.engine()
-        self.assertEqual(restarted.translate_result('together').source,'learning_cache')
+        self.assertEqual(restarted.translate_result('together').source,'glossary')
         self.assertEqual(len(restarted.review_queue.items()),1)
         restarted.client.request.assert_not_called()
 
@@ -525,7 +525,7 @@ print("CLAIM:" + result)
                 line = next(line for line in recovered.stdout.splitlines() if line.startswith("RESTART_PROBE:"))
                 result = json.loads(line.split(":", 1)[1])
                 self.assertEqual((result["requests"], result["attempts"]), (0, 0))
-                self.assertEqual(result["source"], "outcome_unknown" if gap in ("prepared", "response") else "learning_cache")
+                self.assertEqual(result["source"], "outcome_unknown" if gap in ("prepared", "response") else "glossary")
                 if gap in ("qualified", "committed"):
                     self.assertEqual(result["text"], "一起行动")
 

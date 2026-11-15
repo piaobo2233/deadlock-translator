@@ -46,6 +46,7 @@ import pytesseract
 
 from app.vision.body import locate_body, padded_text
 from app.recognition.source import SourceEvidence, assess_source, comparable
+from app.recognition.resident import ReadDeadlineExpired
 from app.recognition.diagnostics import DIAGNOSTICS as _DIAGNOSTICS
 
 measure_stage = _DIAGNOSTICS.measure
@@ -245,7 +246,7 @@ def configure_receive_languages(enabled=True, *, resident=True):
     missing = [name for name in required if not (model_dir / (name + '.traineddata')).is_file()]
     if missing:
         raise RuntimeError('缺少接收语言模型：' + ', '.join(missing))
-    _RECEIVE_MODEL = '+'.join(('chi_sim', *RECEIVE_LANGUAGES)) if enabled else 'eng'
+    _RECEIVE_MODEL = '+'.join(RECEIVE_LANGUAGES) if enabled else 'eng'
     close_receive_backend()
     _RESIDENT_SETTINGS = None
     _DIAGNOSTICS.reset()
@@ -309,7 +310,10 @@ def _read_preferred(gray, mode, *, deadline=None):
     timeout = OCR_TIMEOUT if deadline is None else max(.001, min(OCR_TIMEOUT, deadline-time.monotonic()))
     if _RESIDENT is not None:
         try:
-            return _RESIDENT.read(gray, mode, timeout=timeout).strip()
+            return _RESIDENT.read(gray, mode, timeout=timeout, soft_deadline=deadline is not None).strip()
+        except ReadDeadlineExpired:
+            _DIAGNOSTICS.count('frame_budget_expired')
+            return ''
         except Exception as exc:
             _degrade_receive_backend(exc)
             print(f'[warn] 常驻 OCR 已停止（{type(exc).__name__}），后续使用 OCR 进程')
@@ -801,7 +805,7 @@ def _find_by_blobs(mn, mx, bright_loose, dark, scale, min_h, origin=(0, 0), *, i
 
 
 def ocr_variants(img, box, *, screen=None, region=None, deadline=None, max_workers=4,
-                 preferred_read=None):
+                 preferred_read=None, language_hint='', include_chinese=False):
     """Yield body-first OCR, then bounded fallbacks on validated bodies.
 
     The first call is lazy: a known-word early exit prevents starting fallback
@@ -812,6 +816,8 @@ def ocr_variants(img, box, *, screen=None, region=None, deadline=None, max_worke
     """
     if type(max_workers) is not int or not 1 <= max_workers <= 4:
         raise ValueError("OCR worker limit must be between one and four")
+    if language_hint not in ('','jpn','kor','rus'):
+        raise ValueError('Invalid script hint')
     scale = (screen[1] if screen else REF_H) / REF_H
     body = region if region is not None else locate_body(img, box, scale=scale)
     if not body.accepted:
@@ -827,24 +833,84 @@ def ocr_variants(img, box, *, screen=None, region=None, deadline=None, max_worke
     crop = padded_text(img, body, scale=scale)
     gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
     mode = 6 if body.line_count > 1 else 7
+    from app.recognition.languages import script_model, foreign_chat
+    from app.recognition.resident import script_data_name
+    model_dir = Path(__file__).resolve().parent / 'models'
+    if include_chinese:
+        yield ('body_zh', _read_script(_enlarge(gray, 3), mode, 'chi_sim', deadline=deadline))
+    def script_readings(language):
+        if deadline is not None and time.monotonic() >= deadline:
+            return
+        if language == 'jpn' and body.line_count > 1:
+            # On the bundled runtime, whole Japanese pixels plus both Japanese
+            # models preserve the final kana and are faster than reflow-first.
+            # Dense rows use the quality reader first; the established combined
+            # reader remains a fallback when independent source rejects it.
+            # Longer paragraphs need the existing Han context to disambiguate
+            # e.g. 必殺 / 必組 without spending the frame budget on weak reads.
+            reader = ('jpn_context' if body.line_count >= 6 else
+                      'jpn_quality' if body.line_count >= 3 else 'jpn_combined')
+            yield ('body_jpn', _read_script(_enlarge(gray, 4), mode, reader, deadline=deadline))
+            if body.line_count >= 3:
+                yield ('body_jpn', _read_script(_enlarge(gray, 4), mode, 'jpn_combined', deadline=deadline))
+            single = _source_single_line(gray, body.line_count)
+            if single is not None:
+                yield ('body_jpn', _read_script(_enlarge(single, 2), 13, 'jpn_combined', deadline=deadline))
+            return
+        if language == 'rus' and body.line_count > 1:
+            single = _source_single_line(gray, body.line_count, word_gap=True)
+            if single is not None:
+                # A final wrapped kana is often read as Latin in PSM 6.
+                # Reflow all rows' pixels before the bounded paragraph read.
+                yield ('body_rus', _read_script(_enlarge(single, 2), 13, language, deadline=deadline))
+                fixed = cv2.threshold(single, 150, 255, cv2.THRESH_BINARY)[1]
+                yield ('body_rus', _read_script(_enlarge(fixed, 2), 7, language, deadline=deadline))
+        factor = 4 if language == 'kor' or script_data_name(language, model_dir) == 'jpn_quality' else 3
+        nearest = cv2.resize(gray, None, fx=factor, fy=factor, interpolation=cv2.INTER_NEAREST)
+        # Small script strokes survive nearest-neighbour enlargement more
+        # consistently across compressed frames. Keep cubic as fallback.
+        text = _read_script(nearest, mode, language, deadline=deadline)
+        yield ('body_' + language, text if script_model(text) == language else '')
+        if language == 'jpn' and (deadline is None or time.monotonic() < deadline):
+            # The existing standard model complements quality on compressed
+            # strokes. Retain the established primary and a bounded fallback.
+            small = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_NEAREST)
+            yield ('body_jpn', _read_script(small, mode, 'jpn_standard', deadline=deadline))
+        if deadline is None or time.monotonic() < deadline:
+            text = _read_script(_enlarge(gray,factor), mode, language, deadline=deadline)
+            yield ('body_' + language, text if script_model(text) == language else '')
+    language_hint = language_hint if _RECEIVE_MODEL != 'eng' else ''
+    if language_hint:
+        yield from script_readings(language_hint)
+        return
     if deadline is not None and time.monotonic() >= deadline:
         return
     preferred = (_preferred_read(_enlarge(gray, 3), mode, deadline=deadline)
                  if preferred_read is None else preferred_read)
-    yield (f"body{mode}", preferred)
+    hint = script_model(preferred) if _RECEIVE_MODEL != 'eng' else ''
+    if not hint:
+        yield (f"body{mode}", preferred)
     if deadline is not None and time.monotonic() >= deadline:
         return
     if _RECEIVE_MODEL != 'eng':
         # Combined models can turn kana/Hangul into Latin or digits. Script-first
         # reads remain lazy: a verified common-language body never starts them.
-        from app.recognition.languages import script_model
-        hint = script_model(preferred)
+        # A single misread Cyrillic/kana glyph is only a routing hint. Unlike
+        # the verified previous-frame hint above, it cannot exclude scripts.
         languages = tuple(dict.fromkeys(filter(None, (hint, 'jpn', 'kor', 'rus'))))
+        if hint == 'rus' and not foreign_chat(preferred):
+            # One Cyrillic glyph inside Latin-looking noise is not Russian
+            # evidence. Japanese strokes can produce exactly this reading.
+            languages = ('jpn', 'kor', 'rus')
         for language in languages:
+            if language == language_hint:
+                continue
             if deadline is not None and time.monotonic() >= deadline:
                 return
-            text = _read_script(_enlarge(gray, 3), mode, language, deadline=deadline)
-            yield ('body_' + language, text if script_model(text) == language else '')
+            yield from script_readings(language)
+    if hint:
+        yield (f"body{mode}", preferred)
+        return
     jobs = _fallback_jobs(gray, multiline=body.line_count > 1,
                           short=body.line_count == 1 and body.glyph_count <= 3)
     def read(im, config):
@@ -883,12 +949,18 @@ def _read_script(image, mode, language, *, deadline=None):
     timeout = OCR_TIMEOUT if deadline is None else max(.001, min(OCR_TIMEOUT, deadline-time.monotonic()))
     if _RESIDENT is not None:
         try:
-            return _RESIDENT.read(image, mode, language=language, timeout=timeout).strip()
+            return _RESIDENT.read(image, mode, language=language, timeout=timeout,
+                                  soft_deadline=deadline is not None).strip()
+        except ReadDeadlineExpired:
+            _DIAGNOSTICS.count('frame_budget_expired')
+            return ''
         except Exception as exc:
             _degrade_receive_backend(exc)
             return ''
     model_dir = Path(__file__).resolve().parent / 'models'
-    config = f'--psm {mode} --oem 1 -l {language}+eng+chi_sim --tessdata-dir "{model_dir}"'
+    from app.recognition.resident import script_languages
+    languages = script_languages(language, model_dir)
+    config = f'--psm {mode} --oem 1 -l {languages} --tessdata-dir "{model_dir}"'
     return _read_ocr(image, config, timeout=timeout)
 
 
@@ -904,7 +976,11 @@ def _read_fallback(image, config, *, deadline=None, resident=False):
             if mode is not None:
                 _DIAGNOSTICS.count('fallback_resident')
                 try:
-                    return _RESIDENT.read(image, mode, timeout=timeout).strip()
+                    return _RESIDENT.read(image, mode, timeout=timeout,
+                                          soft_deadline=deadline is not None).strip()
+                except ReadDeadlineExpired:
+                    _DIAGNOSTICS.count('frame_budget_expired')
+                    return ''
                 except Exception as exc:
                     _degrade_receive_backend(exc)
                     return ''
@@ -924,11 +1000,36 @@ def source_evidence(img, body, expected, *, scale=1.0, captured_at=None, origin=
     return replace(evidence, captured_at=captured_at, captured_box=box)
 
 
-def source_model_key(expected):
+def source_model_key(expected, *, multiline=False):
     from app.recognition.languages import script_model
     language = script_model(expected) if _RECEIVE_MODEL != 'eng' else ''
-    return (language + '+eng+chi_sim' if language else
+    from app.recognition.resident import script_languages
+    model = script_languages('jpn_combined' if language == 'jpn' and multiline else language,
+                             Path(__file__).resolve().parent / 'models', source=True)
+    return (model if language else
             '+'.join(dict.fromkeys(('chi_sim', *_RECEIVE_MODEL.split('+')))))
+
+
+def _source_single_line(gray, line_count, *, word_gap=False):
+    """Reflow complete physical rows for raw-line OCR, never concatenate text guesses."""
+    ys = np.flatnonzero((gray < 100).any(axis=1))
+    if not len(ys) or line_count < 2:
+        return None
+    groups = np.split(ys, np.flatnonzero(np.diff(ys) > 3) + 1)
+    if len(groups) != line_count:
+        return None
+    height = max(int(row[-1] - row[0] + 1) for row in groups) + 8
+    gap = max(2, round((height - 8) * .55)) if word_gap else 2
+    parts = []
+    for row in groups:
+        pixels = gray[row[0]:row[-1]+1]
+        xs = np.flatnonzero((pixels < 100).any(axis=0))
+        pixels = pixels[:, xs[0]:xs[-1]+1]
+        padded = np.full((height, pixels.shape[1]+gap), 255, np.uint8)
+        padded[height-4-pixels.shape[0]:height-4, :pixels.shape[1]] = pixels
+        parts.append(padded)
+    return cv2.copyMakeBorder(np.concatenate(parts, axis=1), 4, 4, 4, 4,
+                              cv2.BORDER_CONSTANT, value=255)
 
 
 def _read_source_evidence(img, body, expected, *, scale, deadline=None):
@@ -940,11 +1041,11 @@ def _read_source_evidence(img, body, expected, *, scale, deadline=None):
     started = time.monotonic()
     if deadline is not None and started >= deadline:
         return SourceEvidence(False,'source_ocr_timeout')
-    timeout = OCR_TIMEOUT if deadline is None else max(.001, min(OCR_TIMEOUT, deadline-started))
     png = b""
     from app.recognition.languages import script_model
     language = script_model(expected) if _RECEIVE_MODEL != 'eng' else ''
-    source_model = source_model_key(expected)
+    source_model = source_model_key(expected, multiline=body.line_count > 1)
+    reader_language = 'jpn_combined' if language == 'jpn' and body.line_count > 1 else language
     try:
         if not body.accepted:
             return SourceEvidence(False, 'source_no_body')
@@ -957,34 +1058,98 @@ def _read_source_evidence(img, body, expected, *, scale, deadline=None):
         if any(not (model_dir / (name + '.traineddata')).is_file() for name in source_model.split('+')):
             return SourceEvidence(False, 'source_model_missing', png=png)
         gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
-        if _RESIDENT is not None:
-            try:
-                options = dict(language=language) if language else {}
-                tsv = _RESIDENT.read(_enlarge(gray, 3), 6 if body.line_count > 1 else 7,
-                                     source=True, timeout=timeout, **options)
+        factor = 4 if language == 'kor' or source_model.startswith('jpn_quality+') else 3
+        def read_pixels(pixels, mode=None, *, english_first=False, standard_japanese=False):
+            remaining = OCR_TIMEOUT if deadline is None else max(.001,min(OCR_TIMEOUT,deadline-time.monotonic()))
+            mode = mode if mode is not None else 6 if body.line_count > 1 else 7
+            if _RESIDENT is not None:
+                try:
+                    value = _RESIDENT.read(pixels,mode,source='english' if english_first else True,timeout=remaining,
+                                           soft_deadline=deadline is not None,
+                                           **(dict(language='jpn_standard' if standard_japanese else reader_language) if language else {}))
+                except ReadDeadlineExpired:
+                    _DIAGNOSTICS.count('frame_budget_expired')
+                    raise
+                except Exception as exc:
+                    _degrade_receive_backend(exc)
+                    raise
                 header = 'level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n'
-                if not tsv.startswith('level\t'):
-                    tsv = header + tsv
-                return assess_source(tsv, expected, png=png,
-                    elapsed_ms=round((time.monotonic() - started) * 1000))
-            except Exception as exc:
-                _degrade_receive_backend(exc)
-                return SourceEvidence(False, 'source_ocr_failed', png=png)
-        ok, enlarged = cv2.imencode('.png', _enlarge(gray, 3))
-        if not ok:
-            return SourceEvidence(False, 'source_image_failed', png=png)
-        process = subprocess.run([pytesseract.pytesseract.tesseract_cmd,
-            'stdin', 'stdout', '--psm', '6' if body.line_count > 1 else '7',
-            '--oem', '1', '-l', source_model, '--tessdata-dir', str(model_dir),
-            '-c', 'tessedit_create_tsv=1'],
-            input=enlarged.tobytes(), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            timeout=timeout, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
-            env=dict(os.environ, OMP_THREAD_LIMIT='1'))
-        if process.returncode:
-            return SourceEvidence(False, 'source_ocr_failed', png=png)
-        return assess_source(process.stdout.decode('utf-8'), expected, png=png,
-                             elapsed_ms=round((time.monotonic() - started) * 1000))
-    except subprocess.TimeoutExpired:
+                return value if value.startswith('level\t') else header+value
+            ok, encoded = cv2.imencode('.png',pixels)
+            if not ok:raise ValueError('source_image_failed')
+            process = subprocess.run([pytesseract.pytesseract.tesseract_cmd,
+                'stdin','stdout','--psm',str(mode),'--oem','1','-l',
+                'chi_sim+eng' if english_first else 'jpn+eng+chi_sim' if standard_japanese else source_model,
+                '--tessdata-dir',str(model_dir),'-c','tessedit_create_tsv=1'],
+                input=encoded.tobytes(),stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+                timeout=remaining,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0),
+                env=dict(os.environ,OMP_THREAD_LIMIT='1'))
+            if process.returncode:raise OSError('source_ocr_failed')
+            return process.stdout.decode('utf-8')
+        nearest = cv2.resize(gray,None,fx=factor,fy=factor,interpolation=cv2.INTER_NEAREST)
+        cubic = _enlarge(gray,factor)
+        primary, alternate_pixels = (nearest,cubic) if language else (cubic,nearest)
+        if language == 'jpn' and body.line_count > 1:
+            pixels = _enlarge(gray, 3 if body.line_count >= 3 else 4)
+            paragraph = assess_source(read_pixels(pixels), expected, png=png)
+            if paragraph.verified:
+                return replace(paragraph, elapsed_ms=round((time.monotonic()-started)*1000))
+            if body.line_count >= 3 and (deadline is None or time.monotonic() < deadline):
+                alternate = assess_source(read_pixels(_enlarge(gray, 4)), expected, png=png)
+                if alternate.verified:
+                    return replace(alternate, elapsed_ms=round((time.monotonic()-started)*1000))
+            single = _source_single_line(gray, body.line_count)
+            if single is not None:
+                alternate = assess_source(read_pixels(_enlarge(single, 2), mode=13), expected, png=png)
+                if alternate.reason in ('', 'source_disagrees'):
+                    paragraph = alternate
+            return replace(paragraph, elapsed_ms=round((time.monotonic()-started)*1000))
+        if language == 'rus' and body.line_count > 1:
+            single = _source_single_line(gray, body.line_count, word_gap=True)
+            if single is not None:
+                reflow = assess_source(read_pixels(_enlarge(single, 2), mode=13),
+                                       expected, png=png)
+                if reflow.verified:
+                    return replace(reflow, elapsed_ms=round((time.monotonic()-started)*1000))
+                fixed = cv2.threshold(single, 150, 255, cv2.THRESH_BINARY)[1]
+                alternate = assess_source(read_pixels(_enlarge(fixed, 2), mode=7), expected, png=png)
+                if alternate.verified:
+                    return replace(alternate, elapsed_ms=round((time.monotonic()-started)*1000))
+        if not language:
+            # The existing CJK-capable English context is sufficient only when
+            # it verifies the entire reading. All other languages retain the
+            # unrestricted multilingual fallback, including Chinese rejection.
+            fast = assess_source(read_pixels(primary, english_first=True), expected, png=png)
+            if fast.verified or fast.reason == 'native_chinese':
+                return replace(fast, elapsed_ms=round((time.monotonic()-started)*1000))
+            if deadline is None or time.monotonic() < deadline:
+                alternate = assess_source(read_pixels(nearest, english_first=True), expected, png=png)
+                if alternate.verified or alternate.reason == 'native_chinese':
+                    return replace(alternate, elapsed_ms=round((time.monotonic()-started)*1000))
+        evidence = assess_source(read_pixels(primary),expected,png=png)
+        if (language and evidence.reason == 'source_uncertain'
+                and (deadline is None or time.monotonic() < deadline)):
+            # Video compression changes small strokes between frames. Try one
+            # alternate enlargement; keep the same confidence and
+            # complete-text agreement requirements, never merge partial readings.
+            alternate = assess_source(read_pixels(alternate_pixels),expected,png=png)
+            if alternate.reason in ('','source_disagrees','native_chinese'):
+                evidence = alternate
+        if (language == 'rus' and evidence.reason == 'source_uncertain'
+                and (deadline is None or time.monotonic() < deadline)):
+            # Compressed Cyrillic at the original 3x scale can have one weak
+            # word. A bounded 4x cubic read still requires complete agreement.
+            alternate = assess_source(read_pixels(_enlarge(gray, 4)), expected, png=png)
+            if alternate.reason in ('', 'source_disagrees'):
+                evidence = alternate
+        if (language == 'jpn' and evidence.reason == 'source_uncertain'
+                and (deadline is None or time.monotonic() < deadline)):
+            small = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_NEAREST)
+            alternate = assess_source(read_pixels(small, standard_japanese=True), expected, png=png)
+            if alternate.reason in ('', 'source_disagrees'):
+                evidence = alternate
+        return replace(evidence,elapsed_ms=round((time.monotonic()-started)*1000))
+    except (subprocess.TimeoutExpired, ReadDeadlineExpired):
         return SourceEvidence(False, 'source_ocr_timeout', png=png)
     except Exception:
         return SourceEvidence(False, 'source_ocr_failed', png=png)

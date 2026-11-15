@@ -11,7 +11,7 @@ python -m app
 
 也可双击 `启动.vbs`，按 `.venv-signed`、`.venv`、PATH 的顺序查找解释器；目录名不代表已签名。业务实现位于 `app/`，界面位于 `gui/`，源码入口为 `python -m app` 或 `scripts/run.py`。用户数据路径为 `<程序目录>/data`。
 
-1.0.0 安装包和便携包已内置 Python 与 OCR。`LockLingo.exe` 打开 GUI，`DeadlockTranslate.exe` 用于诊断及 OCR 辅助进程协议。下载入口见[发布说明](releases/v1.0.0.md)。
+安装包和便携包内置 Python 与 OCR。`LockLingo.exe` 打开 GUI，`DeadlockTranslate.exe` 用于诊断及 OCR 辅助进程协议。下载入口见 [GitHub 最新正式版](https://github.com/piaobo2233/deadlock-translator/releases/latest)。
 
 ## 公开基础检查
 

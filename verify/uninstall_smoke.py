@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import platform
 import subprocess
 import sys
 import tempfile
@@ -32,11 +33,33 @@ def registry_value(key, value):
         return None
 
 
+def checked_installer(path, expected):
+    path = path.resolve(strict=True)
+    with path.open('rb') as stream:
+        digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+    if digest != expected.lower():
+        raise ValueError(f'SHA-256 mismatch for {path.name}: {digest}')
+    return path, digest
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('previous', type=Path)
     parser.add_argument('setup', type=Path)
+    parser.add_argument('--previous-version', required=True)
+    parser.add_argument('--candidate-version', required=True)
+    parser.add_argument('--previous-sha256', required=True)
+    parser.add_argument('--candidate-sha256', required=True)
     args = parser.parse_args()
+    if args.previous_version == args.candidate_version:
+        parser.error('Upgrade fixtures require different versions')
+    try:
+        previous, previous_hash = checked_installer(args.previous, args.previous_sha256)
+        candidate, candidate_hash = checked_installer(args.setup, args.candidate_sha256)
+    except (OSError, ValueError) as exc:
+        parser.error(str(exc))
+    if previous_hash == candidate_hash:
+        parser.error('Upgrade fixtures require different installers')
     startup = game_autostart.startup_path()
     shortcut = shell_folder(0x10) / f'{PRODUCT}.lnk'
     programs = shell_folder(2)
@@ -55,12 +78,16 @@ def main():
                    for key in ('Run', 'Run32'))):
         parser.error('Existing startup state or shortcut, refusing fixture install')
 
-    scratch = Path(tempfile.mkdtemp(prefix='uninstall-accept-', dir=ROOT / '.temp')).resolve()
+    scratch_root = ROOT / '.temp'
+    scratch_root.mkdir(exist_ok=True)
+    scratch = Path(tempfile.mkdtemp(prefix='uninstall-accept-', dir=scratch_root)).resolve()
     print(f'Fixture directory: {scratch}', flush=True)
     install = scratch / 'LockLingo'
     group = 'LockLingo acceptance ' + scratch.name
     temporary = scratch / 'temp'
     temporary.mkdir()
+    sibling = scratch / 'unrelated.txt'
+    sibling.write_bytes(b'unrelated fixture')
     env = dict(os.environ, DEEPSEEK_API_KEY='', PYTHONPATH='', PYTHONHOME='',
                TCL_LIBRARY='', TK_LIBRARY='', TEMP=str(temporary), TMP=str(temporary))
     stages = []
@@ -79,6 +106,7 @@ def main():
         execute(executable, stage, '/SP-', f'/DIR={install}', f'/GROUP={group}', '/TASKS=desktopicon')
         assert Path(registration()).resolve() == install
         assert shortcut.is_file()
+        assert (programs / group / f'{PRODUCT}.lnk').is_file()
 
     def remove(stage, *flags):
         assert Path(registration()).resolve() == install
@@ -103,15 +131,18 @@ def main():
             winreg.SetValueEx(key, startup.name, 0, winreg.REG_BINARY, bytes(12))
 
     report = dict(result='failed', scratch=str(scratch), stages=stages,
-                  setup_sha256=hashlib.sha256(args.setup.read_bytes()).hexdigest())
+                  scope='silent setup and direct uninstaller; no application or Windows Settings UI',
+                  system=platform.platform(), previous_version=args.previous_version,
+                  previous_sha256=previous_hash, candidate_version=args.candidate_version,
+                  setup_sha256=candidate_hash)
     try:
-        setup(args.previous, 'install-1.1.1')
-        assert (install/'VERSION').read_text().strip() == '1.1.1'
+        setup(previous, 'install-previous')
+        assert (install/'VERSION').read_text().strip() == args.previous_version
         write('data/config.json', '{"translate_api": false, "api_key": "fixture"}')
         write('data/glossary.json', '{}')
         before = snapshot(install/'data')
-        setup(args.setup, 'upgrade-to-1.1.2')
-        assert (install/'VERSION').read_text().strip() == '1.1.2'
+        setup(candidate, 'upgrade-to-candidate')
+        assert (install/'VERSION').read_text().strip() == args.candidate_version
         assert snapshot(install/'data') == before
         assert (install/'backups/rollback/ready.json').is_file()
         write('backups/updates/fixture/result.json')
@@ -120,7 +151,7 @@ def main():
         remove('uninstall-keep-data')
         assert snapshot(install/'data') == before
         assert not (install/'backups').exists() and not (install/'.temp').exists()
-        setup(args.setup, 'reinstall-for-purge')
+        setup(candidate, 'reinstall-for-purge')
         assert snapshot(install/'data') == before
         from app.storage import store
         assert store.backup(install)
@@ -130,6 +161,7 @@ def main():
         seed_startup()
         remove('uninstall-purge', '/PURGEDATA')
         wait_for(lambda: not install.exists())
+        assert sibling.read_bytes() == b'unrelated fixture'
         report['result'] = 'pass'
     finally:
         (scratch/'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')

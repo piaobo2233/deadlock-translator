@@ -12,6 +12,17 @@ from app.runtime.pipeline import TranslationPipeline
 
 
 class FrameSourceTests(unittest.TestCase):
+    def test_requested_capture_interrupts_idle_wait_and_stop(self):
+        source=FrameSource(lambda:np.zeros((12,20,3),np.uint8),lambda *_:None,
+                           lambda *_:None,interval=5)
+        self.addCleanup(source.stop)
+        source.start()
+        first=source.latest()
+        source.request_capture()
+        current=source.latest(after_sequence=first.sequence,timeout=.3)
+        self.assertGreater(current.sequence,first.sequence)
+        self.assertTrue(source.stop(timeout=.3))
+
     def make(self, capture=lambda: np.zeros((12, 20, 3), np.uint8), **kwargs):
         source = FrameSource(capture, kwargs.pop("observe", lambda image, at: None),
                              kwargs.pop("unavailable", lambda at: None), interval=.01, **kwargs)

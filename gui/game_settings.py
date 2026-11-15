@@ -83,25 +83,45 @@ def hotkey_control(parent,app,key,label,config):
 def language_control(parent,app,key,label,config):
     from gui import pages as p
     from app.translation.directions import LANGUAGES
+    from app.config.specification import BY_KEY
     row,holder=p._row(parent,app.th,label)
     value=app.th.tk.StringVar(value=LANGUAGES[config[key]])
-    box=app.th.combobox(holder,textvariable=value,values=tuple(LANGUAGES.values()),state='readonly',width=14)
+    box=app.th.combobox(holder,textvariable=value,
+        values=tuple(LANGUAGES[code] for code in BY_KEY[key]['options']),state='readonly',width=14)
     box.pack()
     def save(event=None):
         if not p._save(key,next(code for code,name in LANGUAGES.items() if name==value.get()),app):
-            value.set(LANGUAGES[p._load_config(app.root_dir)[key]])
+            if key != 'send_target':
+                value.set(LANGUAGES[p._load_config(app.root_dir)[key]])
+            return False
+        return True
     box.bind('<<ComboboxSelected>>',save)
-    return dict(value=value,box=box)
+    return dict(value=value,box=box,save=save)
 
 
 def build_language_settings(parent,app):
     from gui import pages as p
     config=p._load_config(app.root_dir);th=app.th
+    from app.translation.clipboard import effective_target
+    from app.translation.directions import LANGUAGES
+    control=language_control(parent,app,'send_target','发言译成',dict(config,send_target=effective_target(config)))
+    status=text(parent,th,('当前游戏发言：'+LANGUAGES[effective_target(config)] +
+        ('；选择语言后立即保存并应用。' if not config['send_target_confirmed'] else '')),small=True,muted=True)
+    status.pack(anchor='w',pady=(4,6))
+    def confirm():
+        if control['save']():
+            status.configure(text='已保存发言目标：'+control['value'].get()+'；运行状态见底栏。')
+        else:
+            status.configure(text='目标保存失败，当前游戏发言仍为：'+LANGUAGES[effective_target(p._load_config(app.root_dir))]+'；请重试。')
+    control['box'].bind('<<ComboboxSelected>>',lambda _event:confirm())
+    button=th.button(parent,'确认发言目标',confirm)
+    button.pack(anchor='w',pady=(0,10))
+    app.send_language_control=dict(control,status=status,confirm=button)
     guide=help_text(parent,th,'开启后，在游戏聊天框提交中文输入法候选，再自行 Ctrl+A/C 复制。'
-         '助手确认游戏来源后固定译英并覆盖剪贴板；提示成功后自行 Ctrl+V 粘贴、回车发送。'
+         '助手确认游戏来源后按已确认目标翻译并覆盖剪贴板；提示成功后自行 Ctrl+V 粘贴、回车发送。'
          '切出游戏会取消旧输出，返回后请重新复制。私有请求台账可保留原文和译文。',
          small=True,muted=True,wraplength=720,justify='left')
-    row,holder=p._row(parent,th,'游戏复制中文自动译英',guide.cget('text'),app)
+    row,holder=p._row(parent,th,'游戏复制中文自动翻译',guide.cget('text'),app)
     var=p._switch(app,holder,'input_translate_enabled',config)
     app.input_translate_control=dict(value=var,holder=holder)
 

@@ -60,13 +60,14 @@ class LearnedGlossary:
         # transaction view so disk recovery cannot mutate a live lookup index.
         view = AuthorityView(self.path, self.builtins,
             memory_path=self.authority.paths["memory"], cache_path=self.authority.paths["cache"],
-            review_path=self.authority.review_path, builtins_enabled=self.authority.builtins_enabled)
+            review_path=self.authority.review_path, builtins_enabled=self.authority.builtins_enabled,
+            learning_policy=self.authority.learning_policy)
         view.refresh()
         gate = view.gate(original)
         if gate:
             return LearnResult(False, reason="disabled" if gate == "inactive" else gate)
         local = view.lookup(original)
-        if local:
+        if local and local[1] != 'learning_cache':
             try:
                 receipt = self._receipt(original)
             except OSError:

@@ -1,6 +1,6 @@
 """Extracted capture responsibilities."""
 from app import brand
-from app.recognition.languages import foreign_chat, latin_words
+from app.recognition.languages import foreign_chat, latin_words, clean_ocr_spacing
 from app.recognition.selection import RecognitionRules, select_candidate
 from app.recognition.tracking import same_text
 from app.runtime.events import PipelineStage
@@ -58,7 +58,7 @@ def recognition_rules():
     """One selection policy shared by live capture and offline replay."""
     return RecognitionRules(normalize_text, chat_policy.fix_digit_confusion, chat_policy.is_chat_text,
                             lambda text, glossary: not foreign_chat(text) and chat_policy.is_obvious_garbage(text, glossary),
-                            lambda text, glossary: text.strip() if foreign_chat(text) else trim_tail(text, glossary),
+                            lambda text, glossary: clean_ocr_spacing(text) if foreign_chat(text) else trim_tail(text, glossary),
                             lambda text: len(latin_words(text)), chat_policy.COMMON_WORDS)
 
 
@@ -110,9 +110,10 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                     stop_event=None,
                     message_snapshots: bool = False, visual_tracking: bool = False,
                     capture_owner=None, health=None, visual_notify=None,
-                    frame_provider=None, screen_size=None, multilingual=False,
+                    frame_provider=None, screen_size=None, multilingual=True,
                     capture_config=None, recognition_gate=None, adaptive=True,
-                    capture_changed=lambda: False, capture_ready=lambda: None):
+                    capture_changed=lambda: False, capture_ready=lambda: None,
+                    receive_target='zh-Hans'):
     """屏幕 OCR 抓取源 —— 聊天不在日志里，只能看屏幕。
 
     每 interval 秒截一次「头像栏下方」那块区域；找气泡 → OCR → 多帧投票。
@@ -244,6 +245,7 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
     if capture_owner is not None and ocr._RESIDENT is not None:
         capture_owner(ocr._RESIDENT)
     selection_rules = recognition_rules()
+    last_script = None
     from app.recognition.reuse import RejectedPixels
     rejected_pixels = RejectedPixels()
     from app.recognition.reuse import QuickChatPixels, QuickChatTemplates
@@ -280,7 +282,7 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
     from app.runtime.frame_source import FrameSource, FrameUnavailable
     from app.runtime.visual_pulse import VisualPulse
     from app.runtime.recognition_cadence import RecognitionCadence
-    from app.vision.presence import mask_exclusions, visual_body, same_body_box, VisualBody
+    from app.vision.presence import mask_exclusions, visual_body, same_body_box, VisualBody, same_glyphs, nearby
     pulse, visual_source, frame_sequence = None, None, None
     cadence = RecognitionCadence(interval) if visual_tracking and adaptive else None
     def detect_chat_bubbles(image):
@@ -289,7 +291,16 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
         if selected_rect is None:
             return found
         from app.recognition.chat_area import candidate_inside, chat_body_sized, typing_indicator, voice_indicator, ChatAreaBox
-        kept=[b for b in found if candidate_inside(b,image.shape,scale=sh/ocr.REF_H)]
+        kept=[]
+        for candidate in found:
+            if candidate_inside(candidate,image.shape,scale=sh/ocr.REF_H):
+                kept.append(candidate)
+                continue
+            # An attached portrait/world highlight may touch the ROI boundary
+            # while the complete rectangular text body remains safely inside.
+            region=ocr.locate_body(image,candidate,scale=sh/ocr.REF_H)
+            if region.accepted and candidate_inside(region.tracking_box,image.shape,scale=sh/ocr.REF_H):
+                kept.append(ChatAreaBox(region.tracking_box,region))
         if stats is not None:
             stats['chat_area_clipped_skipped']=stats.get('chat_area_clipped_skipped',0)+len(found)-len(kept)
         shaped=[]
@@ -304,7 +315,7 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                 region=BodyRegion(rect=tuple(candidate[:4]),text_rect=tuple(candidate[:4]))
             else:
                 with ocr.measure_stage('locate_body'):
-                    region=ocr.locate_body(image,candidate,scale=sh/ocr.REF_H)
+                    region=getattr(candidate,'region',None) or ocr.locate_body(image,candidate,scale=sh/ocr.REF_H)
                 if not chat_body_sized(region,scale=sh/ocr.REF_H):
                     shape_rejected+=1
                     continue
@@ -436,6 +447,10 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
             if only_in_game and not desktop.game_in_foreground():
                 if not paused:
                     print("[ocr ] 游戏不在前台，暂停抓取（不截屏、不 OCR、不调 API）")
+                    foreground = desktop.foreground_status()
+                    if foreground.get('method') == 'unavailable':
+                        print(f"[warn] 未能查询前台进程（Windows 错误 {foreground.get('error', 0)}）；"
+                              "无法确认是游戏，已暂停识别。")
                     paused = True
                 if stats is not None:
                     stats["paused_frames"] = stats.get("paused_frames", 0) + 1
@@ -471,6 +486,12 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                     return
                 if capture_changed():
                     return
+                if isinstance(exc, FrameUnavailable) and str(exc) == 'capture_inactive':
+                    # Switching away invalidates old pixels as usual. On return,
+                    # the capture owner may not have published its first frame
+                    # yet; this is a normal pause, not a failed screenshot.
+                    stop_event.wait(.05)
+                    continue
                 if stats is not None:
                     stats['capture_failures'] = stats.get('capture_failures', 0) + 1
                 print(f"[warn] 截屏失败：{exc}")
@@ -535,11 +556,15 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                     pass
 
 
-            if exclude:
+            if exclude and visual_source is None:
                 mask_exclusions(img, exclude(), (x0, y0))
 
-            with ocr.measure_stage('find_bubbles'):
-                boxes = detect_chat_bubbles(img)
+            boxes = pulse.detections_at(captured_at) if pulse is not None else None
+            if boxes is None:
+                with ocr.measure_stage('find_bubbles'):
+                    boxes = detect_chat_bubbles(img)
+            elif stats is not None:
+                stats['frame_detection_reused'] = stats.get('frame_detection_reused', 0) + 1
             if not boxes:
                 recovered=ocr.recover_receive_backend()
                 if recovered is not None and capture_owner is not None and not capture_owner(recovered):
@@ -602,6 +627,7 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                 if prev_text is not None:
                     quick = ""
                     for _kind, _t in ocr.ocr_variants(img, b, screen=(sw, sh), region=body,
+                            **({'include_chinese': True} if receive_target != 'zh-Hans' else {}),
                             **({'max_workers': 1} if cadence else {})):
                         quick = _t or ""
                         quick_read = _t or None
@@ -643,8 +669,10 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                 def read_source(text,deadline):
                     evidence = ocr.source_evidence(img, body, text, scale=sh/ocr.REF_H,
                         captured_at=captured_at, origin=(x0,y0), deadline=deadline)
-                    return evidence
-                frame_sources = FrameSourceReadings(read_source, ocr.source_model_key)
+                    from app.recognition.source import for_text
+                    return for_text(evidence, text, allow_chinese=receive_target != 'zh-Hans')
+                frame_sources = FrameSourceReadings(read_source,
+                    lambda text: ocr.source_model_key(text, multiline=body.line_count > 1))
                 def verify_body(text):
                     prior_hits = frame_sources.hits
                     evidence=frame_sources.for_text(text,first_seen_at+4.0)
@@ -654,15 +682,30 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                     return evidence
                 if stats is not None:
                     stats.update(ocr_active=True, last_ocr_at=time.time())
+                current_body = visual_body(img,body) if body.accepted and body.line_count > 1 else None
+                language_hint = (last_script[1] if last_script is not None and current_body is not None
+                    and nearby(last_script[0].box,current_body.box)
+                    and same_glyphs(last_script[0].mask,current_body.mask) else '')
                 try:
                     decision = select_candidate(ocr.ocr_variants(img, b, screen=(sw, sh), region=body,
+                        **({'include_chinese':True} if receive_target != 'zh-Hans' else {}),
                         deadline=first_seen_at+4.0, preferred_read=quick_read,
+                        **({'language_hint':language_hint} if language_hint else {}),
                         **({'max_workers': 1} if cadence else {})), glossary, selection_rules,
-                        verify_body=verify_body if message_snapshots else None)
+                        verify_body=verify_body if message_snapshots else None,
+                        skip_chinese=receive_target == 'zh-Hans')
                 finally:
                     if stats is not None:
                         stats['ocr_active'] = False
                 tried = list(decision.tried)
+                if decision.accepted and current_body is not None:
+                    from app.recognition.languages import script_model
+                    from app.recognition.source import for_text
+                    language = script_model(decision.text)
+                    if language and any(for_text(value,decision.text).verified for value in early_evidence):
+                        # Language routing only: every vote still reads fresh
+                        # pixels and independently verifies the complete source.
+                        last_script = current_body,language
                 if stats is not None:
                     if quick_read is not None:
                         stats['preferred_frame_reused'] = stats.get('preferred_frame_reused', 0) + 1
@@ -725,13 +768,18 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                     print(f"[ocr ] 抓到 {picked!r}  box={b}  变体={tried!r}  选中={decision.kind}")
                 if capture_changed():
                     return
+                from app.recognition.source import for_text
+                # Fallback-only reads retain their established three-vote then
+                # final-source-check path. A completed weak body check must
+                # instead wait for a fresh verified frame before consuming it.
+                source_verified=(any(for_text(value,picked).verified for value in early_evidence)
+                                 if early_evidence else None)
                 if pulse is not None:
-                    from app.recognition.source import for_text
-                    source_verified=bool(early_evidence and for_text(early_evidence[0],picked).verified)
                     current,confirmed=pulse.feed_current(img,body,captured_at,picked,first_seen_at,
                         source_verified=source_verified)
                 else:
-                    current,confirmed=True,con.feed(picked,width=b[2],box=b,captured_at=first_seen_at)
+                    current,confirmed=True,con.feed(picked,width=b[2],box=b,captured_at=first_seen_at,
+                        can_emit=source_verified if message_snapshots else None)
                 if not current:
                     if stats is not None:
                         stats['stale_source_frame_skipped']=stats.get('stale_source_frame_skipped',0)+1
@@ -783,9 +831,24 @@ def iter_ocr_source(interval: float = 0.4, threshold: int = 2,
                         if identity is None:
                             note_visual_drop("confirmation_expired")
                             continue
-                        if pulse is not None and not pulse.bind(identity, img, body, captured_at):
-                            note_visual_drop("confirmation_not_visible")
-                            continue
+                        if pulse is not None:
+                            if cadence is not None:
+                                # Slow OCR can finish after the active burst.
+                                # Refresh before binding; an idle .4s sample gap
+                                # cannot support the existing .25s visual lease.
+                                visual_source.request_capture()
+                                try:
+                                    fresh=visual_source.latest(after_sequence=frame_sequence)
+                                    frame_sequence=fresh.sequence
+                                except FrameUnavailable:
+                                    note_visual_drop('confirmation_not_visible')
+                                    continue
+                            if not pulse.bind(identity, img, body, captured_at):
+                                note_visual_drop("confirmation_not_visible")
+                                continue
+                            if cadence is not None:
+                                cadence.begin_tracking()
+                                visual_source.request_capture()
                         current_box = con.box_for(identity)
                         if current_box is None:
                             # [!] 这一条原来**连 health 都不写** —— 最彻底的静默。

@@ -179,6 +179,13 @@ def main():
         bundle = work / 'dist' / EXE_NAME
         shutil.copy2(ROOT / 'LICENSE', bundle / 'LICENSE')
         shutil.copy2(ROOT / 'docs/THIRD-PARTY-NOTICES.md', bundle / 'THIRD-PARTY-NOTICES.md')
+        for name in ('BRAND.md', 'PROJECT-NOTICE.md', 'THIRD-PARTY-NOTICES.md'):
+            target = bundle / 'docs' / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ROOT / 'docs' / name, target)
+        audit = bundle / 'docs/releases/20261114-license-migration-audit.md'
+        audit.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / 'docs/releases/20261114-license-migration-audit.md', audit)
         sources_notice = ROOT / 'docs/releases/third-party-sources.md'
         if sources_notice.is_file():
             shutil.copy2(sources_notice, bundle / 'THIRD-PARTY-SOURCES.md')

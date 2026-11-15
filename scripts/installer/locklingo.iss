@@ -101,7 +101,7 @@ WizardStyle=modern
 UsePreviousAppDir=yes
 CloseApplications=no
 RestartApplications=no
-AppMutex=DeadlockTranslate_SingleInstance,DeadlockTranslate_InstallGuard,Local\LockLingo_InstallGuard_v2,Local\LockLingo_RecoveryWindow
+AppMutex=DeadlockTranslate_SingleInstance,DeadlockTranslate_InstallGuard,Local\LockLingo_RecoveryWindow
 SetupLogging=no
 AllowNoIcons=yes
 DisableWelcomePage=no
@@ -187,7 +187,7 @@ var Parameters: String; UpdateActive: Boolean;
 begin
   Result := '';
   if RecoveryPrepared then Exit;
-  if CheckForMutexes('DeadlockTranslate_SingleInstance,DeadlockTranslate_InstallGuard,Local\LockLingo_InstallGuard_v2,Local\LockLingo_RecoveryWindow') then begin
+  if CheckForMutexes('DeadlockTranslate_SingleInstance,DeadlockTranslate_InstallGuard,Local\LockLingo_RecoveryWindow') then begin
     Result := '{#RunningMessage}'; Exit;
   end;
   InstallerGuard := RecoveryCreateMutex(0, False, 'Local\LockLingo_Installer');
@@ -199,7 +199,7 @@ begin
   UpdateActive := RecoveryLastError() = 183;
   if UpdateGuard = 0 then Result := '{#RecoveryError}'
   else begin
-    if CheckForMutexes('DeadlockTranslate_SingleInstance,DeadlockTranslate_InstallGuard,Local\LockLingo_InstallGuard_v2,Local\LockLingo_RecoveryWindow') then
+    if CheckForMutexes('DeadlockTranslate_SingleInstance,DeadlockTranslate_InstallGuard,Local\LockLingo_RecoveryWindow') then
       Result := '{#RunningMessage}'
     else begin
       ExtractTemporaryFile('LockLingoRecovery.exe');

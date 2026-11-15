@@ -5,13 +5,16 @@ import threading
 import time
 
 from app.recognition.languages import contains_han
+from app.translation.clipboard import effective_target
+from app.translation.directions import LANGUAGES
 
 CONFIG_FIELDS = ('api_key', 'endpoint', 'model', 'translate_api',
                  'price_in', 'price_out', 'budget_session', 'budget_daily')
 
 
 def signature(config):
-    return tuple(config.get(key) for key in CONFIG_FIELDS)
+    return (effective_target(config), config.get('send_target_revision', ''),
+            *(config.get(key) for key in CONFIG_FIELDS))
 
 
 @dataclass(frozen=True)
@@ -119,7 +122,9 @@ class ClipboardTranslation:
                                     and signature(latest) == task.settings
                                     and (focused.window, focused.pid) == self.target
                                     and focused.sequence == outcome.sequence):
-                                self.notify('已复制英文，可 Ctrl+V 粘贴')
+                                name = {'en': '英文', 'ru': '俄文', 'ja': '日文', 'ko': '韩文'}.get(
+                                    task.settings[0], LANGUAGES[task.settings[0]])
+                                self.notify(f'已复制{name}，可 Ctrl+V 粘贴')
                             self.diagnose('completed', code='clipboard', elapsed_ms=(self.clock()-task.received)*1000)
                         elif outcome.stage not in ('changed', 'superseded'):
                             self.notify('剪贴板写入失败' + ('，内容可能已改变，请重新复制' if outcome.modified

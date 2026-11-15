@@ -16,7 +16,7 @@ import app.main as dt
 import app.translation.glossary_ops as glossary_ops
 from app.storage import store
 from app.storage.learning_cache import LearningReceipt
-from app.storage.requests import RequestState
+from app.storage.requests import RequestState, SaveReceipt
 from app.translation.client import ApiResponse
 from app.translation.learning import LearnedGlossary
 from app.translation.query import QueryKey
@@ -53,13 +53,13 @@ class PersistentLearningTests(unittest.TestCase):
                     engine._call_once('together')
                 engine.client.request.assert_not_called()
 
-    def test_api_candidate_has_receipt_review_and_no_formal_or_legacy_writes(self):
+    def test_api_candidate_has_formal_receipt_review_and_no_legacy_writes(self):
         engine = self.engine()
         result = engine.translate_result('together')
         self.assertTrue(result.successful,result)
-        self.assertIsInstance(result.save_receipt,LearningReceipt)
+        self.assertIsInstance(result.save_receipt,SaveReceipt)
         self.assertTrue(result.save_receipt.saved)
-        self.assertFalse(self.path.exists())
+        self.assertTrue(self.path.exists())
         self.assertEqual(len(engine.review_queue.items()),1)
         for name in ('translations.json','local_cache.json'):
             self.assertFalse((self.root/name).exists())
@@ -81,14 +81,14 @@ class PersistentLearningTests(unittest.TestCase):
                                 env=dict(os.environ,DEEPSEEK_API_KEY=''),capture_output=True,text=True,timeout=20)
         self.assertEqual(result.returncode,0,result.stderr)
         data = json.loads(result.stdout.splitlines()[-1])
-        self.assertEqual(data,dict(text='一起行动',source='learning_cache',attempts=0))
+        self.assertEqual(data,dict(text='一起行动',source='glossary',attempts=0))
 
     def test_formal_wins_both_flags_and_manual_changes_immediately(self):
         engine = self.engine(translate=True)
         result = engine.translate_result('together')
         self.assertTrue(result.save_receipt.saved)
         self.assertEqual(engine.journal.read('together')['purpose'],'translate')
-        self.assertFalse(self.path.exists())
+        self.assertTrue(self.path.exists())
         self.assertTrue((self.root/'learning_cache.json').exists())
         row=engine.review_queue.items()[0]
         self.assertTrue(engine.review_queue.decide(row['key'],'accept',token=row['token'],formal_token=row['formal_token']).saved)
@@ -108,14 +108,14 @@ class PersistentLearningTests(unittest.TestCase):
 
     def test_qualified_journal_recovers_candidate_after_restart_without_http(self):
         engine=self.engine()
-        with patch.object(engine.learning_cache,'save',return_value=LearningReceipt(False,reason='disk')):
+        with patch('app.translation.learning.store.update_glossary_file',return_value=False):
             result=engine.translate_result('together')
         self.assertTrue(result.successful);self.assertFalse(result.save_receipt.saved)
         restarted=self.engine()
         recovered=restarted.translate_result('together')
-        self.assertEqual((recovered.text,recovered.source,recovered.api_attempts),('一起行动','learning_cache',0))
+        self.assertEqual((recovered.text,recovered.source,recovered.api_attempts),('一起行动','glossary',0))
         restarted.client.request.assert_not_called()
-        self.assertFalse(self.path.exists())
+        self.assertTrue(self.path.exists())
         self.assertTrue((self.root/'learning_cache.json').exists())
         self.assertEqual(len(restarted.review_queue.items()),1)
 
@@ -141,6 +141,7 @@ class PersistentLearningTests(unittest.TestCase):
         engine.reconfigure({'translate_api':False,'realtime_learn':False})
         self.assertEqual(engine.translate_result('together').text,'一起行动')
         self.assertFalse(engine.translate_result('help me').successful)
+        self.path.unlink()
         engine.system_prompt += '\nnew policy'
         self.assertEqual(engine.translate_result('together').reason_code,'learning_incompatible')
         self.assertEqual(engine.client.request.call_count,1)
@@ -148,6 +149,7 @@ class PersistentLearningTests(unittest.TestCase):
     def test_old_quality_version_stays_inspectable_and_cannot_trigger_payment(self):
         engine = self.engine()
         engine.translate_result('together')
+        self.path.unlink()
         path = self.root / 'learning_cache.json'
         payload = json.loads(path.read_text(encoding='utf-8'))
         row = next(iter(payload['entries'].values()))

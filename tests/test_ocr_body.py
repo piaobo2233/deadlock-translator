@@ -115,6 +115,13 @@ class BodyGeometryTests(unittest.TestCase):
 
 
 class OcrVariantLifecycleTests(unittest.TestCase):
+    def setUp(self):
+        # These fixtures mock the English CLI, independently of earlier capture tests.
+        for name, value in (('_RECEIVE_MODEL', 'eng'), ('_RESIDENT', None)):
+            language_state = patch.object(ocr, name, value)
+            language_state.start()
+            self.addCleanup(language_state.stop)
+
     def test_short_fallback_pool_has_bounded_native_concurrency(self):
         from concurrent.futures import ThreadPoolExecutor
         image = synthetic_chat(("go",))
@@ -178,8 +185,12 @@ class RealBodyOcrTests(unittest.TestCase):
                                                 translation_builtins_module.DEFAULT_GLOSSARY, recognition_capture.recognition_rules())
                     self.assertEqual(decision.text.lower(), "gg", decision)
     def test_final_selection_is_exact_for_all_minimized_real_cases(self):
-        # Disable application word files: independence from private user data is required.
-        with patch.object(ocr, "_USER_WORDS", ""):
+        # These historical Latin fixtures rank OCR without source verification.
+        # Isolate their English mode from preceding multilingual capture tests;
+        # production multilingual admission also requires independent evidence.
+        with patch.object(ocr, "_USER_WORDS", ""), \
+                patch.object(ocr, "_RECEIVE_MODEL", "eng"), \
+                patch.object(ocr, "_RESIDENT", None):
             for name, case in CASES.items():
                 with self.subTest(name=name):
                     image = fixture(name)

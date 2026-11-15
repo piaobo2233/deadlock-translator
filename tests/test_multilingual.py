@@ -71,7 +71,7 @@ class MultilingualTests(unittest.TestCase):
                 repo = ConfigRepository(path)
                 before = repo.load(environment={})
                 self.assertEqual(before['auto_send'], (value or {}).get('auto_send', True))
-                self.assertEqual(before['receive_target'], (value or {}).get('receive_target', 'zh-Hans'))
+                self.assertEqual(before['receive_target'], 'zh-Hans')
                 self.assertTrue(repo.save(before))
                 after = ConfigRepository(path).load(environment={})
                 for key in ('auto_send', 'send_hotkey', 'send_target', 'receive_target'):

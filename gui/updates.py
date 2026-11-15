@@ -25,6 +25,8 @@ class Updater:
         self.events = queue.Queue()
         self.release = None
         self.busy = False
+        self.operation_id = 0
+        self.cancel_download = None
         self.message = ''
         self.controls = None
         self.uninstall_button = None
@@ -86,14 +88,16 @@ class Updater:
         self.app.window_callbacks.schedule(60000, self.automatic)
 
     def work(self, operation, done):
+        self.operation_id += 1
+        operation_id = self.operation_id
         self.busy = True
         self.repaint()
         def worker():
             try:
-                self.events.put((done, operation()))
+                self.events.put((operation_id, done, operation()))
             except Exception as exc:
                 message = str(exc) if isinstance(exc, updates.UpdateError) else '更新操作失败，请重试或打开官方下载页'
-                self.events.put(('error', dict(message=message, code='download' if done == 'prepared' else 'release')))
+                self.events.put((operation_id, 'error', dict(message=message, code='download' if done == 'prepared' else 'release')))
         threading.Thread(target=worker, name='release-update', daemon=True).start()
 
     def check(self, manual=False):
@@ -141,12 +145,29 @@ class Updater:
             self.repaint()
             return
         self.message = '正在下载安装包，完成前可继续使用…'
+        cancel = self.cancel_download = threading.Event()
+        operation_id = self.operation_id + 1
         def prepare():
             def progress(done, total):
-                self.events.put(('progress', f'正在下载：{done * 100 // total}%'))
-            setup, checksum = updates.download(release, directory, progress)
-            return update_install.prepare(self.root, setup, checksum, release.version)
+                self.events.put((operation_id, 'progress', f'正在下载：{done * 100 // total}%'))
+            setup, checksum = updates.download(release, directory, progress, cancelled=cancel.is_set,
+                phase=lambda message:self.events.put((operation_id,'progress',message)))
+            updates.check_cancelled(cancel.is_set)
+            self.events.put((operation_id,'progress','正在准备安装，启动安装前仍可取消…'))
+            path = update_install.prepare(self.root, setup, checksum, release.version)
+            updates.check_cancelled(cancel.is_set)
+            return path
         self.work(prepare, 'prepared')
+
+    def cancel(self):
+        if self.cancel_download is None or self.job is not None:
+            return
+        self.cancel_download.set()
+        self.cancel_download = None
+        self.operation_id += 1
+        self.busy = False
+        self.message = '更新已取消，尚未启动安装；可以重新下载'
+        self.repaint()
 
     def begin_install(self, path):
         from app.runtime.panel_instance import owner, alive, request_exit
@@ -241,14 +262,21 @@ class Updater:
         latest_progress = None
         for _ in range(256):
             try:
-                kind, value = self.events.get_nowait()
+                event = self.events.get_nowait()
             except queue.Empty:
                 break
+            if len(event) == 3:
+                operation_id, kind, value = event
+                if operation_id != self.operation_id:
+                    continue
+            else:
+                kind, value = event
             if kind == 'progress':
                 latest_progress = value
                 continue
             latest_progress = None
             self.busy = False
+            self.cancel_download = None
             if kind == 'checked':
                 if value and updates.version_key(value.version) > updates.version_key(self.version):
                     self.release = value
@@ -295,7 +323,7 @@ class Updater:
         if not self.controls or not self.controls['frame'].winfo_exists():
             return
         c = self.controls
-        state=(self.message,self.busy,self.release,self.can_install,
+        state=(self.message,self.busy,self.release,self.can_install,self.cancel_download is not None,
                self.rollback_info['available'],self.rollback_info['message'])
         if c.get('_painted') == state:
             return
@@ -304,6 +332,7 @@ class Updater:
             self.uninstall_button.configure(state='disabled' if self.busy else 'normal')
         c['status'].configure(text=self.message or '启动后检查当前通道；持续运行时每天检查。更新由你选择。')
         c['check'].configure(state='disabled' if self.busy else 'normal')
+        c['cancel'].configure(state='normal' if self.cancel_download is not None and self.job is None else 'disabled')
         c['rollback'].configure(state='normal' if self.rollback_info['available'] and not self.busy else 'disabled',
                                 text=self.rollback_info['message'] if self.rollback_info['available'] else '回退到上一版本')
         release = self.release
@@ -330,7 +359,7 @@ class Updater:
         width = max(1, c['actions'].winfo_width())
         layout = []
         row, used = 0, 0
-        for name in ('check', 'install', 'later', 'skip', 'website', 'rollback'):
+        for name in ('check', 'install', 'cancel', 'later', 'skip', 'website', 'rollback'):
             button = c[name]
             if name in ('install', 'later', 'skip') and not self.release:
                 continue
@@ -345,7 +374,7 @@ class Updater:
         if c.get('action_layout') == layout:
             return
         c['action_layout'] = layout
-        for name in ('check', 'install', 'later', 'skip', 'website', 'rollback'):
+        for name in ('check', 'install', 'cancel', 'later', 'skip', 'website', 'rollback'):
             c[name].pack_forget()
         for frame in c['action_rows']:
             frame.pack_forget()
@@ -375,10 +404,11 @@ class Updater:
         actions = panel(area, th)
         actions.pack(fill='x', pady=(10, 0))
         controls = dict(frame=area, status=status, notes=notes, wrap=wrap, actions=actions,
-                        action_rows=[th.frame(actions) for _ in range(6)])
+                        action_rows=[th.frame(actions) for _ in range(7)])
         for name, label, command in (
                 ('check', '检查更新', lambda: self.check(manual=True)),
                 ('install', '下载并重启更新', self.install),
+                ('cancel', '取消本次更新', self.cancel),
                 ('later', '稍后提醒', self.defer),
                 ('skip', '跳过此版本', lambda: self.defer(skip=True)),
                 ('website', '官方下载页', self.website),
@@ -387,6 +417,7 @@ class Updater:
             from gui.interactions import help_for
             help_for(button,{
                 'check':'联网检查当前通道的公开版本，结果显示在此处；检查本身不会安装。',
+                'cancel':'取消下载、校验或安装前准备；安装器启动后不再提供此操作。',
                 'install':'安装版下载并校验更新，确认后保存数据并退出安装，完成后重新打开设置。源码版和便携版打开官方下载页。',
                 'later':'暂时收起更新提醒，明天再提醒；仍可手动检查。',
                 'skip':'跳过当前提示的版本；以后有更新版本仍会提醒，也可手动检查。',

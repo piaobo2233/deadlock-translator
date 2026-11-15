@@ -1,5 +1,27 @@
 # 测试与验证范围
 
+## 1.2.0 正式版
+
+由用户验收通过的 rc.9 升版，业务源码保持一致。接收范围为英、俄、日、韩 → 简体中文。
+
+- rc.8 相关 211 项检查、12 行录像回放矩阵及英文三轮前后对照有独立记录；rc.9 补充相关 62 项检查和多行排版修复。
+- rc.9 在网络拒绝环境下模拟四次窗口几何短暂失效，前后五条消息完成真实校验、持久化、Tk 绘制和隐藏；15px/24px 文本边界与修前叠行对照通过。
+- 用户反馈 rc.9 实际使用可接受并授权发布；这不代表完整自然对局漏读率、全部 Windows 设备和缩放矩阵已验收。
+- 正式包公开源码、安装器和更新发现检查另记于[发布说明](releases/v1.2.0.md)。Windows 10/11 干净系统的完整交互安装、应用内回退和卸载矩阵仍待验证。
+
+## 1.1.4 正式版
+
+| 范围 | 当前证据 |
+| --- | --- |
+| 自动检查 | 发行源码通过公开 Linux 和 Windows 离线检查。见 [1.1.4 CI](https://github.com/piaobo2233/deadlock-translator/actions/runs/42354085876)。 |
+| 正式安装包 | 1.1.4 安装包摘要已核对。Windows 10/11 干净系统上的首次安装、应用内更新与回退、应用内及 Windows 应用列表卸载仍待验收。见[安装验收清单](releases/installer-acceptance.md)。 |
+| 真实对局 | 当前版没有完整的自然对局漏读率、误读率和译文可见耗时记录。 |
+| 显示环境 | 下方 Tk 模拟与桌面实测属于各自记录的源码轮次。当前版的真实显示设备、分辨率和缩放矩阵待补。 |
+
+下载入口见 [GitHub 最新正式版](https://github.com/piaobo2233/deadlock-translator/releases/latest)。
+
+1.1.4 发行源码启用多语言接收。开发树上的「多语言识别（实验）」开关有单独的默认行为和测试记录。合成 OCR 结果仅覆盖所测模式、语种和样本。
+
 ## 2026-11-02 背景与显示适配源码
 
 本轮本地断网隔离回归共 45 次执行，44 次通过（含 1 次重复用例），1 次旧区域编辑器测试因引用已移除的 `RegionEditor.shade` 报错。未将这轮记作完整测试全通过，也未修改旧断言来隐藏错误。
@@ -58,5 +80,7 @@
 - `python -X utf8 scripts/check.py`：开发源码完整隔离检查；私有真值不在公开树中。
 - `python -X utf8 scripts/check.py --windows-public`：公开 Windows 离线子集。
 - `python scripts/check_public.py --syntax --links`：公开源码语法及本地文档目标。
+- `python -X utf8 verify/recognition_baseline.py --tesseract <锁定的tesseract.exe> --output <新报告.json>`：固定合成裁图，按模式和语言记录漏读、误读及 OCR 处理耗时 P50/P95。
+- `python -X utf8 verify/latency_acceptance.py <真实画面时间标注.json> --output <新报告.json>`：根据画面中聊天出现和译文可见的标注计算端到端延迟。
 
 构建依赖、入口与材料见[开发说明](DEVELOPMENT.md)。

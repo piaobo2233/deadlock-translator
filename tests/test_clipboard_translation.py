@@ -247,7 +247,7 @@ class ClipboardStateTests(unittest.TestCase):
         self.assertEqual(self.native.writes, [])
         self.assertIn('超时', self.report.call_args.args[0])
 
-    def test_config_change_cancels_but_other_entry_language_change_does_not(self):
+    def test_config_change_cancels_but_unconfirmed_preference_and_receive_target_do_not(self):
         self.copy()
         self.config['send_target'] = 'ja'
         self.config['receive_target'] = 'de'
@@ -316,7 +316,7 @@ class ClipboardServiceTests(unittest.TestCase):
         from app.recognition.region import RecognitionGate
         self.assertTrue(RecognitionGate('manual').allowed())
 
-    def test_fixed_english_persists_qualified_reuse_without_mutating_preferences(self):
+    def test_unconfirmed_english_persists_qualified_reuse_without_mutating_preferences(self):
         with tempfile.TemporaryDirectory() as directory:
             config = dict(default_config(), send_target='ja', receive_target='de',
                           api_key='fixture', translate_api=True, price_in=2, price_out=8)
