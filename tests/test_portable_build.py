@@ -2,6 +2,7 @@
 import importlib.util
 from contextlib import ExitStack
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -52,6 +53,7 @@ class PortableBuildTests(unittest.TestCase):
             build.main()
         return root/'dist/LockLingo-1.2.1-windows-x64'
 
+    @unittest.skipUnless(os.name == 'nt', 'Windows portable build pipeline')
     def test_built_notices_are_compatible_with_old_update_manifest(self):
         with tempfile.TemporaryDirectory() as directory:
             bundle=self.build_fixture(Path(directory))
@@ -61,6 +63,7 @@ class PortableBuildTests(unittest.TestCase):
                 self.assertEqual((bundle/'licenses/project'/name).read_text(encoding='utf-8'),'docs/'+name)
             self.assertFalse(any('license-migration-audit' in p.name for p in bundle.rglob('*')))
 
+    @unittest.skipUnless(os.name == 'nt', 'Windows portable build pipeline')
     def test_build_rejects_incompatible_manifest_before_publishing_bundle(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)
