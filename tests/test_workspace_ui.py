@@ -29,7 +29,7 @@ class WorkspaceTests(unittest.TestCase):
         d.pick('reference')
         self.app.root.update()
         self.assertGreater(len(d.rows), 100)
-        d.show(d.rows[0])
+        self.choose(d, d.rows[0]['key'])
         self.app.root.update()
         self.assertEqual(str(d.draft.cget('state')), 'disabled')
         self.assertEqual(store.load_glossary_file(self.glossary), {})
